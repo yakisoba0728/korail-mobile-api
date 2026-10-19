@@ -15,6 +15,7 @@ from ._parsing import (
     _optional_scalar_string,
     _preserve_read_raw,
     _row,
+    _strict_scalar_string,
 )
 from ._parsing import (
     _model_response_fields as _response_fields,
@@ -25,6 +26,7 @@ from .limousine_models import (
     LimousineScheduleResponse,
     LimousineSeat,
     LimousineSeatInventoryResponse,
+    LimousineStop,
 )
 from .models import BaseKorailResponse, SeatWindow
 
@@ -43,6 +45,27 @@ def _required_list(
 def _require_exact_success(response: BaseKorailResponse) -> None:
     if response.str_result != "SUCC":
         raise KorailProtocolError("KORAIL limousine read strResult must be exact SUCC")
+
+
+@_preserve_read_raw
+def parse_limousine_stops(response: BaseKorailResponse) -> tuple[LimousineStop, ...]:
+    """이름·코드 목록의 순서를 유지합니다. 잘못된 짝을 만들거나 일부 행을 버리지 않습니다."""
+    _require_exact_success(response)
+    names = _required_list(response.raw, "app.limousine.stationNm", "limousine stops")
+    codes = _required_list(response.raw, "app.limousine.stationCd", "limousine stops")
+    if len(names) != len(codes):
+        raise KorailProtocolError("KORAIL limousine stop names and codes must have the same length")
+    stops = []
+    for name, code in zip(names, codes, strict=True):
+        row = {"name": name, "code": code}
+        name = _strict_scalar_string(row, "name", "limousine stop")
+        code = _strict_scalar_string(row, "code", "limousine stop")
+        if not name or not name.strip() or not code or not code.strip():
+            raise KorailProtocolError("KORAIL limousine stop name and code must not be empty")
+        stops.append(LimousineStop(code=code, name=name))
+    if len({stop.code for stop in stops}) != len(stops) or len({stop.name for stop in stops}) != len(stops):
+        raise KorailProtocolError("KORAIL limousine stop names and codes must be unambiguous")
+    return tuple(stops)
 
 
 _SCHEDULE_FIELDS = {

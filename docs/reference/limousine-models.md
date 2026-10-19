@@ -2,6 +2,8 @@
 
 공항버스(리무진) 조회 입력과 응답 모델입니다.
 
+::: korail_mobile_api.limousine_models.LimousineStop
+
 ::: korail_mobile_api.limousine_models.LimousineScheduleQuery
 
 ::: korail_mobile_api.limousine_models.LimousineSeatInventoryQuery

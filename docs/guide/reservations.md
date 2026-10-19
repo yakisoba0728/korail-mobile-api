@@ -47,6 +47,12 @@
 - 예약 요청 전에 두 조합을 더 검사합니다. 유아가 있으면 어린이·유아 외의 승객이 있어야 하고, 안내견은 장애 승객(`severe_disability`와 `mild_disability`의 합)보다 많을 수 없습니다.
 - 예약에 사용할 승객 구성으로 조회하세요. 검색의 청소년 인원은 어른 수에 합산되지만 예약에는 사용할 수 없습니다.
 
+!!! warning "검색 인원은 예약에 자동 전달되지 않습니다"
+    검색 결과 열차에는 검색에 사용한 승객 구성을 저장하지 않습니다. `reserve()`와 간편 `reservations.create()`에 같은 구성을 다시 넘겨야 합니다. 생략하면 검색이 여러 명이었어도 **어른 1명**으로 예약합니다. 검색과 예약에서 하나의 `KorailPassengerCounts`를 재사용하세요.
+
+!!! warning "예약 성공과 할인 적용은 별도입니다"
+    성공 응답만으로 요청한 할인 자격·할인율이 적용됐다고 판단하지 마세요. 결제 전에 홀드의 `received_amount`와 예약 상세의 좌석별 승객 유형·적용 할인 정보를 확인하세요. 라이브러리는 이를 확인하려고 자동 상세 조회·재예약하지 않습니다. 2026-10-16 [타 클라이언트의 자격 없는 계정 관측](https://github.com/devgyurak/pykorail/issues/123)에는 중증 장애 승객 예약이 할인 없이 성공한 사례가 있습니다. 이는 이 SDK에서 재현한 결과나 모든 할인에 대한 보장이 아닙니다.
+
 열차 예약은 앱의 `PassengerType.basicList()`와 같은 일곱 종류를 받습니다. `teenager > 0`이면
 직통·좌석 지정·예약대기·환승·병합 예약과 간편 API의 `reservations.create()` 모두 요청 전에
 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다. 대기열 요청도 보내지 않습니다.
@@ -86,18 +92,19 @@ departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
 client = KorailClient()
 try:
     client.login(input("회원번호·전화번호·이메일: "), getpass("비밀번호: "))
+    passengers = KorailPassengerCounts(adult=2)
     query = TrainSearchQuery(
         departure_station_code="서울",
         arrival_station_code="부산",
         departure_date=departure_date,
         departure_time="090000",
-        passengers=2,
+        passengers=passengers.adult,
     )
     result = client.search_trains(query)
     train = next((t for t in result.trains if t.general_reservation_code == "11"), None)
     if train is None:
         raise SystemExit("예약할 수 있는 열차가 없습니다.")
-    hold = client.reserve(train, passengers=KorailPassengerCounts(adult=2))
+    hold = client.reserve(train, passengers=passengers)
     print(hold.pnr_no, hold.received_amount)
     print("결제 기한:", hold.payment_deadline_date, hold.payment_deadline_time)
 finally:

@@ -14,6 +14,14 @@ from .models import BaseKorailResponse, SeatWindow
 
 
 @dataclass(frozen=True)
+class LimousineStop:
+    """공통 코드 조회에서 짝지은 공항버스 정류장 코드와 이름입니다."""
+
+    code: str
+    name: str
+
+
+@dataclass(frozen=True)
 class LimousineScheduleQuery:
     """공항버스 운행 스케줄 조회 조건을 구성합니다."""
 

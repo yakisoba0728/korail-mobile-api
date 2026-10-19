@@ -4,7 +4,7 @@
 
 """공개 진입점은 __all__이며 그 밖의 이름은 내부 구현입니다."""
 
-__version__ = "2.6.0"
+__version__ = "2.6.1"
 
 from .client import KorailClient
 from .config import KorailConfig
@@ -49,7 +49,15 @@ from .errors import (
     KorailSoldOutError,
     KorailTransportError,
 )
-from .facade import Korail, ReservationResource, StationResource, TicketResource, TrainResource
+from .facade import (
+    AirportBusResource,
+    Korail,
+    MembershipResource,
+    ReservationResource,
+    StationResource,
+    TicketResource,
+    TrainResource,
+)
 from .limousine_models import (
     LimousineSchedule,
     LimousineScheduleQuery,
@@ -57,6 +65,7 @@ from .limousine_models import (
     LimousineSeat,
     LimousineSeatInventoryQuery,
     LimousineSeatInventoryResponse,
+    LimousineStop,
 )
 from .live import build_config_from_env
 from .models import (
@@ -257,6 +266,7 @@ from .read_payloads import (
 )
 
 __all__ = [
+    "AirportBusResource",
     "AppDataResponse",
     "AppVersionInfo",
     "BaseKorailResponse",
@@ -353,6 +363,8 @@ __all__ = [
     "LimousineSeat",
     "LimousineSeatInventoryQuery",
     "LimousineSeatInventoryResponse",
+    "LimousineStop",
+    "MembershipResource",
     "MaasMenuItem",
     "MaasMenuListResponse",
     "MaasServiceDetail",

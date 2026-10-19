@@ -45,11 +45,12 @@ KORAIL과는 관계없는 개인 프로젝트입니다. 공식 API가 아니라�
 
 | 구분 | 현재 `main` |
 |---|---|
-| 패키지 버전 | `2.6.0`; 버전별 변경은 [CHANGELOG.md](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)에 기록 |
+| 패키지 버전 | `2.6.1`; 버전별 변경은 [CHANGELOG.md](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)에 기록 |
 | 요청 기본 `AppVersion` | `7.0.8`; API `Version`과 별개 |
 | 오류 메시지 사전 | 앱 `7.0.10` 기준 |
 
 2.6.0에는 사전 갱신, 요청 필드 순서 정정, 환불 대상 연결 검증과 초장문 마일리지 숫자 처리 보완이 포함됩니다.
+2.6.1에는 운임 입력 팩토리, 선택적 검색 이어보기와 멤버십·공항버스 간편 조회가 있습니다. 사용법은 [간편 API 가이드](https://yaki.kr/korail-mobile-api/guide/convenience/)를 참고하세요. 새 간편 흐름은 오프라인 검증만 완료했으며 실서버 확인 범위와 구분합니다.
 **2.5.0에서 수수료 응답을 직접 생성·파싱해 환불하던 호출은 변경해야 합니다.** 실제 수수료 조회 반환값과 원표 반환일·동반자 정보를 맞추세요.
 사전의 앱 버전을 요청 기본값이나 전체 호환 인증으로 간주하지 않습니다.
 `KorailConfig(app_version="7.0.10")`으로 명시한 제한적 실서버 확인과 정적 검토의 범위는
@@ -65,6 +66,7 @@ pip install korail-mobile-api
 
 검색 필터·객실 우선 선택·메시지 사전과 신규 오류 분류는 2.5.0부터 제공합니다.
 환불 대상 연결 검증과 7.0.10 메시지 사전은 2.6.0부터 제공합니다.
+운임 입력 팩토리·검색 이어보기·멤버십·공항버스 간편 조회는 2.6.1부터 제공합니다.
 이전 버전은 `pip install --upgrade korail-mobile-api`로 갱신하세요.
 
 **개발 버전 설치:** `main`의 Unreleased 변경이 필요하면 GitHub에서 바로 설치할 수 있습니다.
@@ -267,12 +269,14 @@ python3 -m venv .venv
 .venv/bin/python -m ruff format --check src checks tests
 .venv/bin/python -m mypy
 .venv/bin/python -m pyright
+.venv/bin/actionlint -shellcheck= -pyflakes=
 .venv/bin/python -m mkdocs build --strict
 git diff --check
 ```
 
 전체 테스트는 합성 응답과 소켓 차단을 사용하며, 두 기존 오프라인 검사·문서 예제·실제 wheel/sdist 내용 검사도 포함합니다.
 CI는 새 가상환경에 wheel을 설치하고 checkout 밖에서 공개 호출·7.0.10 독립 계약·환불 연결을 다시 확인합니다.
+신규 간편 조회도 설치된 wheel에서 검사합니다. 주간 CI와 Dependabot으로 갱신을 확인하고, actionlint와 Trivy로 워크플로·해석된 런타임 의존성·비밀·설정을 검사합니다. 스캔은 실서버 호환 검사나 모든 취약점의 부재를 보장하지 않습니다. 패키지·문서 배포는 계속 수동입니다.
 이는 전체 wire 계약이나 실서버 수용을 증명하지 않습니다. README의 사용 예제는 테스트 밖에서 실행하면 실제 서버에 접속합니다.
 검사별 한계는 [오프라인 검사 기준](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/ACCEPTANCE.md),
 배포 검증은 [배포 절차](https://github.com/yakisoba0728/korail-mobile-api/blob/main/docs/releasing.md)에 있습니다.

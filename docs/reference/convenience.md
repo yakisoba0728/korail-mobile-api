@@ -1,6 +1,7 @@
 # 간편 API와 기기 프로파일
 
 검색 필터·객실 우선 선택·역 이름 집합·기존 예약의 간편 조회는 2.5.0부터 제공합니다.
+이어보기·멤버십·공항버스 간편 조회는 2.6.1부터 제공합니다.
 
 ## Korail
 
@@ -21,6 +22,14 @@
 ## TicketResource
 
 ::: korail_mobile_api.facade.TicketResource
+
+## MembershipResource
+
+::: korail_mobile_api.facade.MembershipResource
+
+## AirportBusResource
+
+::: korail_mobile_api.facade.AirportBusResource
 
 ## KorailDeviceProfile
 

@@ -280,7 +280,7 @@ finally:
 ## 예매 전 운임 조회 {#fare}
 
 [`get_price_fare_quote`](../api/trains.md#get_price_fare_quote)는 열차 한 편이나 환승 두 구간의 운임을 예매 전에 조회합니다.
-조회 결과 행의 값을 [`PriceFareLeg`][korail_mobile_api.read_payloads.PriceFareLeg]로 옮기는 함수를 두면 직통과 환승에 같이 쓸 수 있습니다.
+2.6.1부터 [`PriceFareLeg.from_train()`][korail_mobile_api.read_payloads.PriceFareLeg.from_train]으로 조회 결과의 식별값을 옮길 수 있습니다. 이전 버전에서는 같은 필드를 직접 지정해야 합니다. 팩토리는 운행일·역·종별·좌석 속성을 추측하지 않고, 응답의 상품 번호도 보존합니다.
 
 ```python
 from datetime import datetime, timedelta, timezone
@@ -289,24 +289,11 @@ from korail_mobile_api import KorailClient, PriceFareLeg, PriceFareQuoteRequest,
 
 departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
-
-def fare_leg(train):
-    return PriceFareLeg(
-        departure_station_code=train.departure_station_code,
-        arrival_station_code=train.arrival_station_code,
-        run_date=train.run_date,
-        train_no=train.train_no,
-        requested_seat_attribute_code=train.seat_attribute_code,
-        train_group_code=train.train_group_code,
-        train_class_code=train.train_class_code,
-    )
-
-
 client = KorailClient()
 try:
     query = TrainSearchQuery("강릉", "목포", departure_date, "080000")
     itinerary = client.search_transfer_trains(query).itineraries[0]
-    request = PriceFareQuoteRequest(legs=tuple(fare_leg(train) for train in itinerary.legs))
+    request = PriceFareQuoteRequest(legs=tuple(PriceFareLeg.from_train(train) for train in itinerary.legs))
     for fare in client.get_price_fare_quote(request).fares:
         print(fare.journey_sequence, fare.room_class_name, fare.received_price, fare.total_amount)
 finally:

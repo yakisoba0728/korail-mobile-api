@@ -5,6 +5,8 @@ on:
   pull_request:
   workflow_dispatch:
   workflow_call:
+  schedule:
+    - cron: '23 3 * * 1'
 
 permissions:
   contents: read
@@ -72,7 +74,16 @@ jobs:
         run: python -m pyright
       - name: Offline tests, including both original checks
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
-        run: python -m pytest tests/ --cov=korail_mobile_api --cov-branch --cov-report=term-missing:skip-covered --cov-fail-under=90
+        run: python -m pytest tests/ --cov=korail_mobile_api --cov-branch --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=90 --junitxml=junit.xml
+      - name: Save test reports
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports-${{ matrix.python }}-${{ matrix.dependencies }}
+          path: |
+            coverage.xml
+            junit.xml
+          retention-days: 14
       - name: Build wheel and sdist
         id: build
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
@@ -130,10 +141,39 @@ jobs:
               subprocess.check_call([str(python), str(clean / 'checks' / check)], cwd=clean, env=env)
           tests = clean / 'tests'
           tests.mkdir()
-          for name in ('conftest.py', 'test_public_api_smoke.py', 'test_7010_contract.py', 'test_refund_binding.py'):
+          for name in ('conftest.py', 'test_public_api_smoke.py', 'test_7010_contract.py', 'test_refund_binding.py', 'test_convenience_reads.py'):
               shutil.copy2(root / 'tests' / name, tests / name)
           subprocess.check_call([str(python), '-m', 'pytest', '-q', str(tests)], cwd=clean, env=env)
           PY
+
+  maintenance:
+    name: Workflow lint and dependency security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Lint all workflows, including manual publishing
+        run: |
+          python -m pip install 'actionlint-py>=1.7.12'
+          actionlint -shellcheck= -pyflakes=
+      - name: Resolve runtime dependencies for scanning
+        run: |
+          python -m pip install '.[socks]'
+          python -m pip freeze --exclude korail-mobile-api --exclude actionlint-py > requirements.txt
+      - name: Scan dependencies, secrets and workflow configuration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          skip-dirs: analysis,build,dist,site,.git,.venv
 
   docs:
     name: Docs site build

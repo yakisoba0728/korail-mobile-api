@@ -2,6 +2,9 @@
 
 [`Korail`][korail_mobile_api.facade.Korail]은 기존 `KorailClient` 위에 자주 쓰는 작업을 묶은 선택형 진입점입니다. 전체 API나 세부 요청 옵션은 `korail.client`에서 그대로 사용합니다.
 
+!!! note "2.6.1의 추가 기능"
+    `trains.iter_search`, `PriceFareLeg.from_train`, `membership`, `airport_bus`는 2.6.1부터 제공합니다. 이 흐름의 검증은 소켓을 차단한 합성 응답 기준이며 실서버 성공 기록은 추가하지 않았습니다.
+
 !!! note "2.5.0의 추가 기능"
     검색 필터, 좌석 상태·소요 시간·요약 헬퍼, `KorailReserveOption`, `stations.names()`, `reservations.find()`와 청소년 예약 사전 거절은 2.5.0부터 제공합니다.
 
@@ -70,6 +73,28 @@ with Korail() as korail:
 
 `TrainSummary.duration_minutes`와 `duration_text`는 실제 출발·도착 날짜를 함께 계산해 자정이나 하루를 넘는 운행도 처리합니다. 날짜·시각이 없거나 잘못됐거나 도착이 출발보다 빠르면 `None`입니다. `summary()`는 원문 `raw`를 출력하지 않습니다. 역 이름 집합은 `korail.stations.names()`로 얻을 수 있습니다.
 
+### 필요한 만큼 이어 읽기
+
+`iter_search`는 **순회할 때** 다음 페이지를 요청합니다. `max_pages`는 필수이며 1~20 범위의 정수입니다. 각 업무 조회 전에 기존 대기열 정책을 그대로 적용합니다. 기본 `search`는 계속 한 페이지만 요청합니다.
+
+```python
+from datetime import datetime, timedelta, timezone
+
+from korail_mobile_api import Korail
+
+with Korail() as korail:
+    for train in korail.trains.iter_search(
+        "서울", "부산", max_pages=3,
+        depart_after=datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1),
+    ):
+        print(train.summary())
+```
+
+서버 커서가 있으면 먼저 사용하고, 없으면 필터 전 마지막 열차의 출발 날짜·시각으로 이어갑니다. 열차 번호·출발 일시·출도착역·운행일·열차 그룹/종별의 조합으로 중복을 제외합니다. 빈 페이지, 새 행 없음, 반복 커서, 시각 진전 없음, 명시적 마지막 페이지(`N`)에서 중단합니다. 시각을 임의로 더하지 않으므로 같은 시각의 서버 페이지 경계를 모두 열거한다고 보장하지 않습니다.
+열차 번호·출발 일시·출도착역이 부족해 식별할 수 없는 행은 임의로 합치지 않고 그대로 전달한 뒤 추가 조회를 멈춥니다. 입력 시각은 처음 순회할 때 검증하고 고정하므로 대기열이 길어져도 후속 커서 조회의 시각이 바뀌지 않습니다.
+
+필터 때문에 한 페이지가 비어도 서버 원본을 기준으로 이어갑니다. 첫 요청의 결과 없음 오류는 그대로 발생하며, 후속 요청의 결과 없음은 정상 종료합니다. 그 밖의 후속 오류는 이미 전달한 열차를 되돌리지 않고 그대로 발생합니다. 자동 재시도·감시·예약은 하지 않습니다. `max_pages`는 업무 조회 횟수의 상한이며 역 목록·대기열 요청은 별도입니다.
+
 ## 로그인과 승차권
 
 ```python
@@ -103,13 +128,27 @@ with Korail.logged_in(input("회원번호·전화번호·이메일: "), getpass(
 승객 구성은 [예약 승객 구성](reservations.md#passengers)과 같은 검증을 적용합니다.
 `passengers.teenager > 0`이면 `reservations.create()`도 대기열·예약 요청 전에 `KorailProtocolError`로 거절합니다.
 
+검색 인원은 예약에 자동 전달되지 않습니다. 아래처럼 같은 승객 객체를 두 호출에 전달하세요. 예약 성공이 요청 할인 적용을 보장하지는 않으므로 결제 전에 실제 정산액과 상세의 적용 결과도 확인합니다.
+
+```python
+from korail_mobile_api import KorailPassengerCounts
+
+passengers = KorailPassengerCounts(adult=2, child=1)
+result = korail.trains.search("서울", "부산", passengers=passengers)
+train = next(train for train in result.trains if train.has_general_seat())
+hold = korail.reservations.create(train, passengers=passengers)
+print(hold.received_amount)
+```
+
 기본 예약은 일반실이고, `seat_class=KorailSeatClass.SPECIAL`로 특실을 직접 지정할 수 있습니다. 즉시 예약에서는 `option`으로 가용 객실을 고를 수도 있습니다.
+아래 코드는 앞 예제의 예약 호출을 대체합니다. 검색과 `passengers`는 그대로 두고 두 예약 예제를 연달아 실행하지 마세요.
 
 ```python
 from korail_mobile_api import KorailReserveOption
 
 hold = korail.reservations.create(
     train,
+    passengers=passengers,
     option=KorailReserveOption.GENERAL_FIRST,
 )
 ```
@@ -134,6 +173,47 @@ print(payment.str_result, payment.h_msg_cd, payment.h_msg_txt)
 ```
 
 가져오기 단계의 검증 조건과 실서버 확인 범위는 [기존 예약 가져오기](payments.md#existing-reservation)에 있습니다.
+
+## 마일리지와 쿠폰 조회
+
+로그인한 상태에서 사용합니다. 마일리지 날짜는 `date` 또는 `datetime`이며, 시간대가 있으면 KST로 바꾼 날짜를 사용합니다. 종료일 기본값은 오늘 KST, 시작일 기본값은 종료일의 30일 전입니다. 기간·원장·증감·페이지 검증은 기존 조회를 따릅니다.
+
+```python
+from datetime import date
+
+history = korail.membership.mileage(start_date=date(2026, 10, 1), end_date=date(2026, 10, 19))
+for entry in history.entries:
+    print(entry.departure_date, entry.point_amount)
+coupons = korail.membership.coupons(page_no=1)
+print(len(coupons.items))
+```
+
+기존 `MileageHistoryResponse`·`DiscountCouponListResponse`를 그대로 반환합니다. 한 페이지만 읽으며 잔액 필드를 임의로 합치거나 잘못된 금액을 0으로 바꾸지 않습니다.
+
+## 공항버스 조회
+
+정류장 이름·코드를 받아 기존 공항버스 조회를 호출합니다. 운행 그룹 `service_code`는 호출자가 확인한 값을 명시합니다. 보호된 예약 판매 구분은 추측하지 않으며 `reservation_sale_division_code` 기본 빈 값은 기존 조회처럼 전송에서 빠집니다. 객실·좌석 속성은 기존 SDK의 일반실(`1`)·버스 속성(`015`)을 사용합니다.
+
+```python
+from datetime import datetime, timedelta, timezone
+
+from korail_mobile_api import Korail
+
+with Korail() as korail:
+    stops = korail.airport_bus.stops()
+    for stop in stops:
+        print(stop.name, stop.code)
+    result = korail.airport_bus.search(
+        input("출발 정류장 이름·코드: "), input("도착 정류장 이름·코드: "),
+        service_code=input("확인한 운행 그룹 코드: "),
+        depart_after=datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1),
+    )
+    if result.schedules:
+        inventory = korail.airport_bus.seats(result.schedules[0], passenger_count=1)
+        print(len(inventory.seats))
+```
+
+정류장 목록은 이름·코드 공통코드를 한 번 받아 캐시하며 `stops(refresh=True)`로 갱신합니다. 목록 길이·필수값·이름/코드의 중복이 잘못되면 전체 원문을 가진 `KorailProtocolError`로 거절하고 잘못된 응답은 캐시하지 않습니다. 입력이 여러 정류장의 이름·코드와 겹치면 임의로 고르지 않고 `ValueError`로 거절합니다. 검색은 `LimousineScheduleResponse`, 좌석 조회는 배치·창문·원문을 포함한 `LimousineSeatInventoryResponse`입니다. 좌석 조회는 편의 필수 식별값을 에코하고 승객 수는 1~9명으로 제한합니다. 예약·결제·취소는 자동 실행하지 않습니다.
 
 ## 한 기기의 값 사용하기
 

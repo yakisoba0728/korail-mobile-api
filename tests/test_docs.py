@@ -1,7 +1,7 @@
 """README·문서 예제가 공개 API와 실제 조회 흐름을 유지하는지 확인합니다.
 
 - API 페이지의 시그니처 블록이 소스의 시그니처와 같고, 공개 메서드가 모두 한 번씩 문서화돼 있어야 합니다.
-- Python 예제의 공개 이름·호출 인자를 검사하고 대표 조회 예제는 MockTransport로 실행합니다.
+- Python 예제의 공개 이름·호출 인자를 검사하고 대표 조회·예약 예제는 MockTransport로 실행합니다.
 
 docs/ 는 sdist 에 들어가지 않으므로 없으면 건너뜁니다.
 """
@@ -14,8 +14,10 @@ import inspect
 import pathlib
 import re
 import textwrap
+from contextlib import closing
 from datetime import datetime, timezone
 from functools import cache
+from types import SimpleNamespace
 from urllib.parse import parse_qs
 
 import httpx
@@ -112,6 +114,8 @@ def test_examples_compile_and_use_public_names_and_arguments() -> None:
             "korail.trains": korail_mobile_api.TrainResource,
             "korail.reservations": korail_mobile_api.ReservationResource,
             "korail.tickets": korail_mobile_api.TicketResource,
+            "korail.membership": korail_mobile_api.MembershipResource,
+            "korail.airport_bus": korail_mobile_api.AirportBusResource,
         }
     )
     for path, block in _python_blocks():
@@ -253,3 +257,75 @@ def test_documented_search_and_pagination_keep_connections_open(
     finally:
         for client in clients:
             client.close()
+
+
+@pytest.mark.parametrize("use_option", [False, True], ids=["default", "general-first"])
+def test_documented_reservation_keeps_search_passengers(
+    use_option: bool, scripted_client_factory, f8_logged_in_session
+) -> None:
+    """Run the two reservation examples as alternatives using only the shared offline transport."""
+    path = DOCS / "guide" / "convenience.md"
+    (block,) = [
+        block
+        for source, block in _python_blocks()
+        if source == path and "passengers = KorailPassengerCounts(adult=2, child=1)" in block
+    ]
+    if use_option:
+        (option,) = [
+            block
+            for source, block in _python_blocks()
+            if source == path and "option=KorailReserveOption.GENERAL_FIRST" in block
+        ]
+        block = block.split("hold = ", 1)[0] + option
+    config = korail_mobile_api.KorailConfig(
+        base_url="https://api.example.invalid", netfunnel_enabled=False, disable_dynapath=True
+    )
+    row = {
+        "h_trn_no": "90001",
+        "h_trn_gp_cd": "101",
+        "h_trn_clsf_cd": "00",
+        "h_run_dt": "20990102",
+        "h_dpt_dt": "20990102",
+        "h_dpt_tm": "100000",
+        "h_dpt_rs_stn_cd": "9901",
+        "h_arv_rs_stn_cd": "9903",
+        "h_dpt_stn_cons_ordr": "001",
+        "h_arv_stn_cons_ordr": "002",
+        "h_dpt_stn_run_ordr": "001",
+        "h_arv_stn_run_ordr": "002",
+        "h_gen_rsv_cd": "11",
+    }
+    client, requests, pending = scripted_client_factory(
+        [
+            {"strResult": "SUCC", "trn_infos": {"trn_info": [row]}},
+            {
+                "strResult": "SUCC",
+                "h_pnr_no": "SYNTHETIC-PNR",
+                "h_jrny_cnt": "1",
+                "h_wct_no": "SYNTHETIC-WINDOW",
+                "h_tmp_job_sqno1": "1",
+                "h_tmp_job_sqno2": "2",
+                "h_tot_prc": "1000",
+                "h_rcvd_amt": "1000",
+            },
+        ],
+        config=config,
+        session=f8_logged_in_session,
+    )
+    korail = SimpleNamespace(
+        trains=korail_mobile_api.TrainResource(
+            client, korail_mobile_api.StationResource(client), validate_stations=False
+        ),
+        reservations=korail_mobile_api.ReservationResource(client),
+    )
+    with closing(client):
+        exec(compile(block, str(path), "exec"), {"korail": korail})
+    assert client.http._client.is_closed
+    assert len(requests) == 2 and pending == []
+    assert requests[0].url.path.endswith("seatMovie.ScheduleView")
+    assert requests[1].url.path.endswith("certification.TicketReservation")
+    search, reservation = [parse_qs(request.content.decode()) for request in requests]
+    assert search["txtPsgFlg_1"] == ["2"] and search["txtPsgFlg_2"] == ["1"]
+    assert reservation["txtTotPsgCnt"] == ["3"]
+    assert reservation["txtCompaCnt1"] == ["2"] and reservation["txtPsgTpCd1"] == ["1"]
+    assert reservation["txtCompaCnt2"] == ["1"] and reservation["txtPsgTpCd2"] == ["3"]

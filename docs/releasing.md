@@ -1,7 +1,7 @@
 # 배포 절차
 
 패키지 버전은 `src/korail_mobile_api/__init__.py`의 `__version__` 한 곳에서 관리합니다.
-`pyproject.toml`과 배포 파일의 메타데이터는 이 값을 읽습니다. 아래 명령은 **2.6.0** 기준입니다.
+`pyproject.toml`과 배포 파일의 메타데이터는 이 값을 읽습니다. 아래 명령은 **2.6.1** 기준입니다.
 다음 배포에서는 버전, 변경 이력, 태그와 파일 경로를 함께 바꾸세요.
 
 ## 문서와 버전
@@ -31,6 +31,7 @@ python3 -m venv .venv
 .venv/bin/python -m ruff format --check src checks tests
 .venv/bin/python -m mypy
 .venv/bin/python -m pyright
+.venv/bin/actionlint -shellcheck= -pyflakes=
 .venv/bin/python -m pytest tests/ --cov=korail_mobile_api --cov-branch --cov-report=term-missing:skip-covered --cov-fail-under=90
 .venv/bin/python -m mkdocs build --strict
 git diff --check
@@ -40,7 +41,9 @@ git diff --check
 배포 파일 내용 검사가 포함됩니다. 테스트는 소켓을 차단하고 가짜 응답만 사용합니다.
 
 CI는 Python 3.11·3.12·3.13·3.14와 Python 3.11의 선언된 최소 의존성 조합을 검사합니다.
+actionlint는 수동 게시·문서 배포 워크플로까지 검사합니다. 주간 실행과 Dependabot은 자동 배포를 하지 않습니다. Trivy는 현재 해석된 런타임 의존성·비밀·설정의 HIGH/CRITICAL을 검사하며, 수정본이 없는 취약점은 gate에서 제외합니다. 최소 의존성 조합 전체에 대한 보안 보증은 아닙니다.
 빌드한 wheel을 별도 가상환경에 설치해 import·버전·의존성·오프라인 검사와 공개 메서드·7.0.10 독립 계약·환불 연결 테스트도 확인합니다.
+새 간편 조회 테스트도 설치본에서 실행합니다.
 이 테스트는 checkout 밖으로 복사해 실행하므로 소스 트리 대신 설치된 패키지를 사용합니다.
 배포 워크플로는 지정한 태그에서 이 CI를 다시 실행하고 모두 통과해야 업로드합니다.
 
@@ -50,14 +53,14 @@ CI는 Python 3.11·3.12·3.13·3.14와 Python 3.11의 선언된 최소 의존성
 `python -m build`는 sdist를 만든 뒤 그 sdist에서 wheel을 빌드합니다.
 
 ```sh
-.venv/bin/python -m build --outdir dist/2.6.0
-.venv/bin/python -m twine check --strict dist/2.6.0/*.whl dist/2.6.0/*.tar.gz
+.venv/bin/python -m build --outdir dist/2.6.1
+.venv/bin/python -m twine check --strict dist/2.6.1/*.whl dist/2.6.1/*.tar.gz
 ```
 
 배포 파일은 다음 두 개입니다.
 
-- `dist/2.6.0/korail_mobile_api-2.6.0-py3-none-any.whl`
-- `dist/2.6.0/korail_mobile_api-2.6.0.tar.gz`
+- `dist/2.6.1/korail_mobile_api-2.6.1-py3-none-any.whl`
+- `dist/2.6.1/korail_mobile_api-2.6.1.tar.gz`
 
 wheel에는 런타임 소스·`py.typed`·패키지 메타데이터와 라이선스가 들어갑니다.
 sdist에는 README·변경 이력·검사·테스트도 포함됩니다. 문서 사이트는 별도 배포합니다.
@@ -70,9 +73,9 @@ sdist에는 README·변경 이력·검사·테스트도 포함됩니다. 문서 
 ```sh
 git status --short
 git log -1 --oneline
-git tag -a v2.6.0 -m 'Release 2.6.0'
-git push origin v2.6.0
-gh workflow run publish.yml --ref v2.6.0
+git tag -a v2.6.1 -m 'Release 2.6.1'
+git push origin v2.6.1
+gh workflow run publish.yml --ref v2.6.1
 ```
 
 이 마지막 명령은 실제 PyPI 업로드를 시작합니다. 워크플로는 태그 이름과 패키지 버전 일치를 검사하고,
@@ -91,14 +94,14 @@ Actions의 **Publish to PyPI** 실행 결과와 PyPI에 표시되는 버전을 �
 
 ```sh
 git fetch origin --tags
-test "$(git rev-parse origin/main)" = "$(git rev-parse 'v2.6.0^{commit}')" &&
+test "$(git rev-parse origin/main)" = "$(git rev-parse 'v2.6.1^{commit}')" &&
     gh workflow run docs-deploy.yml --ref main
 ```
 
 **Docs site** 워크플로가 성공했는지 확인하고, 문서 사이트의 변경 이력과
 [기존 예약 가이드](guide/payments.md#existing-reservation)가 해당 버전 내용인지 확인합니다.
 워크플로 실행의 커밋도 릴리스 태그와 일치해야 합니다. `main`이 앞서간 경우에는 위 명령을 그대로 진행하지 말고 배포할 문서 버전을 먼저 확인하세요.
-GitHub Release를 만들 때는 `CHANGELOG.md`의 2.6.0 항목을 릴리스 설명으로 사용하고 같은 태그를 지정하세요.
+GitHub Release를 만들 때는 `CHANGELOG.md`의 2.6.1 항목을 릴리스 설명으로 사용하고 같은 태그를 지정하세요.
 
-마지막으로 새 가상환경에서 `pip install korail-mobile-api==2.6.0`을 실행해
-`korail_mobile_api.__version__`과 설치된 패키지 메타데이터가 `2.6.0`인지 확인합니다.
+마지막으로 새 가상환경에서 `pip install korail-mobile-api==2.6.1`을 실행해
+`korail_mobile_api.__version__`과 설치된 패키지 메타데이터가 `2.6.1`인지 확인합니다.

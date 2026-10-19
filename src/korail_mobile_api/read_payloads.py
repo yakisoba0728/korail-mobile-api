@@ -16,6 +16,7 @@ from . import _read_payload_account, _read_payload_tickets, _read_payload_valida
 from ._payload_helpers import _device_version
 from .config import KorailConfig
 from .errors import KorailProtocolError
+from .models import TrainSummary
 from .mutation_models import StationRefundVerificationRequest
 from .payloads import build_cache_query as build_cache_query
 from .read_models import (
@@ -785,6 +786,22 @@ class PriceFareLeg:
             _wire_component(value, name)
         if self.goods_no is not None:
             _wire_component(self.goods_no, "goods_no")
+
+    @classmethod
+    def from_train(cls, train: TrainSummary) -> PriceFareLeg:
+        """조회한 열차의 운행일·역·좌석 속성을 복사합니다. 누락값은 추측하지 않고 거절합니다."""
+        if not isinstance(train, TrainSummary):
+            raise KorailProtocolError("train must be a TrainSummary")
+        return cls(
+            departure_station_code=_required_text(train.departure_station_code, "departure_station_code"),
+            arrival_station_code=_required_text(train.arrival_station_code, "arrival_station_code"),
+            run_date=_required_text(train.run_date, "run_date"),
+            train_no=train.train_no,
+            requested_seat_attribute_code=_required_text(train.seat_attribute_code, "seat_attribute_code"),
+            train_group_code=_required_text(train.train_group_code, "train_group_code"),
+            train_class_code=_required_text(train.train_class_code, "train_class_code"),
+            goods_no=None if train.goods_no == "" else train.goods_no,
+        )
 
 
 @dataclass(frozen=True)

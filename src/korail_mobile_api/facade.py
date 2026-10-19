@@ -6,18 +6,29 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from difflib import get_close_matches
 from types import TracebackType
 
 import httpx
 
 from ._cleanup import _close_connections
+from ._read_payload_validation import _optional_text, _passenger_count, _required_text
 from .client import KorailClient
 from .config import KorailConfig
 from .constants import KorailReservationJobType, KorailReserveOption, KorailSeatClass
-from .errors import KorailProtocolError
+from .errors import KorailNoResultsError, KorailProtocolError
+from .limousine_models import (
+    LimousineSchedule,
+    LimousineScheduleQuery,
+    LimousineScheduleResponse,
+    LimousineSeatInventoryQuery,
+    LimousineSeatInventoryResponse,
+    LimousineStop,
+)
+from .limousine_parsers import parse_limousine_stops
 from .models import (
     BaseKorailResponse,
     KorailSession,
@@ -26,6 +37,7 @@ from .models import (
     TrainSearchQuery,
     TrainSearchResult,
     TrainSummary,
+    _train_datetime,
 )
 from .mutation_models import (
     CardPayment,
@@ -35,16 +47,36 @@ from .mutation_models import (
     ReservationHoldResponse,
     ReservationPaymentResponse,
 )
+from .mutation_payloads import LIMOUSINE_CAR_NO
 from .read_models import (
+    DiscountCouponListResponse,
+    MileageHistoryResponse,
     RefundCommissionResponse,
     ReservationHistoryResponse,
     TicketListResponse,
     TicketReservationDetailResponse,
 )
-from .read_payloads import OriginalTicketReference, RefundCompanion, TicketReservationDetailRequest
+from .read_payloads import (
+    KorailMileageLedger,
+    KorailMileageMovement,
+    MileageHistoryRequest,
+    OriginalTicketReference,
+    RefundCompanion,
+    TicketReservationDetailRequest,
+)
 
 KST = timezone(timedelta(hours=9))
 _PAST_TOLERANCE = timedelta(minutes=1)
+
+
+def _departure_moment(depart_after: datetime | None) -> datetime:
+    moment = depart_after if depart_after is not None else datetime.now(KST)
+    if not isinstance(moment, datetime):
+        raise TypeError("depart_after must be a datetime")
+    moment = moment.replace(tzinfo=KST) if moment.tzinfo is None else moment.astimezone(KST)
+    if moment < datetime.now(KST) - _PAST_TOLERANCE:
+        raise ValueError("이미 지난 출발 시각입니다")
+    return moment
 
 
 class StationResource:
@@ -117,18 +149,29 @@ class TrainResource:
         """
         if type(include_no_seats) is not bool or type(include_waiting_list) is not bool:
             raise TypeError("include_no_seats and include_waiting_list must be bool")
-        moment = depart_after if depart_after is not None else datetime.now(KST)
-        if not isinstance(moment, datetime):
-            raise TypeError("depart_after must be a datetime")
-        moment = moment.replace(tzinfo=KST) if moment.tzinfo is None else moment.astimezone(KST)
-        if moment < datetime.now(KST) - _PAST_TOLERANCE:
-            raise ValueError("이미 지난 출발 시각입니다")
+        moment = _departure_moment(depart_after)
+        query = self._query(
+            departure, arrival, moment, passengers, train_group_code, include_srt, include_nearby_stations
+        )
+        result = self._client.search_trains(query, peak_season=peak_season, continuation=continuation)
+        return self._filter(result, include_no_seats, include_waiting_list)
+
+    def _query(
+        self,
+        departure: str,
+        arrival: str,
+        moment: datetime,
+        passengers: KorailPassengerCounts | None,
+        train_group_code: str,
+        include_srt: bool,
+        include_nearby_stations: bool,
+    ) -> TrainSearchQuery:
         if self._validate_stations:
             self._stations.ensure_exists(departure, arrival)
         counts = passengers if passengers is not None else KorailPassengerCounts()
         if not isinstance(counts, KorailPassengerCounts):
             raise TypeError("passengers must be KorailPassengerCounts")
-        query = TrainSearchQuery(
+        return TrainSearchQuery(
             departure_station_code=departure,
             arrival_station_code=arrival,
             departure_date=moment.strftime("%Y%m%d"),
@@ -145,7 +188,11 @@ class TrainResource:
             include_srt=include_srt,
             include_nearby_stations=include_nearby_stations,
         )
-        result = self._client.search_trains(query, peak_season=peak_season, continuation=continuation)
+
+    @staticmethod
+    def _filter(
+        result: TrainSearchResult, include_no_seats: bool, include_waiting_list: bool
+    ) -> TrainSearchResult:
         if include_no_seats:
             return result
         return replace(
@@ -156,6 +203,215 @@ class TrainResource:
                 if train.has_seat() or (include_waiting_list and train.has_waiting_list())
             ],
             unfiltered_trains=result.trains,
+        )
+
+    def iter_search(
+        self,
+        departure: str,
+        arrival: str,
+        *,
+        max_pages: int,
+        depart_after: datetime | None = None,
+        passengers: KorailPassengerCounts | None = None,
+        train_group_code: str = "109",
+        include_srt: bool = False,
+        include_nearby_stations: bool = False,
+        peak_season: bool = False,
+        include_no_seats: bool = True,
+        include_waiting_list: bool = False,
+    ) -> Iterator[TrainSummary]:
+        """직통 검색을 최대 1~20페이지 이어 읽으며 중복 열차를 제외합니다.
+
+        순회할 때 요청합니다. 커서가 없으면 필터 전 마지막 출발 시각을 사용하며,
+        빈 페이지·중복 페이지·반복 커서·출발 시각의 진전 없음에서 멈춥니다.
+        후속 조회 실패도 자동 재시도하지 않고 그대로 전달합니다.
+        """
+        if type(max_pages) is not int or not 1 <= max_pages <= 20:
+            raise ValueError("max_pages must be an integer from 1 through 20")
+        if type(include_no_seats) is not bool or type(include_waiting_list) is not bool:
+            raise TypeError("include_no_seats and include_waiting_list must be bool")
+        moment = _departure_moment(depart_after)
+        query = self._query(
+            departure, arrival, moment, passengers, train_group_code, include_srt, include_nearby_stations
+        )
+        seen: set[tuple[str | None, ...]] = set()
+        cursors: set[TrainSearchContinuation] = set()
+        continuation = None
+        for page in range(max_pages):
+            try:
+                result = self._filter(
+                    self._client.search_trains(query, peak_season=peak_season, continuation=continuation),
+                    include_no_seats,
+                    include_waiting_list,
+                )
+            except KorailNoResultsError:
+                if page == 0:
+                    raise
+                return
+            source = result.unfiltered_trains if result.unfiltered_trains is not None else result.trains
+            identities = {self._identity(train) for train in source}
+            if not source or (None not in identities and not identities - seen):
+                return
+            for train in result.trains:
+                identity = self._identity(train)
+                if identity is None or identity not in seen:
+                    if identity is not None:
+                        seen.add(identity)
+                    yield train
+            seen.update(identity for identity in identities if identity is not None)
+            if None in identities or page + 1 == max_pages or result.metadata.next_page_flag == "N":
+                return
+            continuation = result.next_page()
+            if continuation is not None:
+                if continuation in cursors:
+                    return
+                cursors.add(continuation)
+                continue
+            next_query = result.next_query_from_last_departure(query)
+            if next_query is None:
+                return
+            following = _train_datetime(next_query.departure_date, next_query.departure_time)
+            if following is None or following.replace(tzinfo=KST) <= moment:
+                return
+            query = next_query
+            moment = following.replace(tzinfo=KST)
+
+    @staticmethod
+    def _identity(train: TrainSummary) -> tuple[str | None, ...] | None:
+        identity = (
+            train.train_no,
+            train.departure_date,
+            train.departure_time,
+            train.departure_station_code or train.departure_station_name,
+            train.arrival_station_code or train.arrival_station_name,
+            train.run_date,
+            train.train_group_code,
+            train.train_class_code,
+        )
+        return identity if all(identity[:5]) else None
+
+
+class MembershipResource:
+    """기존 마일리지·쿠폰 응답을 보존하며 날짜 입력을 단순화합니다."""
+
+    def __init__(self, client: KorailClient) -> None:
+        self._client = client
+
+    def mileage(
+        self,
+        *,
+        start_date: date | datetime | None = None,
+        end_date: date | datetime | None = None,
+        ledger: KorailMileageLedger = "1",
+        movement: KorailMileageMovement = "0",
+        page_no: int = 1,
+    ) -> MileageHistoryResponse:
+        """기본 최근 30일의 마일리지 한 페이지입니다. datetime은 KST 날짜로 읽습니다."""
+        end = self._date(end_date, datetime.now(KST).date())
+        if start_date is None:
+            try:
+                start = end - timedelta(days=30)
+            except OverflowError as error:
+                raise ValueError("end_date must allow a 30-day default range") from error
+        else:
+            start = self._date(start_date, end)
+        return self._client.get_mileage_history(
+            MileageHistoryRequest(
+                start.isoformat().replace("-", ""), end.isoformat().replace("-", ""), ledger, movement, page_no
+            )
+        )
+
+    @staticmethod
+    def _date(value: date | datetime | None, default: date) -> date:
+        if value is None:
+            return default
+        if isinstance(value, datetime):
+            return (value.replace(tzinfo=KST) if value.tzinfo is None else value.astimezone(KST)).date()
+        if not isinstance(value, date):
+            raise TypeError("start_date and end_date must be date or datetime values")
+        return value
+
+    def coupons(self, *, page_no: int = 1, pnr_no: str = "") -> DiscountCouponListResponse:
+        """쿠폰 한 페이지를 조회합니다. 목록·페이지 정보·원문을 그대로 반환합니다."""
+        return self._client.get_discount_coupons(page_no=page_no, pnr_no=pnr_no)
+
+
+class AirportBusResource:
+    """기존 공통 코드·공항버스 조회를 이름 기반으로 조합합니다. 예약은 하지 않습니다."""
+
+    def __init__(self, client: KorailClient) -> None:
+        self._client = client
+        self._stops: tuple[LimousineStop, ...] | None = None
+
+    def stops(self, *, refresh: bool = False) -> tuple[LimousineStop, ...]:
+        """정류장 이름·코드 목록을 한 번 조회해 캐시합니다. 잘못된 응답은 캐시하지 않습니다."""
+        if self._stops is None or refresh:
+            response = self._client.get_common_code(["app.limousine.stationNm", "app.limousine.stationCd"])
+            self._stops = parse_limousine_stops(response)
+        return self._stops
+
+    def search(
+        self,
+        departure: str,
+        arrival: str,
+        *,
+        service_code: str,
+        depart_after: datetime | None = None,
+        reservation_sale_division_code: str = "",
+    ) -> LimousineScheduleResponse:
+        """이름 또는 코드로 운행 편 한 페이지를 조회합니다. 운행 그룹은 명시적으로 받습니다."""
+        moment = _departure_moment(depart_after)
+        _required_text(service_code, "service_code")
+        _optional_text(reservation_sale_division_code, "reservation_sale_division_code")
+        references = (
+            _required_text(departure, "departure").strip(),
+            _required_text(arrival, "arrival").strip(),
+        )
+        codes = []
+        stops = self.stops()
+        for reference in references:
+            matches = [stop for stop in stops if reference in (stop.name, stop.code)]
+            if not matches:
+                raise ValueError(f"공항버스 정류장을 찾을 수 없습니다: {reference!r}")
+            if len(matches) != 1:
+                raise ValueError(f"공항버스 정류장 이름·코드를 구분할 수 없습니다: {reference!r}")
+            codes.append(matches[0].code)
+        return self._client.get_limousine_schedules(
+            LimousineScheduleQuery(
+                moment.strftime("%Y%m%d"),
+                codes[0],
+                codes[1],
+                service_code,
+                "1",
+                moment.strftime("%H%M%S"),
+                "",
+                "015",
+                reservation_sale_division_code,
+            )
+        )
+
+    def seats(self, schedule: LimousineSchedule, *, passenger_count: int = 1) -> LimousineSeatInventoryResponse:
+        """조회한 편의 식별값으로 좌석 배치를 읽습니다. 필수값이 없으면 요청 전에 거절합니다."""
+        if not isinstance(schedule, LimousineSchedule):
+            raise TypeError("schedule must be a LimousineSchedule")
+        _passenger_count(passenger_count, "passenger_count")
+        return self._client.get_limousine_seat_inventory(
+            LimousineSeatInventoryQuery(
+                train_class_code=_required_text(schedule.train_class_code, "train_class_code"),
+                service_code=_required_text(schedule.service_code, "service_code"),
+                run_date=_required_text(schedule.run_date, "run_date"),
+                train_no=_required_text(schedule.train_no, "train_no"),
+                car_no=LIMOUSINE_CAR_NO,
+                room_class_code="1",
+                departure_station_code=_required_text(
+                    schedule.departure_station_code, "departure_station_code"
+                ),
+                arrival_station_code=_required_text(schedule.arrival_station_code, "arrival_station_code"),
+                seat_attribute_code="015",
+                departure_run_order=_required_text(schedule.departure_run_order, "departure_run_order"),
+                arrival_run_order=_required_text(schedule.arrival_run_order, "arrival_run_order"),
+                passenger_count=passenger_count,
+            )
         )
 
 
@@ -262,7 +518,7 @@ class TicketResource:
 
 
 class Korail:
-    """일상적인 네 리소스를 제공하는 선택적 간편 클라이언트입니다.
+    """일상적인 조회·예약 리소스를 제공하는 선택적 간편 클라이언트입니다.
 
     ``client`` 속성에서 전체 ``KorailClient`` API에 접근할 수 있습니다.
     컨텍스트 종료는 연결만 닫으며 서버 로그아웃은 별도로 호출해야 합니다.
@@ -280,6 +536,8 @@ class Korail:
         self.trains = TrainResource(self.client, self.stations, validate_stations=validate_stations)
         self.reservations = ReservationResource(self.client)
         self.tickets = TicketResource(self.client)
+        self.membership = MembershipResource(self.client)
+        self.airport_bus = AirportBusResource(self.client)
 
     @classmethod
     def logged_in(
