@@ -15,6 +15,7 @@ import pathlib
 import re
 import textwrap
 from datetime import datetime, timezone
+from functools import cache
 from urllib.parse import parse_qs
 
 import httpx
@@ -70,6 +71,7 @@ def _normalise(text: str) -> str:
     return re.sub(r"\s+", "", text).replace(",)", ")").replace('"', "'")
 
 
+@cache
 def _python_blocks() -> list[tuple[pathlib.Path, str]]:
     blocks = []
     for path in [ROOT / "README.md", *sorted(DOCS.rglob("*.md"))]:

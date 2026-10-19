@@ -851,7 +851,7 @@ def test_forms_follow_the_app_dto_order(name, expected, make_client) -> None:
     else:
         kwargs["companion"] = p.RefundCompanion("TEST-NAME", "TEST-CERT")
     getattr(client, name)(**kwargs)
-    assert [key for key, _ in parse_qsl(calls[0].content.decode(), keep_blank_values=True)] == expected.split()
+    assert [key for key, _ in wire_pairs(calls[0])] == expected.split()
 
 
 def typed_strings(obj: Any) -> list[str]:
@@ -1054,46 +1054,44 @@ def test_trip_date_string_array_integer_compatibility(make_client) -> None:
     assert client.get_trip_change_dates(DATE).trip_change_dates == (DATE, "20300103")
 
 
-@pytest.mark.parametrize("bad", [None, {}, "20300102", [None], [True], [1.5], [{}]])
-def test_trip_dates_wrong_structure(bad, make_client) -> None:
-    """TipChgDateInquiryOut.java:53-64: required non-null List<String>."""
-    payload = success(tripChgDates=bad)
+@pytest.mark.parametrize(
+    "name,payload",
+    [
+        *[
+            ("get_trip_change_dates", success(tripChgDates=bad))
+            for bad in [None, {}, "20300102", [None], [True], [1.5], [{}]]
+        ],
+        *[("get_customer_trip_info", success(mainList=bad)) for bad in ([1], {}, "TEST")],
+        *[
+            ("get_recent_delivery_history", {**RECENT_BODY, "acepList": bad})
+            for bad in ([None], [1], {}, "TEST")
+        ],
+    ],
+)
+def test_required_lists_reject_wrong_structure(name, payload, make_client) -> None:
+    """TipChgDateInquiryOut.java:53-64: required non-null List<String>.
+    CustTripInfoOut.java:51-63: List<CustTripInfo>, not an arbitrary scalar/list.
+    RecentDeliveryHistoryOut.java:51-57: acepList is a required List<DeliveryHistoryData>.
+    """
     client, _ = make_client(payload)
     with pytest.raises(KorailProtocolError) as error:
-        client.get_trip_change_dates(DATE)
+        getattr(client, name)(**BY_NAME[name].kwargs)
     assert error.value.raw == payload
 
 
-@pytest.mark.parametrize("key,bad", [("mainList", [1]), ("mainList", {}), ("mainList", "TEST")])
-def test_customer_required_list_structure(key, bad, make_client) -> None:
-    """CustTripInfoOut.java:51-63: List<CustTripInfo> rather than an arbitrary scalar/list."""
-    payload = success(**{key: bad})
-    client, _ = make_client(payload)
-    with pytest.raises(KorailProtocolError) as error:
-        client.get_customer_trip_info()
-    assert error.value.raw == payload
-
-
-@pytest.mark.parametrize("bad", ([], True))
-def test_recent_changed_reservation_no_is_lenient(bad, make_client) -> None:
+@pytest.mark.parametrize("value", (ABSENT_LIST, [], True), ids=["missing", "list", "bool"])
+def test_recent_changed_reservation_no_is_lenient(value, make_client) -> None:
     """RecentDeliveryHistoryOut.java:51-57 marks chgePbpRsvNo required, but the 2026-09-24 live response
-    omitted it, so it is read as optional."""
+    omitted it while acepList was present, so it is read as optional."""
     payload = deepcopy(RECENT_BODY)
-    payload["chgePbpRsvNo"] = bad
+    if value is ABSENT_LIST:
+        del payload["chgePbpRsvNo"]
+    else:
+        payload["chgePbpRsvNo"] = value
     client, _ = make_client(payload)
     result = client.get_recent_delivery_history()
     assert result.raw == payload and result.changed_acceptance_reservation_no is None
-
-
-@pytest.mark.parametrize("bad", ([None], [1], {}, "TEST"))
-def test_recent_recipient_list_structure(bad, make_client) -> None:
-    """RecentDeliveryHistoryOut.java:51-57: acepList is a required List<DeliveryHistoryData>."""
-    payload = deepcopy(RECENT_BODY)
-    payload["acepList"] = bad
-    client, _ = make_client(payload)
-    with pytest.raises(KorailProtocolError) as error:
-        client.get_recent_delivery_history()
-    assert error.value.raw == payload
+    assert len(result.recipients) == 1
 
 
 @pytest.mark.parametrize(
@@ -1151,15 +1149,6 @@ def test_checkin_forms_omit_the_journey_sequence_without_journeys(make_client) -
     with pytest.raises(KorailProtocolError):
         client.check_self_checkin_seat(DETAIL, "")
     assert len(calls) == 1
-
-
-def test_recent_changed_reservation_no_may_be_absent(make_client) -> None:
-    """2026-09-24 live: chgePbpRsvNo was absent from a successful response; acepList was present."""
-    payload = deepcopy(RECENT_BODY)
-    del payload["chgePbpRsvNo"]
-    client, _ = make_client(payload)
-    result = client.get_recent_delivery_history()
-    assert result.raw == payload and len(result.recipients) == 1
 
 
 @pytest.mark.parametrize(
@@ -1229,7 +1218,7 @@ def test_optional_invalid_values_remain_raw(make_client) -> None:
 )
 def test_default_empty_optional_request_fields_are_omitted(entry, kwargs, expected, make_client) -> None:
     """NetworkService.java:15335-15344; MyTicketListIn.java:62: no fabricated type discriminator."""
-    client, calls = make_client(deepcopy(entry.response), lang=None)
+    client, calls = make_client(entry.response, lang=None)
     getattr(client, entry.method)(**kwargs)
     assert Counter(wire_pairs(calls[0], entry.query)) == Counter(COMMON + list(expected.items()))
     assert "type" not in dict(wire_pairs(calls[0], entry.query))
@@ -1244,7 +1233,7 @@ def test_default_empty_optional_request_fields_are_omitted(entry, kwargs, expect
 )
 def test_direct_field_and_query_keep_empty_common_values(method, kwargs, query, make_client) -> None:
     """NetworkApi.java:392-393; PushService.java:16-17: explicit @Field/@Query bypass flattening."""
-    client, calls = make_client(deepcopy(BY_NAME[method].response))
+    client, calls = make_client(BY_NAME[method].response)
     object.__setattr__(client.config, "key", "")
     getattr(client, method)(**kwargs)
     assert ("Key", "") in wire_pairs(calls[0], query)
@@ -1256,7 +1245,7 @@ def test_direct_field_and_query_keep_empty_common_values(method, kwargs, query, 
 
 
 def test_deposit_bank_direct_fields_allow_app_version_omission(make_client) -> None:
-    client, calls = make_client(deepcopy(BY_NAME["get_deposit_banks"].response), app_version=None)
+    client, calls = make_client(BY_NAME["get_deposit_banks"].response, app_version=None)
     client.get_deposit_banks()
     assert wire_pairs(calls[0]) == [("Device", "TEST-DEVICE"), ("Version", "TEST-VERSION"), ("Key", "TEST-KEY")]
 
@@ -1298,7 +1287,7 @@ def test_commuter_passengers_repeat_age_per_person(make_client) -> None:
         )
     )
     request = p.CommuterPassengerRequest.from_response(PASS_DATA, source, (2, 1))
-    client, calls = make_client(deepcopy(BY_NAME["get_commuter_info"].response), lang=None)
+    client, calls = make_client(BY_NAME["get_commuter_info"].response, lang=None)
     client.get_commuter_info(request)
     assert wire_pairs(calls[0]) == COMMON + [
         ("jobDvCd", "b"),
@@ -1312,7 +1301,7 @@ def test_commuter_passengers_repeat_age_per_person(make_client) -> None:
 
 def test_commuter_original_ticket_stage(make_client) -> None:
     """CommutationInfoIn.java:64; SeatAssignViewModel.java:291: original-ticket query only."""
-    client, calls = make_client(deepcopy(BY_NAME["get_commuter_info"].response), lang=None)
+    client, calls = make_client(BY_NAME["get_commuter_info"].response, lang=None)
     client.get_commuter_info(p.CommuterTicketInquiryRequest(REFERENCE, "1"))
     assert wire_pairs(calls[0]) == COMMON + [
         ("jobDvCd", "c"),
@@ -1377,13 +1366,16 @@ def test_mode_one_explicit_dates_are_not_silently_erased(make_client) -> None:
     assert form["h_abrd_dt_from"] == DATE and form["h_abrd_dt_to"] == "20300103"
 
 
-def test_required_integer_retains_zero_padding_only_in_raw(make_client) -> None:
-    """ReceiptInfo.java:87; StlInfo.java:55: Kotlin Int normalizes a quoted decimal."""
+@pytest.mark.parametrize("wire,expected", [("001200", 1200), ("-1200", -1200), ("-0", 0)])
+def test_required_integer_normalizes_quoted_decimal_only_in_typed_value(wire, expected, make_client) -> None:
+    """ReceiptInfo.java:87; StlInfo.java:55: Kotlin Int normalizes a quoted decimal.
+    kotlinx/serialization/json/internal/JsonReader.java:575-640 also permits a leading '-'.
+    """
     payload = deepcopy(RECEIPT_BODY)
-    payload["receipt_infos"]["receipt_info"][0]["h_rcvd_amt"] = "001200"
+    payload["receipt_infos"]["receipt_info"][0]["h_rcvd_amt"] = wire
     client, _ = make_client(payload)
     result = client.get_ticket_receipt(**BY_NAME["get_ticket_receipt"].kwargs)
-    assert result.items[0].received_amount == 1200
+    assert result.items[0].received_amount == expected
     assert result.raw == payload
 
 
@@ -1393,17 +1385,6 @@ def test_ticket_receipt_identifiers_are_keyword_only(make_client) -> None:
     with pytest.raises(TypeError):
         client.get_ticket_receipt("0102", "TEST-WINDOW", "TEST-SEQUENCE", "TEST-RETURN")  # type: ignore[misc]
     assert not calls
-
-
-@pytest.mark.parametrize(("wire", "expected"), [("-1200", -1200), ("-0", 0)])
-def test_required_integer_accepts_a_leading_minus_like_kotlinx(wire, expected, make_client) -> None:
-    """kotlinx/serialization/json/internal/JsonReader.java:575-640: a quoted Int may start with '-'."""
-    payload = deepcopy(RECEIPT_BODY)
-    payload["receipt_infos"]["receipt_info"][0]["h_rcvd_amt"] = wire
-    client, _ = make_client(payload)
-    assert (
-        client.get_ticket_receipt(**BY_NAME["get_ticket_receipt"].kwargs).items[0].received_amount == expected
-    )
 
 
 @pytest.mark.parametrize("wire", ["-", "--1", "1-", "1e3", "+1"])

@@ -96,7 +96,24 @@ def test_past_date_and_unknown_station_do_not_send_search() -> None:
     assert len(calls) == 1
 
 
-def test_search_keeps_teenager_count_as_adults() -> None:
+@pytest.mark.parametrize(
+    "kwargs,expected",
+    [
+        pytest.param(
+            {"passengers": KorailPassengerCounts(adult=0, teenager=1)},
+            {"txtPsgFlg_1": ["1"]},
+            id="teenager-counted-as-adult",
+        ),
+        pytest.param(
+            {"continuation": TrainSearchContinuation("0001", "0123")},
+            {"qryStNo": ["0001"], "qryStTrnNo": ["0123"]},
+            id="continuation-without-station-lookup",
+        ),
+    ],
+)
+def test_search_without_station_validation_keeps_request_options(
+    kwargs: dict[str, object], expected: dict[str, list[str]]
+) -> None:
     calls: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -110,35 +127,13 @@ def test_search_keeps_teenager_count_as_adults() -> None:
             "서울",
             "부산",
             depart_after=datetime(2099, 1, 1),
-            passengers=KorailPassengerCounts(adult=0, teenager=1),
+            **kwargs,
         )
     assert len(calls) == 1
     form = parse_qs(calls[0].content.decode())
-    assert form["txtPsgFlg_1"] == ["1"]
+    for key, value in expected.items():
+        assert form[key] == value
     assert "P11" not in calls[0].content.decode()
-
-
-def test_search_passes_continuation_without_an_extra_station_lookup() -> None:
-    calls: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(request)
-        return httpx.Response(
-            200,
-            json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "trn_infos": {"trn_info": []}},
-        )
-
-    with Korail(_config(), transport=httpx.MockTransport(handler), validate_stations=False) as korail:
-        korail.trains.search(
-            "서울",
-            "부산",
-            depart_after=datetime(2099, 1, 1),
-            continuation=TrainSearchContinuation("0001", "0123"),
-        )
-    assert len(calls) == 1
-    form = parse_qs(calls[0].content.decode())
-    assert form["qryStNo"] == ["0001"]
-    assert form["qryStTrnNo"] == ["0123"]
 
 
 def test_reservation_detail_is_an_explicit_follow_up(monkeypatch: pytest.MonkeyPatch) -> None:

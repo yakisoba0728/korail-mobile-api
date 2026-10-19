@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from copy import deepcopy
 from dataclasses import replace
 from inspect import Parameter, signature
@@ -62,38 +63,32 @@ def _refund_raw():
 
 
 @pytest.fixture
-def binding_client(f8_client_factory):
+def binding_client(scripted_client_factory, f8_logged_in_session):
     """A strict two-route transport: every extra lookup or mutation is observable."""
+    recorded = []
+    config = KorailConfig(
+        base_url="https://api.example.invalid",
+        key="SYNTH-KEY",
+        netfunnel_enabled=False,
+        disable_dynapath=True,
+    )
 
     def make(*, fee_raw=None, refund_reply=None):
         fee = _fee_raw() if fee_raw is None else fee_raw
         reply = _refund_raw() if refund_reply is None else refund_reply
-        requests = []
-
-        def handler(request):
-            assert request.url.host == "api.example.invalid"
-            assert request.method == "POST"
-            requests.append(request)
-            if request.url.path.endswith("refunds.CommissionView"):
-                return httpx.Response(200, json=fee)
-            assert request.url.path.endswith("refunds.RefundsRequest"), "unexpected refund workflow HTTP"
-            if isinstance(reply, BaseException):
-                raise reply
-            return httpx.Response(200, json=reply)
-
-        client = f8_client_factory(
-            handler,
-            logged_in=True,
-            config=KorailConfig(
-                base_url="https://api.example.invalid",
-                key="SYNTH-KEY",
-                netfunnel_enabled=False,
-                disable_dynapath=True,
-            ),
-        )
+        client, requests, _ = scripted_client_factory([fee, reply], config=config, session=f8_logged_in_session)
+        client.http.cookies.set("JSESSIONID", f8_logged_in_session.jsessionid)
+        recorded.append(requests)
         return client, requests
 
-    return make
+    yield make
+    paths = [
+        "/classes/com.korail.mobile.refunds.CommissionView",
+        "/classes/com.korail.mobile.refunds.RefundsRequest",
+    ]
+    for requests in recorded:
+        assert all(request.method == "POST" for request in requests)
+        assert [request.url.path for request in requests] == paths[: len(requests)]
 
 
 def _form(request):
@@ -138,6 +133,78 @@ def test_matching_lookup_and_refund_make_exactly_two_http_requests(binding_clien
     assert commission.raw == unchanged
 
 
+@pytest.mark.parametrize("limit", [640, 0], ids=["minimum-limit", "disabled-limit"])
+def test_oversized_mileage_is_zero_and_cannot_cover_the_fee(binding_client, limit):
+    raw = {**_fee_raw(), "use_psb_mlg_num": "9" * 4301}
+    client, requests = binding_client(fee_raw=raw)
+    commission = client.get_refund_commission(_reference())
+    previous = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(limit)
+        with pytest.raises(KorailProtocolError, match="mileage is below the fee"):
+            client.refund(_ticket(), commission=commission, settle_mileage=True)
+        assert sys.get_int_max_str_digits() == limit
+    finally:
+        sys.set_int_max_str_digits(previous)
+    assert len(requests) == 1
+    assert commission.raw == raw
+
+
+@pytest.mark.parametrize(
+    "usable,fee,allowed",
+    [
+        pytest.param("0" * 4301 + "400", "400", True, id="padded-mileage-equal"),
+        pytest.param("+" + "0" * 4301 + "399", "400", False, id="padded-positive-mileage-below"),
+        pytest.param("-" + "0" * 4301 + "1", "0", False, id="padded-negative-mileage"),
+        pytest.param("400", "+" + "0" * 4301 + "400", True, id="padded-fee-equal"),
+        pytest.param("399", "0" * 4301 + "400", False, id="padded-fee-above"),
+        pytest.param("0" * 4301, "1", False, id="all-zero-mileage"),
+        pytest.param("-" + "0" * 4301, "0", True, id="padded-negative-zero"),
+        pytest.param("2147483647", "1", True, id="int32-max-mileage"),
+        pytest.param("2147483646", "2147483647", False, id="int32-max-fee"),
+        pytest.param("2147483648", "1", False, id="positive-overflow-mileage"),
+        pytest.param("0", "2147483648", True, id="positive-overflow-fee-is-zero"),
+        pytest.param("-2147483648", "-1", False, id="int32-min-mileage"),
+        pytest.param("-2147483647", "-2147483648", True, id="int32-min-fee"),
+        pytest.param("-2147483649", "-1", True, id="negative-overflow-mileage-is-zero"),
+        pytest.param("-1", "-2147483649", False, id="negative-overflow-fee-is-zero"),
+        pytest.param("0", "9" * 4301, True, id="oversized-fee-is-zero"),
+        pytest.param("-1", "-" + "9" * 4301, False, id="oversized-negative-fee-is-zero"),
+        pytest.param(None, "1", False, id="null-mileage-is-zero"),
+        pytest.param("0", None, True, id="null-fee-is-zero"),
+        *[
+            pytest.param(value, "1", False, id=name)
+            for name, value in (
+                ("empty", ""),
+                ("leading-space", " +400"),
+                ("trailing-space", "400 "),
+                ("unicode-digits", "４００"),
+                ("positive-sign-only", "+"),
+                ("negative-sign-only", "-"),
+                ("repeated-sign", "++400"),
+                ("mixed-signs", "+-400"),
+            )
+        ],
+    ],
+)
+def test_refund_mileage_comparison_follows_app_int32_rules(binding_client, usable, fee, allowed):
+    """Keep the SDK's ASCII gate and TextHelper.java:169-181 int32/zero fallback rules."""
+    raw = {**_fee_raw(), "use_psb_mlg_num": usable, "ret_fee": fee}
+    client, requests = binding_client(fee_raw=raw)
+    commission = client.get_refund_commission(_reference())
+    if allowed:
+        assert client.refund(_ticket(), commission=commission, settle_mileage=True).str_result == "SUCC"
+        assert len(requests) == 2
+        assert _form(requests[1])["h_mlg_stl"] == ["Y"]
+    else:
+        with pytest.raises(KorailProtocolError, match="mileage is below the fee"):
+            client.refund(_ticket(), commission=commission, settle_mileage=True)
+        assert len(requests) == 1
+    assert commission.usable_mileage == usable
+    assert commission.refund_fee == fee
+    assert commission.raw == raw
+
+
 @pytest.mark.parametrize(
     "changes",
     [
@@ -178,20 +245,39 @@ def test_quote_for_a_cannot_refund_mismatching_ticket(binding_client, changes):
     _assert_private_error(caught.value, *changes.values())
 
 
-@pytest.mark.parametrize("missing", [None, "", "   "])
-def test_missing_original_return_date_fails_closed(binding_client, missing):
+@pytest.mark.parametrize(
+    "ticket_changes,commission_changes",
+    [
+        *[({"return_sale_date": value}, {}) for value in (None, "", "   ")],
+        *[({}, {"str_result": value}) for value in ("FAIL", "UNKNOWN", "", None)],
+    ],
+    ids=[
+        "missing-original-date",
+        "empty-original-date",
+        "blank-original-date",
+        "FAIL",
+        "UNKNOWN",
+        "empty-result",
+        "null-result",
+    ],
+)
+def test_bound_lookup_still_requires_original_date_and_success(
+    binding_client, ticket_changes, commission_changes
+):
     client, requests = binding_client()
     commission = client.get_refund_commission(_reference())
+    # Change public result data only; never manufacture or access private context.
+    supplied = replace(commission, **commission_changes)
 
     with pytest.raises(KorailProtocolError) as caught:
-        client.refund(_ticket(return_sale_date=missing), commission=commission)
+        client.refund(_ticket(**ticket_changes), commission=supplied)
 
     assert len(requests) == 1
     assert caught.value.raw == commission.raw
     _assert_private_error(caught.value)
 
 
-@pytest.mark.parametrize("source", ["constructor", "base-parser", "fee-parser"])
+@pytest.mark.parametrize("source", ["constructor", "base-parser", "fee-parser", "empty-constructor"])
 def test_direct_responses_cannot_forge_binding_from_server_raw(binding_client, source):
     raw = _fee_raw()
     raw.update(
@@ -207,9 +293,13 @@ def test_direct_responses_cannot_forge_binding_from_server_raw(binding_client, s
             "_refund_context": {"bound": True},
         }
     )
+    if source == "empty-constructor":
+        raw = {}
     unchanged = deepcopy(raw)
     client, requests = binding_client()
-    if source == "constructor":
+    if source == "empty-constructor":
+        commission = RefundCommissionResponse(str_result="SUCC")
+    elif source == "constructor":
         commission = RefundCommissionResponse(str_result="SUCC", raw=raw)
     elif source == "base-parser":
         commission = RefundCommissionResponse.from_raw(raw)
@@ -226,78 +316,40 @@ def test_direct_responses_cannot_forge_binding_from_server_raw(binding_client, s
     _assert_private_error(caught.value)
 
 
-def test_plain_success_response_without_lookup_is_unbound(binding_client):
-    client, requests = binding_client()
-    commission = RefundCommissionResponse(str_result="SUCC")
-
-    with pytest.raises(KorailProtocolError) as caught:
-        client.refund(_ticket(), commission=commission)
-
-    assert requests == []
-    assert caught.value.raw == commission.raw
-    _assert_private_error(caught.value)
-
-
-@pytest.mark.parametrize("result", ["FAIL", "UNKNOWN", "", None])
-def test_non_success_commission_is_rejected_even_after_a_bound_lookup(binding_client, result):
-    client, requests = binding_client()
-    commission = client.get_refund_commission(_reference())
-    # Change only public result data; never manufacture or access private context.
-    unsuccessful = replace(commission, str_result=result)
-
-    with pytest.raises(KorailProtocolError) as caught:
-        client.refund(_ticket(), commission=unsuccessful)
-
-    assert len(requests) == 1
-    assert caught.value.raw == commission.raw
-    _assert_private_error(caught.value)
-
-
-def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion(binding_client):
+@pytest.mark.parametrize("original_date", ["1017", None], ids=["original-date", "missing-original-date"])
+def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion(binding_client, original_date):
     companion = RefundCompanion("SYNTH-COMPANION-A", "20991231")
     detail = RefundTicketDetailResponse(
         str_result="SUCC",
         pnr_no="SYNTH-PNR-A",
         sale_date="20991019",
-        original_sale_date="1017",
+        original_sale_date=original_date,
         original_window_no="SYNTH-WINDOW-A",
         original_sale_sequence="SYNTH-SEQUENCE-A",
         original_return_password="SYNTH-PASSWORD-A",
         companion_name=companion.name,
         companion_birth_date=companion.certificate_no,
     )
+    client, requests = binding_client()
+    commission = client.get_refund_commission(_reference(), companion=companion)
+    if original_date is None:
+        with pytest.raises(KorailProtocolError):
+            ticket = PaidTicket.from_refund_detail(detail)
+            client.refund(ticket, commission=commission)
+        assert len(requests) == 1
+        return
+
     ticket = PaidTicket.from_refund_detail(detail)
     assert ticket.sale_date == "20991019"
     assert ticket.return_sale_date == "1017"
     assert ticket.companion_name == companion.name
     assert ticket.companion_certificate_no == companion.certificate_no
 
-    client, requests = binding_client()
-    commission = client.get_refund_commission(_reference(), companion=companion)
     assert client.refund(ticket, commission=commission).str_result == "SUCC"
     assert len(requests) == 2
     assert _form(requests[0])["h_comp_nm"] == [companion.name]
     assert _form(requests[0])["h_comp_cert_no"] == [companion.certificate_no]
     assert _form(requests[1])["h_orgtk_sale_dt"] == ["20991019"]
-
-
-def test_detail_without_original_date_cannot_enable_refund(binding_client):
-    client, requests = binding_client()
-    commission = client.get_refund_commission(_reference())
-    detail = RefundTicketDetailResponse(
-        str_result="SUCC",
-        pnr_no="SYNTH-PNR-A",
-        sale_date="20991019",
-        original_window_no="SYNTH-WINDOW-A",
-        original_sale_sequence="SYNTH-SEQUENCE-A",
-        original_return_password="SYNTH-PASSWORD-A",
-    )
-
-    with pytest.raises(KorailProtocolError):
-        ticket = PaidTicket.from_refund_detail(detail)
-        client.refund(ticket, commission=commission)
-
-    assert len(requests) == 1
 
 
 def test_new_ticket_identity_fields_are_keyword_only_and_hidden_from_repr(binding_client):

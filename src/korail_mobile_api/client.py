@@ -11,6 +11,7 @@ from typing import Any, Literal, TypeVar, overload
 import httpx
 
 from ._cleanup import _close_connections
+from ._parsing import _preserve_read_raw
 from .config import KorailConfig
 from .constants import KorailLoginInputFlag, KorailReservationJobType, KorailRoomClassCode, KorailSeatClass
 from .errors import (
@@ -132,6 +133,7 @@ from .parsers import (
     resolve_station_name,
 )
 from .payloads import (
+    _build_ticket_maas_menu_form,
     build_cache_query,
     build_common_code_form,
     build_maas_menu_form,
@@ -503,6 +505,7 @@ class KorailClient:
         return response
 
     @staticmethod
+    @_preserve_read_raw
     def _parse_mutation_response(
         raw: Mapping[str, object],
         parser: Callable[[Mapping[str, object]], T],
@@ -510,12 +513,7 @@ class KorailClient:
         """POST·GET 변경 및 환불 검증의 파싱 오류에 전체 응답을 보존합니다. 재전송하지 않습니다."""
         try:
             return parser(raw)
-        except KorailApiError as error:
-            # 파싱 실패를 재전송 신호로 쓰면 중복 예약·결제가 생길 수 있으므로 전체 응답과 부분 원문을 함께 보존합니다. 변경 파서는 직접 불러도 같도록 _preserve_read_raw
-            # 가 이미 옮겨 두므로, 그때는 parser_raw 를 덮어쓰지 않습니다.
-            if error.raw is not raw:
-                error.parser_raw = error.raw
-                error.raw = raw
+        except KorailApiError:
             raise
         except Exception as error:
             # 패키지 밖 예외도 원문을 붙인 KorailProtocolError로 감싸며 재전송하지 않습니다.
@@ -1396,19 +1394,7 @@ class KorailClient:
             include_common = False
         else:
             self._require_session()
-            if not isinstance(pnr_no, str) or not pnr_no.strip():
-                raise KorailProtocolError("KORAIL ticket MaaS menu requires a PNR")
-            if (
-                ticket_return_numbers is None
-                or isinstance(ticket_return_numbers, (str, bytes))
-                or not ticket_return_numbers
-                or any(not isinstance(number, str) or not number.strip() for number in ticket_return_numbers)
-            ):
-                raise KorailProtocolError("KORAIL ticket MaaS menu requires at least one return number")
-            form = [
-                ("pnrNo", pnr_no),
-                *(("tkRetNo", number) for number in ticket_return_numbers),
-            ]
+            form = _build_ticket_maas_menu_form(pnr_no, ticket_return_numbers)
             include_common = True
         return self._run_read(
             lambda: parse_maas_menu_list_response(

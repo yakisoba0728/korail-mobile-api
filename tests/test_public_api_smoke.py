@@ -39,7 +39,7 @@ def _f8_bound_commission(ticket: api.OriginalTicketReference) -> api.RefundCommi
         return client.get_refund_commission(ticket)
 
 
-def _f8_arguments() -> dict[str, dict[str, Any]]:
+def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
     train = api.TrainSummary(
         train_no="90001",
         train_group_code="100",
@@ -273,7 +273,7 @@ def _f8_arguments() -> dict[str, dict[str, Any]]:
                 "90001",
                 return_sale_date=ticket.sale_date,
             ),
-            "commission": _f8_bound_commission(ticket),
+            "commission": _f8_bound_commission(ticket) if method_name == "refund" else None,
         },
         "verify_station_ticket_refund": {
             "request": api.StationRefundVerificationRequest(
@@ -508,7 +508,7 @@ def test_f8_all_public_methods(method_name: str, f8_client_factory: Callable[...
     case = F8_CASE_DATA[method_name]
     handler, seen = _f8_handler(case["exchanges"])
     client = f8_client_factory(handler, logged_in=method_name != "login")
-    result = getattr(client, method_name)(**_f8_arguments()[method_name])
+    result = getattr(client, method_name)(**_f8_arguments(method_name)[method_name])
     expected_type = type(None) if case["return_type"] == "NoneType" else getattr(api, case["return_type"])
     assert type(result) is expected_type
     expected_seen = [exchange["query"].get("opcode", [exchange["path"]])[0] for exchange in case["exchanges"]]

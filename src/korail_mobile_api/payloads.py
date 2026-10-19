@@ -345,6 +345,25 @@ def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
     }
 
 
+def _build_ticket_maas_menu_form(
+    pnr_no: str | None,
+    ticket_return_numbers: Sequence[str] | None,
+) -> list[tuple[str, str]]:
+    if not isinstance(pnr_no, str) or not pnr_no.strip():
+        raise KorailProtocolError("KORAIL ticket MaaS menu requires a PNR")
+    if (
+        ticket_return_numbers is None
+        or isinstance(ticket_return_numbers, (str, bytes))
+        or not ticket_return_numbers
+        or any(not isinstance(number, str) or not number.strip() for number in ticket_return_numbers)
+    ):
+        raise KorailProtocolError("KORAIL ticket MaaS menu requires at least one return number")
+    return [
+        ("pnrNo", pnr_no),
+        *(("tkRetNo", number) for number in ticket_return_numbers),
+    ]
+
+
 def build_maas_station_form(additional_service_code: str) -> dict[str, str]:
     """부가서비스 코드(``addSrvDvCd``) 하나뿐이고 공통 필드도 붙지 않습니다."""
     if not isinstance(additional_service_code, str) or not additional_service_code.strip():

@@ -10,7 +10,13 @@ import os
 import time
 
 from .config import KorailConfig
-from .constants import KORAIL_API_USER_AGENT, build_dalvik_user_agent
+from .constants import (
+    KORAIL_API_USER_AGENT,
+    KORAIL_DEFAULT_ANDROID_SDK_INT,
+    KORAIL_DEFAULT_DEVICE_HEIGHT,
+    KORAIL_DEFAULT_DEVICE_WIDTH,
+    build_dalvik_user_agent,
+)
 from .dynapath import (
     KORAIL_DYNAPATH_AS_VALUE,
     DynapathConfig,
@@ -70,9 +76,9 @@ def build_config_from_env() -> KorailConfig:
             device_model=device_model,
             build_id=_required_env("KORAIL_ANDROID_BUILD_ID"),
         ),
-        device_width=int(os.environ.get("KORAIL_DEVICE_WIDTH", "1440")),
-        device_height=int(os.environ.get("KORAIL_DEVICE_HEIGHT", "3120")),
-        android_sdk_int=int(os.environ.get("KORAIL_ANDROID_SDK_INT", "37")),
+        device_width=int(os.environ.get("KORAIL_DEVICE_WIDTH", KORAIL_DEFAULT_DEVICE_WIDTH)),
+        device_height=int(os.environ.get("KORAIL_DEVICE_HEIGHT", KORAIL_DEFAULT_DEVICE_HEIGHT)),
+        android_sdk_int=int(os.environ.get("KORAIL_ANDROID_SDK_INT", KORAIL_DEFAULT_ANDROID_SDK_INT)),
         dynapath=dynapath,
         advertising_id=advertising_id,
         proxy=os.environ.get("KORAIL_PROXY") or None,

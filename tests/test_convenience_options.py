@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import replace
 from datetime import datetime
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -44,6 +46,12 @@ def _train(**changes: Any) -> TrainSummary:
     )
 
 
+@pytest.fixture
+def korail() -> Iterator[Korail]:
+    with Korail(KorailConfig(netfunnel_enabled=False), validate_stations=False) as value:
+        yield value
+
+
 @pytest.mark.parametrize(
     "include_no_seats, include_waiting_list, expected",
     [
@@ -54,7 +62,11 @@ def _train(**changes: Any) -> TrainSummary:
     ],
 )
 def test_filters_are_optional_and_keep_source_response(
-    monkeypatch: pytest.MonkeyPatch, include_no_seats: bool, include_waiting_list: bool, expected: list[str]
+    monkeypatch: pytest.MonkeyPatch,
+    korail: Korail,
+    include_no_seats: bool,
+    include_waiting_list: bool,
+    expected: list[str],
 ) -> None:
     trains = [
         _train(train_no="1"),
@@ -65,62 +77,46 @@ def test_filters_are_optional_and_keep_source_response(
     ]
     raw: dict[str, object] = {"extra": {"preserved": True}}
     original = TrainSearchResult(trains, BaseKorailResponse(str_result="SUCC", raw=raw), raw=raw)
-    calls: list[TrainSearchQuery] = []
-
-    def search(query: TrainSearchQuery, **kwargs: object) -> TrainSearchResult:
-        calls.append(query)
-        return original
-
-    with Korail(KorailConfig(netfunnel_enabled=False), validate_stations=False) as korail:
-        monkeypatch.setattr(korail.client, "search_trains", search)
-        result = korail.trains.search(
-            "출발시험역",
-            "도착시험역",
-            depart_after=datetime(2099, 1, 2),
-            include_no_seats=include_no_seats,
-            include_waiting_list=include_waiting_list,
-        )
+    search = Mock(return_value=original)
+    monkeypatch.setattr(korail.client, "search_trains", search)
+    result = korail.trains.search(
+        "출발시험역",
+        "도착시험역",
+        depart_after=datetime(2099, 1, 2),
+        include_no_seats=include_no_seats,
+        include_waiting_list=include_waiting_list,
+    )
     assert [train.train_no for train in result.trains] == expected
     assert result.raw is raw and result.response is original.response and result.metadata is original.metadata
-    assert original.trains is trains and len(original.trains) == 5 and len(calls) == 1
+    assert original.trains is trains and len(original.trains) == 5 and search.call_count == 1
     assert result.unfiltered_trains is (None if include_no_seats else trains)
     if include_no_seats:
         assert result is original
 
 
-@pytest.mark.parametrize("empty_filtered", [True, False])
+@pytest.mark.parametrize("page", ["sold-out", "available", "empty"])
 def test_filter_preserves_cursor_and_last_server_departure(
-    monkeypatch: pytest.MonkeyPatch, empty_filtered: bool
+    monkeypatch: pytest.MonkeyPatch, korail: Korail, page: str
 ) -> None:
-    first = _train(general_reservation_code="13" if empty_filtered else "11")
+    first = _train(general_reservation_code="11" if page == "available" else "13")
     last = _train(train_no="90002", general_reservation_code="13", departure_time="230000")
     original = TrainSearchResult(
-        [first, last],
+        [] if page == "empty" else [first, last],
         BaseKorailResponse(str_result="SUCC"),
         metadata=TrainSearchMetadata(next_page_flag="Y", next_query_station_no="0001", next_train_no="90002"),
     )
-    with Korail(KorailConfig(netfunnel_enabled=False), validate_stations=False) as korail:
-        monkeypatch.setattr(korail.client, "search_trains", lambda *args, **kwargs: original)
-        result = korail.trains.search(
-            "출발시험역", "도착시험역", depart_after=datetime(2099, 1, 2), include_no_seats=False
-        )
-    assert result.trains == ([] if empty_filtered else [first])
-    assert result.next_page() == original.next_page() and result.next_page() is not None
+    monkeypatch.setattr(korail.client, "search_trains", lambda *args, **kwargs: original)
+    result = korail.trains.search(
+        "출발시험역", "도착시험역", depart_after=datetime(2099, 1, 2), include_no_seats=False
+    )
+    assert result.trains == ([first] if page == "available" else [])
     query = TrainSearchQuery("출발시험역", "도착시험역", "20990102", "000000")
-    assert result.next_query_from_last_departure(query) == replace(query, departure_time="230000")
-
-
-def test_empty_server_page_does_not_gain_a_cursor(monkeypatch: pytest.MonkeyPatch) -> None:
-    original = TrainSearchResult(
-        [],
-        BaseKorailResponse(str_result="SUCC"),
-        metadata=TrainSearchMetadata(next_page_flag="Y", next_query_station_no="0001", next_train_no="90002"),
-    )
-    with Korail(KorailConfig(netfunnel_enabled=False), validate_stations=False) as korail:
-        monkeypatch.setattr(korail.client, "search_trains", lambda *args, **kwargs: original)
-        result = korail.trains.search("출발", "도착", depart_after=datetime(2099, 1, 2), include_no_seats=False)
-    assert result.next_page() is None
-    assert result.next_query_from_last_departure(TrainSearchQuery("출발", "도착", "20990102", "000000")) is None
+    if page == "empty":
+        assert result.next_page() is None
+        assert result.next_query_from_last_departure(query) is None
+    else:
+        assert result.next_page() == original.next_page() and result.next_page() is not None
+        assert result.next_query_from_last_departure(query) == replace(query, departure_time="230000")
 
 
 @pytest.mark.parametrize("field", ["include_no_seats", "include_waiting_list"])
@@ -141,7 +137,7 @@ def test_invalid_filter_is_rejected_before_search(
 @pytest.mark.parametrize("option", list(KorailReserveOption))
 @pytest.mark.parametrize("general, special", [(False, False), (True, False), (False, True), (True, True)])
 def test_cabin_option_matrix_sends_at_most_one_reservation(
-    monkeypatch: pytest.MonkeyPatch, option: KorailReserveOption, general: bool, special: bool
+    monkeypatch: pytest.MonkeyPatch, korail: Korail, option: KorailReserveOption, general: bool, special: bool
 ) -> None:
     train = _train(
         general_reservation_code="11" if general else "13", special_reservation_code="11" if special else "13"
@@ -164,35 +160,27 @@ def test_cabin_option_matrix_sends_at_most_one_reservation(
         expected = KorailSeatClass.GENERAL if general else KorailSeatClass.SPECIAL
     else:
         expected = KorailSeatClass.SPECIAL if special else KorailSeatClass.GENERAL
-    with Korail(KorailConfig(netfunnel_enabled=False)) as korail:
-        monkeypatch.setattr(korail.client, "reserve", reserve)
-        if allowed:
-            assert korail.reservations.create(train, option=option, passengers=counts) is hold
-            assert calls == [
-                {"passengers": counts, "seat_class": expected, "job_type": KorailReservationJobType.IMMEDIATE}
-            ]
-        else:
-            with pytest.raises(KorailProtocolError, match="available seat"):
-                korail.reservations.create(train, option=option)
-            assert calls == []
+    monkeypatch.setattr(korail.client, "reserve", reserve)
+    if allowed:
+        assert korail.reservations.create(train, option=option, passengers=counts) is hold
+        assert calls == [
+            {"passengers": counts, "seat_class": expected, "job_type": KorailReservationJobType.IMMEDIATE}
+        ]
+    else:
+        with pytest.raises(KorailProtocolError, match="available seat"):
+            korail.reservations.create(train, option=option)
+        assert calls == []
 
 
-def test_option_does_not_retry_a_server_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[KorailSeatClass] = []
-
-    def decline(
-        train: TrainSummary, *, seat_class: KorailSeatClass, **kwargs: object
-    ) -> ReservationHoldResponse:
-        calls.append(seat_class)
-        raise KorailProtocolError("synthetic server refusal")
-
-    with Korail(KorailConfig(netfunnel_enabled=False)) as korail:
-        monkeypatch.setattr(korail.client, "reserve", decline)
-        with pytest.raises(KorailProtocolError, match="server refusal"):
-            korail.reservations.create(
-                _train(special_reservation_code="11"), option=KorailReserveOption.GENERAL_FIRST
-            )
-    assert calls == [KorailSeatClass.GENERAL]
+def test_option_does_not_retry_a_server_failure(monkeypatch: pytest.MonkeyPatch, korail: Korail) -> None:
+    decline = Mock(side_effect=KorailProtocolError("synthetic server refusal"))
+    monkeypatch.setattr(korail.client, "reserve", decline)
+    with pytest.raises(KorailProtocolError, match="server refusal"):
+        korail.reservations.create(
+            _train(special_reservation_code="11"), option=KorailReserveOption.GENERAL_FIRST
+        )
+    decline.assert_called_once()
+    assert decline.call_args.kwargs["seat_class"] is KorailSeatClass.GENERAL
 
 
 @pytest.mark.parametrize(
@@ -205,45 +193,40 @@ def test_option_does_not_retry_a_server_failure(monkeypatch: pytest.MonkeyPatch)
     ],
 )
 def test_conflicting_options_never_reserve(
-    monkeypatch: pytest.MonkeyPatch, kwargs: dict[str, object], error: type[Exception]
+    monkeypatch: pytest.MonkeyPatch, korail: Korail, kwargs: dict[str, object], error: type[Exception]
 ) -> None:
     def unexpected(*args: object, **kwargs: object) -> None:
         raise AssertionError("invalid options must not reserve")
 
-    with Korail(KorailConfig(netfunnel_enabled=False)) as korail:
-        monkeypatch.setattr(korail.client, "reserve", unexpected)
-        with pytest.raises(error):
-            korail.reservations.create(_train(), **{"option": KorailReserveOption.GENERAL_FIRST, **kwargs})
+    monkeypatch.setattr(korail.client, "reserve", unexpected)
+    with pytest.raises(error):
+        korail.reservations.create(_train(), **{"option": KorailReserveOption.GENERAL_FIRST, **kwargs})
 
 
-def test_option_does_not_convert_sold_out_to_waiting(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_option_does_not_convert_sold_out_to_waiting(monkeypatch: pytest.MonkeyPatch, korail: Korail) -> None:
     def unexpected(*args: object, **kwargs: object) -> None:
         raise AssertionError("a waiting flag must not trigger automatic reservation")
 
-    with Korail(KorailConfig(netfunnel_enabled=False)) as korail:
-        monkeypatch.setattr(korail.client, "reserve", unexpected)
-        with pytest.raises(KorailProtocolError, match="available seat"):
-            korail.reservations.create(
-                _train(general_reservation_code="13", wait_reservation_flag=" 9"),
-                option=KorailReserveOption.GENERAL_FIRST,
-            )
+    monkeypatch.setattr(korail.client, "reserve", unexpected)
+    with pytest.raises(KorailProtocolError, match="available seat"):
+        korail.reservations.create(
+            _train(general_reservation_code="13", wait_reservation_flag=" 9"),
+            option=KorailReserveOption.GENERAL_FIRST,
+        )
 
 
 @pytest.mark.parametrize("seat_class", [None, KorailSeatClass.GENERAL, KorailSeatClass.SPECIAL])
 def test_default_and_explicit_cabin_behavior_remain(
-    monkeypatch: pytest.MonkeyPatch, seat_class: KorailSeatClass | None
+    monkeypatch: pytest.MonkeyPatch, korail: Korail, seat_class: KorailSeatClass | None
 ) -> None:
-    calls: list[dict[str, object]] = []
     hold = ReservationHoldResponse(str_result="SUCC")
-
-    def reserve(*args: object, **kwargs: object) -> ReservationHoldResponse:
-        calls.append(kwargs)
-        return hold
-
-    with Korail(KorailConfig(netfunnel_enabled=False)) as korail:
-        monkeypatch.setattr(korail.client, "reserve", reserve)
-        assert korail.reservations.create(_train(), seat_class=seat_class) is hold
-    assert calls[0]["seat_class"] is (KorailSeatClass.GENERAL if seat_class is None else seat_class)
+    reserve = Mock(return_value=hold)
+    monkeypatch.setattr(korail.client, "reserve", reserve)
+    assert korail.reservations.create(_train(), seat_class=seat_class) is hold
+    reserve.assert_called_once()
+    assert reserve.call_args.kwargs["seat_class"] is (
+        KorailSeatClass.GENERAL if seat_class is None else seat_class
+    )
 
 
 @pytest.mark.parametrize(
@@ -315,15 +298,9 @@ def test_summary_has_no_raw_data() -> None:
     assert TrainSummary("1").summary() == "[열차 1] ?~? ?~?"
 
 
-def test_find_delegates_to_one_direct_hold_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[str] = []
+def test_find_delegates_to_one_direct_hold_lookup(monkeypatch: pytest.MonkeyPatch, korail: Korail) -> None:
     hold = ReservationHoldResponse(str_result="SUCC", pnr_no="SYNTHETIC-PNR")
-
-    def find(pnr_no: str) -> ReservationHoldResponse:
-        calls.append(pnr_no)
-        return hold
-
-    with Korail(KorailConfig(netfunnel_enabled=False)) as korail:
-        monkeypatch.setattr(korail.client, "get_reservation_hold", find)
-        assert korail.reservations.find("SYNTHETIC-PNR") is hold
-    assert calls == ["SYNTHETIC-PNR"]
+    find = Mock(return_value=hold)
+    monkeypatch.setattr(korail.client, "get_reservation_hold", find)
+    assert korail.reservations.find("SYNTHETIC-PNR") is hold
+    find.assert_called_once_with("SYNTHETIC-PNR")
