@@ -11,7 +11,7 @@ from korail_mobile_api import (
     KorailDeviceProfile,
     build_config_from_profile,
 )
-from korail_mobile_api.dynapath import build_default_token_settings
+from korail_mobile_api._core.dynapath import build_default_token_settings
 
 
 def test_default_client_uses_diagnostic_header_without_extra_requests(f8_client_factory):

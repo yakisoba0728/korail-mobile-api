@@ -10,7 +10,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from ._parsing import (
+from ._core.parsing import (
     RESERVATION_OUT_EXTRA_FIELDS,
     _nested_rows,
     _nullable_scalar_fields,
@@ -21,7 +21,7 @@ from ._parsing import (
     _rows,
     _strict_scalar_string,
 )
-from ._parsing import _response_fields as _base_fields
+from ._core.parsing import _response_fields as _base_fields
 from .errors import KorailProtocolError
 from .mutation_models import (
     CartAddResponse,

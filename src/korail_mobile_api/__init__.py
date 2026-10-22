@@ -6,6 +6,7 @@
 
 __version__ = "2.6.2"
 
+from ._core.dynapath import DynapathConfig, DynapathRequestContext, DynapathTokenProvider, DynapathTokenSettings
 from .client import KorailClient
 from .config import KorailConfig, KorailDeviceProfile, build_config_from_env, build_config_from_profile
 from .constants import (
@@ -15,7 +16,6 @@ from .constants import (
     KorailRoomClassCode,
     KorailSeatClass,
 )
-from .dynapath import DynapathConfig, DynapathRequestContext, DynapathTokenProvider, DynapathTokenSettings
 from .errors import (
     KorailAccountLockedError,
     KorailAlreadyProcessedError,

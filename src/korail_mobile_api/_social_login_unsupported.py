@@ -15,7 +15,7 @@ from .errors import KorailProtocolError
 from .models import KorailSession
 
 if TYPE_CHECKING:
-    from .session import KorailSessionClient
+    from ._core.session import KorailSessionClient
 
 
 def login_social(

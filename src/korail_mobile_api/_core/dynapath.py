@@ -17,7 +17,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from urllib.parse import quote_plus
 
-from .constants import (
+from ..constants import (
     DYNAPATH_ALLOWLIST_PATHS,
     DYNAPATH_HEADER_NAME,
     KORAIL_DEFAULT_ANDROID_OS_RELEASE,

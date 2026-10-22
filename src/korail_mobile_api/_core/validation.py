@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from datetime import date
 
-from ._payload_helpers import _is_ascii_digits
-from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
-from .errors import KorailProtocolError
+from ..constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
+from ..errors import KorailProtocolError
+from .wire import _is_ascii_digits
 
 
 def _int_text(value: int, name: str) -> str:

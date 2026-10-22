@@ -10,8 +10,78 @@ from typing import Any, Literal, TypeVar, overload
 
 import httpx
 
-from ._cleanup import _close_connections
-from ._parsing import _preserve_read_raw
+from ._core.cleanup import _close_connections
+from ._core.http import KorailHttpClient
+from ._core.netfunnel import KorailNetFunnelClient
+from ._core.parsing import _preserve_read_raw
+from ._core.session import KorailSessionClient
+from ._read_account_parsers import (
+    parse_cart_list_response,
+    parse_crew_request_list_response,
+    parse_customer_trip_info_response,
+    parse_delay_discount_ticket_response,
+    parse_deposit_bank_response,
+    parse_discount_coupon_response,
+    parse_korail_point_summary_response,
+    parse_maas_service_detail_list_response,
+    parse_mileage_history_response,
+    parse_multi_child_discount_target_response,
+    parse_product_detail_response,
+    parse_product_reservation_list_response,
+    parse_service_status_response,
+    parse_trip_change_date_response,
+    parse_trip_menu_response,
+)
+from ._read_pass_parsers import (
+    parse_commuter_info_response,
+    parse_commuter_kind_menu_response,
+    parse_discount_card_schedule_response,
+    parse_discount_card_usage_response,
+    parse_pass_availability_response,
+    parse_pass_menu_response,
+    parse_pass_schedule_response,
+)
+from ._read_payload_account import (
+    build_cart_list_form,
+    build_commuter_kind_menu_query,
+    build_crew_request_list_query,
+    build_customer_trip_info_form,
+    build_delay_discount_ticket_form,
+    build_discount_card_usage_query,
+    build_discount_coupon_form,
+    build_korail_point_summary_form,
+    build_multi_child_discount_target_form,
+    build_pass_availability_form,
+    build_pass_menu_form,
+    build_product_detail_query,
+    build_product_reservations_query,
+    build_recent_delivery_history_form,
+    build_service_status_query,
+    build_trip_change_date_form,
+)
+from ._read_payload_tickets import (
+    build_self_checkin_info_form,
+    build_self_checkin_seat_check_form,
+    build_ticket_receipt_form,
+)
+from ._read_ticket_parsers import (
+    parse_delay_certificate_response,
+    parse_delay_return_receipt_response,
+    parse_delivery_recipient_response,
+    parse_original_ticket_inquiry_response,
+    parse_pbp_acceptance_specification_response,
+    parse_recent_delivery_history_response,
+    parse_refund_commission_response,
+    parse_refund_ticket_detail_response,
+    parse_reservation_history_response,
+    parse_self_checkin_info_response,
+    parse_self_checkin_seat_check_response,
+    parse_self_seat_change_info_response,
+    parse_ticket_duplication_check_response,
+    parse_ticket_list_response,
+    parse_ticket_receipt_response,
+    parse_ticket_reservation_detail_response,
+)
 from .config import KorailConfig
 from .constants import KorailLoginInputFlag, KorailReservationJobType, KorailRoomClassCode, KorailSeatClass
 from .errors import (
@@ -21,7 +91,6 @@ from .errors import (
     KorailProtocolError,
     KorailSessionExpiredError,
 )
-from .http import KorailHttpClient
 from .limousine_models import (
     LimousineSchedule,
     LimousineScheduleQuery,
@@ -29,14 +98,8 @@ from .limousine_models import (
     LimousineSeatInventoryQuery,
     LimousineSeatInventoryResponse,
 )
-from .limousine_parsers import (
-    parse_limousine_schedule_response,
-    parse_limousine_seat_inventory_response,
-)
-from .limousine_payloads import (
-    build_limousine_schedule_form,
-    build_limousine_seat_inventory_form,
-)
+from .limousine_parsers import parse_limousine_schedule_response, parse_limousine_seat_inventory_response
+from .limousine_payloads import build_limousine_schedule_form, build_limousine_seat_inventory_form
 from .models import (
     AppDataResponse,
     BaseKorailResponse,
@@ -115,7 +178,6 @@ from .mutation_payloads import (
     build_transfer_reservation_form,
     build_unpaid_reservation_cancel_form,
 )
-from .netfunnel import KorailNetFunnelClient
 from .parsers import (
     parse_app_data_response,
     parse_maas_menu_list_response,
@@ -196,49 +258,11 @@ from .read_models import (
     _RefundCommissionContext,
 )
 from .read_parsers import (
-    parse_cart_list_response,
-    parse_commuter_info_response,
-    parse_commuter_kind_menu_response,
-    parse_crew_request_list_response,
-    parse_customer_trip_info_response,
-    parse_delay_certificate_response,
-    parse_delay_discount_ticket_response,
-    parse_delay_return_receipt_response,
-    parse_delivery_recipient_response,
-    parse_deposit_bank_response,
-    parse_discount_card_schedule_response,
-    parse_discount_card_usage_response,
-    parse_discount_coupon_response,
     parse_free_seat_car_response,
     parse_guide_seat_condition_response,
-    parse_korail_point_summary_response,
-    parse_maas_service_detail_list_response,
     parse_merge_seats_inquiry_response,
-    parse_mileage_history_response,
-    parse_multi_child_discount_target_response,
-    parse_original_ticket_inquiry_response,
-    parse_pass_availability_response,
-    parse_pass_menu_response,
-    parse_pass_schedule_response,
-    parse_pbp_acceptance_specification_response,
     parse_price_fare_quote_response,
-    parse_product_detail_response,
-    parse_product_reservation_list_response,
-    parse_recent_delivery_history_response,
-    parse_refund_commission_response,
-    parse_refund_ticket_detail_response,
-    parse_reservation_history_response,
     parse_seat_assignment_schedule_response,
-    parse_self_checkin_info_response,
-    parse_self_checkin_seat_check_response,
-    parse_self_seat_change_info_response,
-    parse_service_status_response,
-    parse_ticket_duplication_check_response,
-    parse_ticket_list_response,
-    parse_ticket_receipt_response,
-    parse_ticket_reservation_detail_response,
-    parse_trip_change_date_response,
-    parse_trip_menu_response,
 )
 from .read_payloads import (
     CommuterInfoRequest,
@@ -256,49 +280,29 @@ from .read_payloads import (
     SelfSeatChangeInfoRequest,
     TicketDuplicationCheckRequest,
     TicketReservationDetailRequest,
-    build_cart_list_form,
     build_commuter_info_form,
-    build_commuter_kind_menu_query,
-    build_crew_request_list_query,
-    build_customer_trip_info_form,
     build_delay_certificate_form,
-    build_delay_discount_ticket_form,
     build_delay_return_receipt_form,
     build_delivery_recipient_form,
     build_discount_card_schedule_query,
-    build_discount_card_usage_query,
-    build_discount_coupon_form,
     build_free_seat_car_form,
     build_guide_seat_condition_form,
-    build_korail_point_summary_form,
     build_maas_service_detail_form,
     build_merge_seats_inquiry_form,
     build_mileage_history_form,
-    build_multi_child_discount_target_form,
     build_original_ticket_inquiry_form,
-    build_pass_availability_form,
-    build_pass_menu_form,
     build_pass_schedule_form,
     build_pbp_acceptance_specification_form,
     build_price_fare_quote_form,
-    build_product_detail_query,
-    build_product_reservations_query,
-    build_recent_delivery_history_form,
     build_refund_commission_form,
     build_refund_ticket_detail_form,
     build_seat_assignment_schedule_form,
-    build_self_checkin_info_form,
-    build_self_checkin_seat_check_form,
     build_self_seat_change_info_form,
-    build_service_status_query,
     build_station_refund_verification_form,
     build_ticket_duplication_check_form,
-    build_ticket_receipt_form,
     build_ticket_reservation_detail_query,
-    build_trip_change_date_form,
     build_trip_menu_form,
 )
-from .session import KorailSessionClient
 
 T = TypeVar("T")
 

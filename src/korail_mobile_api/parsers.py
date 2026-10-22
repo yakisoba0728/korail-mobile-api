@@ -10,13 +10,9 @@ from collections.abc import Mapping
 from functools import partial
 from typing import Any
 
-from ._parsing import (
-    _inventory_ratio as _inventory_ratio,
-)
-from ._parsing import (
-    _model_response_fields as _response_fields,
-)
-from ._parsing import (
+from ._core.parsing import _inventory_ratio as _inventory_ratio
+from ._core.parsing import _model_response_fields as _response_fields
+from ._core.parsing import (
     _nested_rows,
     _nullable_scalar_fields,
     _optional_integer,

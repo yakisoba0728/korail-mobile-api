@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from ._parsing import (
+from ._core.parsing import (
     _nullable_scalar_fields,
     _optional_integer,
     _optional_mapping,

@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from ._parsing import _envelope, _nullable_scalar_fields, _optional_mapping, _rows, _strict_scalar_string
+from ._core.parsing import _envelope, _nullable_scalar_fields, _optional_mapping, _rows, _strict_scalar_string
 from .errors import SESSION_EXPIRED_CODE, KorailProtocolError, KorailSessionExpiredError, classify_app_error
 from .read_models import MaasServiceDetail, MaasServiceDetailInfo
 

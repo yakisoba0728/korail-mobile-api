@@ -18,8 +18,8 @@ from korail_mobile_api import (
     build_config_from_env,
     build_config_from_profile,
 )
-from korail_mobile_api import _transport as transport_module
-from korail_mobile_api._transport import build_transport
+from korail_mobile_api._core import http as transport_module
+from korail_mobile_api._core.http import build_transport
 
 USER = "synthetic-proxy-user"
 SECRET = "synthetic-proxy-secret"

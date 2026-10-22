@@ -14,7 +14,7 @@ import pytest
 
 from korail_mobile_api import read_models as m
 from korail_mobile_api import read_payloads as p
-from korail_mobile_api._parsing import _nullable_scalar_fields, _reservation_passengers
+from korail_mobile_api._core.parsing import _nullable_scalar_fields, _reservation_passengers
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import KorailProtocolError, KorailSessionExpiredError

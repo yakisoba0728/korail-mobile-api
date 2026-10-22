@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from ._read_payload_validation import _ascii_digits, _required_text
+from ._core.validation import _ascii_digits, _required_text
 from .errors import KorailProtocolError
 from .read_models import RefundTicketDetailResponse
 

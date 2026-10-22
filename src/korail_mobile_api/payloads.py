@@ -7,7 +7,7 @@
 import time
 from collections.abc import Sequence
 
-from ._payload_helpers import _device_version, _device_version_key, _is_ascii_digits
+from ._core.wire import _device_version, _device_version_key, _is_ascii_digits
 from .config import KorailConfig
 from .constants import (
     KORAIL_DIRECT_ITINERARY_CODE,

@@ -14,11 +14,11 @@ import pytest
 
 import korail_mobile_api.client as client_module
 import korail_mobile_api.mutation_payloads as payload_module
+from korail_mobile_api import DynapathConfig
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.constants import KorailReservationJobType as Job
 from korail_mobile_api.constants import KorailSeatClass as Cabin
-from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import KorailApiError, KorailProtocolError, KorailSessionExpiredError
 from korail_mobile_api.facade import ReservationResource
 from korail_mobile_api.models import KorailSession, TrainSummary

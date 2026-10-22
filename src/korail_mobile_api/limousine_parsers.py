@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from ._parsing import (
+from ._core.parsing import (
     _inventory_ratio,
     _nullable_scalar_fields,
     _optional_scalar_string,
@@ -17,9 +17,7 @@ from ._parsing import (
     _row,
     _strict_scalar_string,
 )
-from ._parsing import (
-    _model_response_fields as _response_fields,
-)
+from ._core.parsing import _model_response_fields as _response_fields
 from .errors import KorailProtocolError
 from .limousine_models import (
     LimousineSchedule,

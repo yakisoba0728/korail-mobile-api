@@ -6,12 +6,9 @@
 
 from __future__ import annotations
 
-from ._payload_helpers import _device_version_key
+from ._core.wire import _device_version_key
 from .config import KorailConfig
-from .limousine_models import (
-    LimousineScheduleQuery,
-    LimousineSeatInventoryQuery,
-)
+from .limousine_models import LimousineScheduleQuery, LimousineSeatInventoryQuery
 
 
 def build_limousine_schedule_form(

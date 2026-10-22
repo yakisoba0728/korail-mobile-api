@@ -10,6 +10,13 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
+from korail_mobile_api._core.netfunnel import (
+    KORAIL_NETFUNNEL_GATES,
+    KorailNetFunnelClient,
+    KorailNetFunnelGate,
+    korail_netfunnel_node_url,
+    parse_netfunnel_body,
+)
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import (
     KorailApiError,
@@ -35,13 +42,6 @@ from korail_mobile_api.limousine_payloads import (
 from korail_mobile_api.models import BaseKorailResponse, TrainSearchQuery
 from korail_mobile_api.mutation_models import KorailPassengerCounts
 from korail_mobile_api.mutation_payloads import build_limousine_reservation_form
-from korail_mobile_api.netfunnel import (
-    KORAIL_NETFUNNEL_GATES,
-    KorailNetFunnelClient,
-    KorailNetFunnelGate,
-    parse_netfunnel_body,
-)
-from korail_mobile_api.netfunnel_safety import korail_netfunnel_node_url
 
 
 @dataclass

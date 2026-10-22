@@ -12,17 +12,18 @@ import httpx
 import pytest
 
 import korail_mobile_api as package
+from korail_mobile_api import DynapathConfig, DynapathTokenSettings
 from korail_mobile_api import errors as E
-from korail_mobile_api._payload_helpers import _device_version_key
+from korail_mobile_api._core.crypto import transform_login_password
+from korail_mobile_api._core.dynapath import DynapathTokenGenerator
+from korail_mobile_api._core.http import KorailHttpClient, parse_base_response
+from korail_mobile_api._core.netfunnel import KorailNetFunnelClient
+from korail_mobile_api._core.session import infer_login_input_flag
+from korail_mobile_api._core.wire import _device_version_key
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS, KORAIL_COMMON_CODE_BOOTSTRAP_CODES
-from korail_mobile_api.crypto import transform_login_password
-from korail_mobile_api.dynapath import DynapathConfig, DynapathTokenGenerator, DynapathTokenSettings
-from korail_mobile_api.http import KorailHttpClient, parse_base_response
 from korail_mobile_api.models import LoginCryptoInfo
-from korail_mobile_api.netfunnel import KorailNetFunnelClient
-from korail_mobile_api.session import infer_login_input_flag
 
 LOGIN = "/classes/com.korail.mobile.login.Login"
 LOGOUT = "/classes/com.korail.mobile.login.Logout"
@@ -1057,7 +1058,7 @@ def test_oversized_envelope_integer_is_protocol_error_with_raw(key: str, entrypo
     import sys
 
     from korail_mobile_api import BaseKorailResponse, KorailProtocolError
-    from korail_mobile_api.http import parse_base_response
+    from korail_mobile_api._core.http import parse_base_response
     from korail_mobile_api.read_parsers import parse_delay_return_receipt_response
 
     parsers = {

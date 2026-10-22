@@ -10,10 +10,8 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Literal
 
-from ._parsing import _optional_scalar_string
-from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES, KorailLoginInputFlag
-from .crypto import transform_login_password
-from .errors import (
+from ..constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES, KorailLoginInputFlag
+from ..errors import (
     ACCOUNT_LOCKED_CODES,
     KorailAccountLockedError,
     KorailAppUpdateRequiredError,
@@ -24,9 +22,11 @@ from .errors import (
     KorailServiceUnavailableError,
     classify_app_error,
 )
+from ..models import BaseKorailResponse, KorailSession, LoginCryptoInfo
+from ..payloads import build_common_code_form
+from .crypto import transform_login_password
 from .http import KorailHttpClient
-from .models import BaseKorailResponse, KorailSession, LoginCryptoInfo
-from .payloads import build_common_code_form
+from .parsing import _optional_scalar_string
 
 KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
 #: LoginViewModel.java:1390-1520의 hashCode 분기 -699977554·-699974646은 error_json.json의 해당 코드와 일치합니다. 다른 거절은 앱 오류

@@ -14,9 +14,9 @@ import pytest
 
 import korail_mobile_api as api
 from korail_mobile_api import mutation_parsers, read_parsers, read_payloads
+from korail_mobile_api._core.session import infer_login_input_flag
 from korail_mobile_api.models import TrainSummary
 from korail_mobile_api.read_payloads import build_self_seat_change_info_form
-from korail_mobile_api.session import infer_login_input_flag
 
 
 @pytest.mark.parametrize("module", [read_parsers, read_payloads])

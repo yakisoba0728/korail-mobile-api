@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from urllib.parse import urlsplit
 
+from ._core.dynapath import DynapathConfig, _DiagnosticTokenProvider
 from .constants import (
     KORAIL_API_USER_AGENT,
     KORAIL_API_VERSION,
@@ -30,7 +31,6 @@ from .constants import (
     KORAIL_USER_AGENT,
     build_dalvik_user_agent,
 )
-from .dynapath import DynapathConfig, _DiagnosticTokenProvider
 
 _PROXY_SCHEMES = frozenset({"http", "https", "socks5", "socks5h"})
 

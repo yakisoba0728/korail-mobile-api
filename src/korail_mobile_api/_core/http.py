@@ -2,10 +2,13 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""공통 필드·헤더·실패 봉투 정책을 공유하며 대기열 전송은 netfunnel에서 분리합니다."""
+"""공통 필드·헤더·실패 봉투 정책을 공유하며 대기열 전송은 netfunnel에서 분리합니다.
+
+API·대기열 클라이언트가 같은 규칙으로 전송 계층을 고르며 프록시 URL은 오류 메시지에 싣지 않습니다."""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from typing import Any
@@ -13,15 +16,9 @@ from urllib.parse import urlencode
 
 import httpx
 
-from ._parsing import _envelope
-from ._payload_helpers import _device_version_key
-from ._transport import build_transport, redact_failed_request
-from .config import KorailConfig
-from .constants import (
-    DYNAPATH_REQUIRED_PATHS,
-)
-from .dynapath import DynapathRequestContext, DynapathTokenGenerator
-from .errors import (
+from ..config import KorailConfig
+from ..constants import DYNAPATH_REQUIRED_PATHS
+from ..errors import (
     SESSION_EXPIRED_CODE,
     KorailDynaPathError,
     KorailDynaPathRequiredError,
@@ -30,7 +27,10 @@ from .errors import (
     KorailTransportError,
     classify_app_error,
 )
-from .models import BaseKorailResponse
+from ..models import BaseKorailResponse
+from .dynapath import DynapathRequestContext, DynapathTokenGenerator
+from .parsing import _envelope
+from .wire import _device_version_key
 
 # 응답 모델이 CommonOut 을 상속하지 않아 strResult 누락이 실패가 아닌 읽기 경로: StationDataOut(stationdata, EbizMaasStationList),
 # StationInfoOut(stationinfo).
@@ -414,3 +414,41 @@ class KorailHttpClient:
             raise_on_fail=raise_on_fail,
             require_envelope=require_envelope,
         )
+
+
+# 프록시까지의 TLS(https 프록시)는 httpx 0.25.0·httpcore 0.18.0부터 지원합니다.
+_HTTPX_VERSION = tuple(int(part) for part in re.findall(r"\d+", httpx.__version__)[:2])
+
+
+def build_transport(config: KorailConfig, transport: httpx.BaseTransport | None) -> httpx.BaseTransport | None:
+    """``proxy``가 없으면 ``transport``를 그대로 돌려줘 httpx 기본 동작(환경변수 프록시 포함)을 유지합니다."""
+    if config.proxy is None:
+        return transport
+    # 함께 주면 httpx 는 프록시 mount 로 모든 요청을 보내 transport 를 조용히 무시합니다.
+    if transport is not None:
+        raise ValueError("KorailConfig.proxy cannot be combined with a custom transport")
+    try:
+        proxy = httpx.Proxy(config.proxy)
+    except (ValueError, httpx.InvalidURL):
+        # httpx 0.28 미만은 socks5h 를 받지 않습니다. httpx 의 메시지에는 사용자 이름이 남아 원인을 잇지 않습니다.
+        raise ValueError("httpx rejected the proxy URL; socks5h needs httpx 0.28 or later") from None
+    # 낮은 httpx 에서 프록시까지 TLS 없이 연결되거나 실패하는 대신 요청 전에 거절합니다.
+    if proxy.url.scheme == "https" and _HTTPX_VERSION < (0, 25):
+        raise ValueError("https proxies need httpx 0.25 or later")
+    try:
+        # Client 의 proxies/proxy 인자는 httpx 0.24 와 0.28 에서 달라 두 버전에 공통인 HTTPTransport(proxy=Proxy) 를 씁니다.
+        return httpx.HTTPTransport(proxy=proxy)
+    except ImportError as exc:
+        raise ImportError("SOCKS proxies need the socks extra: pip install 'korail-mobile-api[socks]'") from exc
+
+
+def redact_failed_request(exc: Exception) -> None:
+    """전송 실패 예외에 붙은 요청을 메서드와 쿼리 없는 URL만 남긴 사본으로 바꿉니다. 예외 객체와 타입은 그대로입니다."""
+    # 원래 요청에는 로그인 아이디·변환된 비밀번호·카드 필드(본문), 세션 쿠키·DynaPath 토큰(헤더), 식별자(쿼리)가 있습니다.
+    if not isinstance(exc, httpx.HTTPError):
+        return
+    try:
+        request = exc.request
+    except RuntimeError:
+        return
+    exc.request = httpx.Request(request.method, request.url.copy_with(query=None))

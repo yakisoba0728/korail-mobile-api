@@ -13,7 +13,7 @@ import pytest
 
 import korail_mobile_api as api
 from korail_mobile_api import errors as E
-from korail_mobile_api.http import parse_base_response
+from korail_mobile_api._core.http import parse_base_response
 
 ROOT = Path(__file__).resolve().parents[1]
 

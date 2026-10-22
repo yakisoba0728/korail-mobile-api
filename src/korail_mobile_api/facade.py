@@ -14,8 +14,8 @@ from types import TracebackType
 
 import httpx
 
-from ._cleanup import _close_connections
-from ._read_payload_validation import _optional_text, _passenger_count, _required_text
+from ._core.cleanup import _close_connections
+from ._core.validation import _optional_text, _passenger_count, _required_text
 from .client import KorailClient
 from .config import KorailConfig
 from .constants import KorailReservationJobType, KorailReserveOption, KorailSeatClass

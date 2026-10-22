@@ -11,7 +11,8 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from typing import NoReturn, TypeVar
 
-from ._payload_helpers import _device_version_key
+from ._core.wire import _device_version_key
+from ._read_payload_tickets import self_checkin_ticket_fields
 from .config import KorailConfig
 from .constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
@@ -56,7 +57,6 @@ from .read_models import (
     TrainScheduleItem,
     _RefundCommissionContext,
 )
-from .read_payloads import self_checkin_ticket_fields
 
 _DATE_RE = re.compile(r"[0-9]{8}")
 _TIME_RE = re.compile(r"[0-9]{6}")

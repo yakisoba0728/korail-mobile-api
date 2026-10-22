@@ -12,17 +12,15 @@ from dataclasses import dataclass
 from typing import Literal, TypeAlias
 from typing import cast as _cast
 
-from . import _read_payload_account, _read_payload_tickets, _read_payload_validation
-from ._payload_helpers import _device_version
+from . import _read_payload_account, _read_payload_tickets
+from ._core import validation as _read_payload_validation
+from ._core.wire import _device_version
 from .config import KorailConfig
 from .errors import KorailProtocolError
 from .models import TrainSummary
 from .mutation_models import StationRefundVerificationRequest
 from .payloads import build_cache_query as build_cache_query
-from .read_models import (
-    CommuterInfoResponse,
-    PassMenuData,
-)
+from .read_models import CommuterInfoResponse, PassMenuData
 
 # 요청 모델은 이 모듈에 유지하고 독립 빌더는 기존 경로로 다시 제공합니다.
 _maas_cart_item = _read_payload_account._maas_cart_item

@@ -48,10 +48,10 @@ def _offline_transport() -> Any:
 
 # --- G10: import 무결성 -----------------------------------------------------
 def g10(pkg: Any) -> int:
-    modules = [m.name for m in pkgutil.iter_modules(pkg.__path__)]
+    modules = [m.name for m in pkgutil.walk_packages(pkg.__path__, prefix="korail_mobile_api.")]
     for name in modules:
         try:
-            importlib.import_module(f"korail_mobile_api.{name}")
+            importlib.import_module(name)
         except Exception as error:  # noqa: BLE001
             check("G10", False, f"import {name}: {type(error).__name__}")
     undefined = [n for n in pkg.__all__ if not hasattr(pkg, n)]

@@ -6,7 +6,7 @@
 
 from typing import TypeGuard
 
-from .config import KorailConfig
+from ..config import KorailConfig
 
 
 def _device_version(config: KorailConfig) -> dict[str, str]:

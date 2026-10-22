@@ -64,7 +64,7 @@ class BaseKorailResponse:
 
         성공·실패는 판정하지 않습니다. ``raw``가 JSON 객체가 아니거나 봉투 필드가 문자열·정수·``null``이 아니면
         ``KorailProtocolError``가 발생합니다."""
-        from ._parsing import _envelope
+        from ._core.parsing import _envelope
 
         if not isinstance(raw, dict):
             error = KorailProtocolError("KORAIL response must be a JSON object")

@@ -2,40 +2,39 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""5101→필요한 5002→API→5004 순서를 유지하며 노드·오류 정책은 checks/BEHAVIOR.md에 명시합니다."""
+"""5101→필요한 5002→API→5004 순서를 유지하며 노드·오류 정책은 checks/BEHAVIOR.md에 명시합니다.
+
+서버가 준 노드라도 허용 범위 밖이면 신뢰하지 않고 정문을 사용합니다."""
 
 from __future__ import annotations
 
 import logging
+import re
 import time
 import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TypeVar
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 
-from ._transport import build_transport, redact_failed_request
-from .config import KorailConfig
-from .constants import (
+from ..config import KorailConfig
+from ..constants import (
     KORAIL_NETFUNNEL_PATH,
     KORAIL_NETFUNNEL_RETRY,
     KORAIL_NETFUNNEL_SERVICE_ID,
+    KORAIL_NETFUNNEL_URL,
     KorailNetFunnelAction,
     KorailNetFunnelOpcode,
 )
-from .errors import (
-    KorailNetFunnelError,
-    KorailProtocolError,
-    KorailQueueRejectedError,
-    KorailTransportError,
-)
-from .netfunnel_safety import korail_netfunnel_node_url
+from ..errors import KorailNetFunnelError, KorailProtocolError, KorailQueueRejectedError, KorailTransportError
+from .http import build_transport, redact_failed_request
 
 T = TypeVar("T")
 
-_log = logging.getLogger(__name__)
+# Logger names predate the _core move; docs/guide/configuration.md names this one.
+_log = logging.getLogger("korail_mobile_api.netfunnel")
 
 #: ``Code.Success`` — ``com/netfunnel/api/Code.java:27``.
 SUCCESS_CODE = "200"
@@ -351,3 +350,32 @@ class KorailNetFunnelClient:
         except Exception as exc:
             # 반납은 finally 에서 불리므로 어떤 실패도 API 쪽 원래 예외를 가리지 않게 로그만 남깁니다.
             _log.warning("KORAIL NetFunnel setComplete failed: %s", exc)
+
+
+_safety_log = logging.getLogger("korail_mobile_api.netfunnel_safety")
+
+KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
+
+#: SDK 기본값 host_notmodify=true는 응답 노드 이동을 막습니다 (com/netfunnel/api/Response.java:143-146;
+#: CommandClient.java:33-38; com/netfunnel/api/Property.java:23). 앱 기동 시 변경 여부는 보호된 setter 때문에
+#: 미확인입니다(KorailTalkApplication.java:361-389).
+KORAIL_NETFUNNEL_NODE_HOST_RE = re.compile(r"rnf[1-9][0-9]?\.letskorail\.com")
+
+KORAIL_NETFUNNEL_NODE_PORT = 443
+
+
+def korail_netfunnel_node_url(ip: str, port: str) -> str:
+    """노드가 없거나 허용 범위 밖이면 빈 문자열이며, 호출자는 정문을 씁니다. SDK 기본값은 노드를 따르지 않습니다(com/netfunnel/api/Property.java:23)."""
+    if not ip and not port:
+        return ""
+    host_allowed = ip == KORAIL_NETFUNNEL_HTTPS_HOST or KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(ip) is not None
+    if not host_allowed or port != str(KORAIL_NETFUNNEL_NODE_PORT):
+        _safety_log.warning(
+            "KORAIL NetFunnel reply named node %r port %r; only rnf<1-99>.letskorail.com (lowercase) or the "
+            "front door on %d are followed, so the front door is used",
+            ip,
+            port,
+            KORAIL_NETFUNNEL_NODE_PORT,
+        )
+        return ""
+    return f"https://{ip}"

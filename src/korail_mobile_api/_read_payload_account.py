@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from ._read_payload_validation import _ascii_digits, _calendar_date, _int_text, _optional_text, _required_text
+from ._core.validation import _ascii_digits, _calendar_date, _int_text, _optional_text, _required_text
 from .errors import KorailProtocolError
 from .payloads import build_cache_query
 from .read_models import CartItem, MaasServiceDetail

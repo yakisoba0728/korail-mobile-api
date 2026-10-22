@@ -12,8 +12,8 @@ from collections.abc import Callable, Mapping
 from functools import wraps
 from typing import Any, ParamSpec, TypedDict, TypeVar
 
-from .errors import KorailApiError, KorailProtocolError
-from .models import BaseKorailResponse, ReservationPassengerInfo
+from ..errors import KorailApiError, KorailProtocolError
+from ..models import BaseKorailResponse, ReservationPassengerInfo
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
