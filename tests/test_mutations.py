@@ -2079,3 +2079,28 @@ def test_recalculation_from_hold_keeps_raw_on_oversized_integer(key: str) -> Non
         assert isinstance(error.value.__cause__, ValueError)
     finally:
         sys.set_int_max_str_digits(previous)
+
+
+def test_documented_recovery_cancels_a_hold_whose_response_failed_to_parse(scripted_client_factory) -> None:
+    """docs/guide/errors.md#unparsed-hold: the PNR survives in raw and a hand-built hold cancels it."""
+    config = KorailConfig(base_url="https://offline.invalid", netfunnel_enabled=False, disable_dynapath=True)
+    unparsable = hold_raw()
+    unparsable["h_tot_rcvd_amt"] = "009999"
+    client, requests, _ = scripted_client_factory(
+        [unparsable, {**BASE}, {**BASE}], config=config, session=KorailSession(jsessionid="SYNTH-SESSION")
+    )
+    with pytest.raises(KorailProtocolError) as caught:
+        client.reserve(train())
+    raw = caught.value.raw
+    assert isinstance(raw, dict)
+    pending = ReservationHoldResponse(
+        str_result="SUCC", pnr_no=str(raw.get("h_pnr_no") or ""), journey_count=str(raw.get("h_jrny_cnt") or "")
+    )
+    client.cancel_unpaid_hold(pending)
+    cancel = dict(parse_qsl(requests[-1].content.decode()))
+    assert [request.url.path.rsplit(".", 1)[-1] for request in requests] == [
+        "TicketReservation",
+        "ReservationCancel",
+        "ReservationCancelChk",
+    ]
+    assert (cancel["txtPnrNo"], cancel["txtJrnyCnt"]) == (PNR, "0001")
