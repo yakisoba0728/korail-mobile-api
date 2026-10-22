@@ -29,9 +29,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 CLIENT = ROOT / "src" / "korail_mobile_api" / "client.py"
 
-pytestmark = pytest.mark.skipif(
-    not DOCS.is_dir() or not CLIENT.is_file(), reason="docs/ is not shipped in the sdist"
-)
+# The sdist ships tests but not docs/; a moved client.py must fail, not skip.
+pytestmark = pytest.mark.skipif(not DOCS.is_dir(), reason="docs/ is not shipped in the sdist")
 
 _FENCE = re.compile(r"^([ \t]*)```python[^\n]*\n(.*?)^\1```", re.S | re.M)
 

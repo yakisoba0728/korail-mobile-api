@@ -200,6 +200,9 @@ def test_httpx_rejection_is_reraised_without_the_url(
 
 
 def test_missing_socksio_points_to_the_socks_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    # httpcore installs a permanent SOCKS fallback if first imported while socksio is blocked.
+    import httpcore  # noqa: F401
+
     monkeypatch.setitem(sys.modules, "socksio", None)
     config = KorailConfig(proxy=f"socks5://{USER}:{SECRET}@127.0.0.1:1080")
     with pytest.raises(ImportError, match=r"korail-mobile-api\[socks\]") as excinfo:
