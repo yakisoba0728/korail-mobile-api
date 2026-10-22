@@ -436,7 +436,7 @@ for train in result.trains:
 
 ## `register_discount_card`
 
-3.0에서 제거했습니다. 실서버에서 확인하지 못했고 라이브러리로 결제·취소할 수 없는 구매만 만들었기 때문입니다. `DiscountCardPurchaseRequest`, `DiscountCardSectionRequest`, `DiscountCardAdditionalUser`, `DiscountCardPurchaseResponse`도 함께 제거했습니다. 대신 쓸 메서드는 없으며 [3.0 이전 안내](../migration-3.0.md#removed)를 참고하세요.
+3.0에서 제거했습니다. 실서버에서 확인하지 못했고 라이브러리로 결제·취소할 수 없는 구매만 만들었기 때문입니다. `DiscountCardPurchaseRequest`, `DiscountCardSectionRequest`, `DiscountCardAdditionalUser`, `DiscountCardPurchaseResponse`도 함께 제거했습니다. 대신 쓸 메서드는 없으며 [3.0으로 옮기기](../migration-3.0.md#removed)를 참고하세요.
 
 ## `extend_discount_card`
 

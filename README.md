@@ -266,7 +266,7 @@ KORAIL은 데이터센터·VPN IP 대역에서 오는 요청을 막습니다. Or
 
 ## 문서와 링크
 
-- [문서 사이트](https://yaki.kr/korail-mobile-api/) — 시작하기, 가이드, 메서드 85개 전체의 API 레퍼런스
+- [문서 사이트](https://yaki.kr/korail-mobile-api/) — 시작하기, 가이드, 메서드 83개 전체의 API 레퍼런스
 - [동작 규칙 (checks/BEHAVIOR.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/BEHAVIOR.md) — 요청을 만드는 규칙, 응답을 읽는 규칙, 앱과 다르게 한 부분
 - [변경 이력 (CHANGELOG.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)
 - [오프라인 검사 기준 (checks/ACCEPTANCE.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/ACCEPTANCE.md)
