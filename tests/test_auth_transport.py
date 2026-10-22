@@ -710,7 +710,8 @@ def test_dalvik_user_agent_follows_android_runtime_init() -> None:
 def test_default_configuration_and_explicit_overrides():
     # Construction only: no token generation formula is executed or inspected.
     config = KorailConfig()
-    assert config.dynapath.enabled and config.dynapath.token_settings is not None
+    assert config.dynapath.enabled and config.dynapath.token_provider is not None
+    assert config.dynapath.token_settings is None
     assert config.device == "AD" and config.version == "250601003"
     assert config.key == "korail1234567890" and config.timeout == 60.0
     assert config.lang is None
@@ -1032,3 +1033,18 @@ def test_common_form_keeps_order_and_returns_fresh_mapping(lang: str | None, app
 def test_invalid_app_version_is_rejected(app_version: object) -> None:
     with pytest.raises(ValueError, match="app_version"):
         KorailConfig(app_version=app_version)  # type: ignore[arg-type]
+
+
+def test_default_diagnostic_login_keeps_bootstrap_and_session_contract(factory):
+    client, requests = factory(
+        [*bootstrap(), login_response()],
+        config=KorailConfig(base_url="https://offline.invalid", netfunnel_enabled=False),
+    )
+    assert client.login(ID, PASSWORD).jsessionid == COOKIE
+    assert [request.url.path for request in requests] == [SERVICE, COMMON, LOGIN]
+    assert [request.headers.get("x-dynapath-m-token") for request in requests] == [
+        None,
+        None,
+        "2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus",
+    ]
+    assert PASSWORD not in requests[-1].content.decode()

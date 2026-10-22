@@ -2,10 +2,11 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""토큰 공식은 SDK 평문 흐름을 유지하며 기본 기기 식별자는 합성값입니다(DynaPathMobileSDK.java:29-72)."""
+"""기본 SDK 2.0.1 진단 공급자와 명시적으로 선택하는 레거시 v1.0.3 생성기입니다."""
 
 from __future__ import annotations
 
+import base64
 import random
 import string
 import threading
@@ -13,7 +14,7 @@ import time
 import uuid
 from collections import deque
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import quote_plus
 
 from .constants import (
@@ -141,6 +142,22 @@ class DynapathRequestContext:
 DynapathTokenProvider = Callable[[DynapathRequestContext], str | None]
 TimestampMsProvider = Callable[[], int]
 RandomTextProvider = Callable[[], str]
+
+
+@dataclass(frozen=True)
+class _DiagnosticTokenProvider:
+    """SDK 2.0.1 native-unavailable diagnostic; includes only supplied device facts."""
+
+    os_version: bytes | None = field(default=None, repr=False)
+    device_model: bytes | None = field(default=None, repr=False)
+    install_id: bytes | None = field(default=None, repr=False)
+
+    def __call__(self, _context: DynapathRequestContext) -> str:
+        token = "2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus"
+        for name, value in (("os", self.os_version), ("dm", self.device_model), ("iid", self.install_id)):
+            if value is not None:
+                token += f"&{name}=" + base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
+        return token
 
 
 @dataclass(frozen=True)

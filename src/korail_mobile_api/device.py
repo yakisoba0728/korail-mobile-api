@@ -13,6 +13,7 @@ from .constants import (
     KORAIL_DEFAULT_DEVICE_WIDTH,
     build_dalvik_user_agent,
 )
+from .dynapath import _DiagnosticTokenProvider
 
 
 @dataclass(frozen=True)
@@ -55,22 +56,32 @@ def build_config_from_profile(
     if not isinstance(profile, KorailDeviceProfile):
         raise TypeError("profile must be a KorailDeviceProfile")
     config = base if base is not None else KorailConfig()
-    if config.disable_dynapath or config.dynapath.token_provider is not None:
+    provider = config.dynapath.token_provider
+    if config.disable_dynapath or (provider is not None and not isinstance(provider, _DiagnosticTokenProvider)):
         raise ValueError("a device profile requires configurable DynaPath token settings")
     settings = config.dynapath.token_settings
-    if settings is None:
+    if isinstance(provider, _DiagnosticTokenProvider):
+        provider = replace(
+            provider,
+            os_version=profile.android_release.encode("utf-8"),
+            device_model=profile.model.encode("utf-8"),
+            install_id=profile.device_id.encode("utf-8"),
+        )
+    elif settings is None:
         raise ValueError("DynaPath token settings are missing")
-    settings = replace(
-        settings,
-        device_id=profile.device_id,
-        os_version=profile.android_release,
-        device_model=profile.model,
-    )
+    if settings is not None:
+        settings = replace(
+            settings,
+            device_id=profile.device_id,
+            os_version=profile.android_release,
+            device_model=profile.model,
+        )
     return replace(
         config,
         dynapath=replace(
             config.dynapath,
             enabled=True,
+            token_provider=provider,
             token_settings=settings,
             device_name=profile.model,
             os_version=profile.android_release,

@@ -10,6 +10,7 @@ import httpx
 import pytest
 
 from korail_mobile_api import (
+    DynapathRequestContext,
     Korail,
     KorailClient,
     KorailConfig,
@@ -240,6 +241,26 @@ def test_build_config_from_env_reads_korail_proxy(device_env: pytest.MonkeyPatch
     with pytest.raises(ValueError) as excinfo:
         build_config_from_env()
     _assert_no_credentials(str(excinfo.value))
+
+
+def test_environment_uses_diagnostic_device_facts(device_env: pytest.MonkeyPatch) -> None:
+    device_env.setenv("KORAIL_DYNAPATH_DEVICE_ID", "synthetic-install")
+    device_env.setenv("KORAIL_DYNAPATH_OS_VERSION", "16")
+    device_env.setenv("KORAIL_DYNAPATH_DEVICE_MODEL", "synthetic-model")
+    config = build_config_from_env()
+    assert config.dynapath.token_settings is None
+    assert config.dynapath.token_provider is not None
+    assert config.dynapath.token_provider(DynapathRequestContext(*("synthetic",) * 9)) == (
+        "2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus"
+        "&os=MTY&dm=c3ludGhldGljLW1vZGVs&iid=c3ludGhldGljLWluc3RhbGw"
+    )
+
+
+@pytest.mark.parametrize("name", ["DEVICE_ID", "OS_VERSION", "DEVICE_MODEL"])
+def test_environment_still_rejects_blank_device_values(device_env: pytest.MonkeyPatch, name: str) -> None:
+    device_env.setenv("KORAIL_DYNAPATH_" + name, "\u3000")
+    with pytest.raises(ValueError):
+        build_config_from_env()
 
 
 @pytest.mark.parametrize(

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import os
-import time
 
 from .config import KorailConfig
 from .constants import (
@@ -17,11 +16,7 @@ from .constants import (
     KORAIL_DEFAULT_DEVICE_WIDTH,
     build_dalvik_user_agent,
 )
-from .dynapath import (
-    KORAIL_DYNAPATH_AS_VALUE,
-    DynapathConfig,
-    DynapathTokenSettings,
-)
+from .dynapath import DynapathConfig, _DiagnosticTokenProvider
 
 
 def _required_env(name: str) -> str:
@@ -37,7 +32,7 @@ def build_config_from_env() -> KorailConfig:
     ``KORAIL_DYNAPATH_DEVICE_ID``, ``KORAIL_DYNAPATH_OS_VERSION``, ``KORAIL_DYNAPATH_DEVICE_MODEL``은 반드시 있어야 하며,
     ``KORAIL_NETFUNNEL_USER_AGENT``를 지정하지 않으면 ``KORAIL_ANDROID_BUILD_ID``도 필요합니다. 기기 모델과 OS 버전은
     DynaPath 토큰과 대기열 ``User-Agent``에 함께 씁니다. 나머지 값은 ``KORAIL_BASE_URL``, ``KORAIL_USER_AGENT``,
-    ``KORAIL_DEVICE_WIDTH``, ``KORAIL_DEVICE_HEIGHT``, ``KORAIL_ANDROID_SDK_INT``, ``KORAIL_DYNAPATH_AS_VALUE``,
+    ``KORAIL_DEVICE_WIDTH``, ``KORAIL_DEVICE_HEIGHT``, ``KORAIL_ANDROID_SDK_INT``,
     ``KORAIL_ADVERTISING_ID``로 바꿀 수 있습니다. ``KORAIL_PROXY``는 ``proxy``가 되며 비어 있으면 지정하지 않습니다.
     로그인 정보나 카드 정보는 환경변수에서 읽지 않습니다.
 
@@ -47,20 +42,16 @@ def build_config_from_env() -> KorailConfig:
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
     device_model = _required_env("KORAIL_DYNAPATH_DEVICE_MODEL")
+    if any(not value.strip() for value in (device_id, os_version, device_model)):
+        raise ValueError("DynaPath device values must not be whitespace")
     advertising_id = os.environ.get("KORAIL_ADVERTISING_ID", "")
-    settings = DynapathTokenSettings(
-        device_id=device_id,
-        as_value=os.environ.get(
-            "KORAIL_DYNAPATH_AS_VALUE",
-            KORAIL_DYNAPATH_AS_VALUE,
-        ),
-        app_start_ts=str(int(time.time() * 1000)),
-        os_version=os_version,
-        device_model=device_model,
-    )
     dynapath = DynapathConfig(
         enabled=True,
-        token_settings=settings,
+        token_provider=_DiagnosticTokenProvider(
+            os_version=os_version.encode("utf-8"),
+            device_model=device_model.encode("utf-8"),
+            install_id=device_id.encode("utf-8"),
+        ),
         device_name=device_model,
         os_version=os_version,
     )
