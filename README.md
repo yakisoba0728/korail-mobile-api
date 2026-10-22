@@ -17,7 +17,6 @@
   <a href="https://pypi.org/project/korail-mobile-api/"><img src="https://img.shields.io/pypi/v/korail-mobile-api" alt="PyPI"></a>
   <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&amp;logoColor=white" alt="Python 3.11 | 3.12 | 3.13 | 3.14">
   <img src="https://img.shields.io/badge/typing-mypy%20strict-2A6DB2" alt="mypy strict">
-  <img src="https://img.shields.io/badge/AppVersion-7.0.8%20default-0b7a75" alt="요청 기본 AppVersion 7.0.8">
   <a href="https://github.com/yakisoba0728/korail-mobile-api/blob/main/LICENSE"><img src="https://img.shields.io/github/license/yakisoba0728/korail-mobile-api" alt="License"></a>
 </p>
 
@@ -38,10 +37,17 @@
 KORAIL과는 관계없는 개인 프로젝트입니다. 공식 API가 아니라서 KORAIL이 서버나 앱을 바꾸면 언제든 깨질 수 있습니다.
 쓰기 전에 [법적 고지](#법적-고지)는 꼭 읽어 주세요.
 
-Unreleased에서는 기본 DynaPath로 SDK 2.0.1 `2!` 진단 헤더를 사용합니다. 프로파일·환경변수로 제공한 기기값만 토큰에 추가하며, 명시적 v1 설정·외부 공급자·대기열·무재시도 정책은 유지합니다. [검증 조건과 한계](https://github.com/yakisoba0728/korail-mobile-api/blob/main/docs/verification-7010.md#diagnostic-20261023)를 참고하세요.
+**현재 상태 (2026-10-23):** 2026-10-21부터 익명 열차 조회를 포함한 모든 요청이 `-8204`("원활한 예매 및 결제 서비스를 위해 최신 버전으로 업데이트해 주세요")로 실패한다는 보고가 있습니다([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)).
+`2!` 기본 헤더 도입 전 `main`(1b89779)에서 기본 `AppVersion` 7.0.8과 `app_version="7.0.10"`만 바꾼 설정(API `Version` 250601003) 모두 실패했습니다.
+기록된 실서버 성공은 2026-10-23 `AppVersion=7.0.10`·API `Version=250722001`·기본 `2!` 헤더 조합으로 병합 전 작업 트리에서 한 번 관측한 것뿐입니다.
+2.6.2는 기본 버전을 바꾸지 않으며, 2.6.2의 기본 조합(`2!`·7.0.8·250601003)은 실서버에서 시도하지 않았습니다.
+`KorailConfig(app_version="7.0.10", version="250722001")`이나 `build_config_from_env()`의 `KORAIL_APP_VERSION`·`KORAIL_API_VERSION`으로 시도해 볼 수 있지만 동작을 보장하지 않습니다.
+자세한 내용은 [실서버 확인 현황](https://yaki.kr/korail-mobile-api/status/)과 [설정 가이드의 요청 버전](https://yaki.kr/korail-mobile-api/guide/configuration/#request-version)을 참고하세요.
+
+2.6.2부터 기본 DynaPath로 SDK 2.0.1 `2!` 진단 헤더를 사용합니다. 프로파일·환경변수로 제공한 기기값만 토큰에 추가하며, 명시적 v1 설정·외부 공급자·대기열·무재시도 정책은 유지합니다. [검증 조건과 한계](https://github.com/yakisoba0728/korail-mobile-api/blob/main/docs/verification-7010.md#diagnostic-20261023)를 참고하세요.
 
 - **타입이 붙은 응답** — 서버 응답을 dataclass로 읽고, 원문은 `.raw`에 남깁니다. `.raw`의 개인정보는 자동으로 가리지 않습니다.
-- **실수하기 어렵게** — 결제 금액은 홀드의 `received_amount`를 쓰며, 0원·예약대기 홀드의 카드 결제를 차단합니다. 2.6.0부터 환불은 성공한 수수료 조회와 대상 승차권의 연결도 확인합니다.
+- **실수하기 어렵게** — 결제 금액은 홀드의 `received_amount`를 쓰며, 0원·예약대기 홀드의 카드 결제를 차단합니다. 2.6.0부터 환불은 성공한 수수료 조회와 대상 승차권의 연결도 확인합니다. 2.6.2부터 예약대기 홀드의 재계산과 병합 외 유형의 `reserve_merge`도 요청 전에 거절합니다.
 - **변경 요청 재전송 없음** — 예약·결제·환불 결과가 불명확해도 자동으로 같은 요청을 다시 보내지 않습니다.
 - **오프라인 검증** — CI에서 Python 3.11~3.14와 최소 의존성 조합, 타입·포맷·문서, checkout 밖에 설치한 wheel까지 검사합니다.
 
@@ -51,12 +57,13 @@ Unreleased에서는 기본 DynaPath로 SDK 2.0.1 `2!` 진단 헤더를 사용합
 
 | 구분 | 현재 `main` |
 |---|---|
-| 패키지 버전 | `2.6.1`; 버전별 변경은 [CHANGELOG.md](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)에 기록 |
-| 요청 기본 `AppVersion` | `7.0.8`; API `Version`과 별개 |
+| 패키지 버전 | `2.6.2`; 버전별 변경은 [CHANGELOG.md](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)에 기록 |
+| 요청 기본 `AppVersion` | `7.0.8`(API `Version` 기본값 `250601003`과 별개); 2026-10-23 현재 이 기본값의 실서버 동작은 미확인 |
 | 오류 메시지 사전 | 앱 `7.0.10` 기준 |
 
 2.6.0에는 사전 갱신, 요청 필드 순서 정정, 환불 대상 연결 검증과 초장문 마일리지 숫자 처리 보완이 포함됩니다.
 2.6.1에는 운임 입력 팩토리, 선택적 검색 이어보기와 멤버십·공항버스 간편 조회가 있습니다. 사용법은 [간편 API 가이드](https://yaki.kr/korail-mobile-api/guide/convenience/)를 참고하세요. 새 간편 흐름은 오프라인 검증만 완료했으며 실서버 확인 범위와 구분합니다.
+2.6.2에는 기본 `2!` 헤더, `-8204` 분류, 버전 환경변수, 결제 안전 검사와 요청 전 입력 검사 보강이 있습니다. 2.6.2 코드로는 오프라인으로만 검증했습니다.
 **2.5.0에서 수수료 응답을 직접 생성·파싱해 환불하던 호출은 변경해야 합니다.** 실제 수수료 조회 반환값과 원표 반환일·동반자 정보를 맞추세요.
 사전의 앱 버전을 요청 기본값이나 전체 호환 인증으로 간주하지 않습니다.
 `KorailConfig(app_version="7.0.10")`으로 명시한 제한적 실서버 확인과 정적 검토의 범위는
@@ -73,6 +80,7 @@ pip install korail-mobile-api
 검색 필터·객실 우선 선택·메시지 사전과 신규 오류 분류는 2.5.0부터 제공합니다.
 환불 대상 연결 검증과 7.0.10 메시지 사전은 2.6.0부터 제공합니다.
 운임 입력 팩토리·검색 이어보기·멤버십·공항버스 간편 조회는 2.6.1부터 제공합니다.
+`-8204` 분류, `KORAIL_APP_VERSION`·`KORAIL_API_VERSION` 환경변수와 결제 안전 검사는 2.6.2부터 제공합니다.
 이전 버전은 `pip install --upgrade korail-mobile-api`로 갱신하세요.
 
 **개발 버전 설치:** `main`의 Unreleased 변경이 필요하면 GitHub에서 바로 설치할 수 있습니다.
@@ -87,7 +95,7 @@ pip install --force-reinstall "git+https://github.com/yakisoba0728/korail-mobile
 
 ## 빠르게 써보기
 
-열차 조회는 로그인 없이 됩니다.
+열차 조회는 로그인 없이 됩니다. 다만 2026-10-23 현재 기본 설정 요청이 `-8204`로 거절될 수 있습니다(위 현재 상태 참고).
 
 자주 쓰는 조회는 `with`와 KST `datetime`을 받는 간편 API로 시작할 수 있습니다.
 
@@ -173,6 +181,7 @@ finally:
 
 변경 요청은 자동으로 다시 보내지 않습니다. 응답을 못 읽어서 예외가 나도 서버에서는 이미 처리됐을 수 있습니다.
 그럴 땐 다시 보내지 말고 예외의 `.raw`를 보고, 예약은 `get_reservation_history()`, 결제·환불은 `get_ticket_list()`로 먼저 확인하세요.
+예약 응답을 읽지 못한 홀드는 `get_reservation_hold`도 같은 이유로 실패할 수 있습니다. 취소 방법은 [오류 처리 가이드](https://yaki.kr/korail-mobile-api/guide/errors/#unparsed-hold)에 있습니다.
 
 2.6.0부터 환불은 대상 연결을 확인할 수 없으면 거절하는 fail-closed 정책입니다. `PaidTicket.from_refund_detail()` 사용을 권하며, 수동 생성 시 현재 `sale_date`와 별도로 `return_sale_date`를 명시하세요. 수수료 조회 연결은 금액의 유효기간이나 서버 승인을 보장하지 않습니다. [환불 가이드](https://yaki.kr/korail-mobile-api/guide/payments/#commission)를 참고하세요.
 
@@ -240,6 +249,12 @@ SRT 앱용으로 만들었던 [srt-mobile-api](https://github.com/yakisoba0728/s
 **대기열을 끄면 빨라지나요?**
 `KorailConfig(netfunnel_enabled=False)`로 끌 수는 있습니다. 하지만 앱과 다르게 동작하게 되고 KORAIL의 혼잡 제어를 건너뛰는 셈이라 권하지 않습니다.
 
+**모든 요청이 `-8204`로 실패해요.**
+2026-10-21부터 보고된 서버 응답으로, 앱 업데이트 안내입니다([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)). 네트워크 차단(`-8202` 등)과는 다릅니다.
+2.6.2부터 로그인을 포함한 모든 경로에서 `KorailAppUpdateRequiredError`로 분류하고 서버 메시지를 그대로 남깁니다.
+기록된 성공은 2026-10-23 `AppVersion=7.0.10`·API `Version=250722001`·기본 `2!` 헤더 조합의 1회 관측뿐입니다.
+`KorailConfig(app_version="7.0.10", version="250722001")`로 두 값을 함께 바꿔 시도할 수 있지만 동작을 보장하지 않습니다. `app_version`만 바꾼 설정은 실패가 보고됐습니다.
+
 **클라우드 서버에서는 로그인이 막혀요.**
 KORAIL은 데이터센터·VPN IP 대역에서 오는 요청을 막습니다. Oracle Cloud나 Vercel 같은 곳에서 `KorailDynaPathError`(HTTP 403, `-8202` 등)가 나고, 같은 코드가 집 네트워크에서는 되는 사례가 보고됐습니다.
 라이브러리의 요청 형식 문제가 아니라 요청이 나가는 네트워크의 문제입니다. 2.4.0부터는 `KorailConfig(proxy="socks5://...")`로 KORAIL 요청만 본인이 관리하는 다른 네트워크로 보낼 수 있습니다. 자세한 내용은 [설정 가이드의 프록시](https://yaki.kr/korail-mobile-api/guide/configuration/#proxy)를 보세요.
@@ -247,6 +262,7 @@ KORAIL은 데이터센터·VPN IP 대역에서 오는 요청을 막습니다. Or
 **비밀번호나 카드 번호는 어디에 저장되나요?**
 어디에도 저장하지 않습니다. KORAIL 서버로만 보내고 파일로 쓰지 않습니다.
 다만 응답 모델과 예외의 `.raw`에는 개인정보가 그대로 들어 있으니 로그에 그대로 찍지 않도록 조심하세요.
+2.6.2부터 네트워크 오류로 `KorailTransportError.__cause__`에 붙는 httpx 예외에는 메서드와 쿼리를 뺀 URL만 남고 본문·쿠키·DynaPath 토큰은 지웁니다. 응답 모델, `.raw`, `dataclasses.asdict`와 pickle 결과는 여전히 가리지 않습니다.
 
 ## 문서와 링크
 

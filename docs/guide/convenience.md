@@ -26,9 +26,9 @@ with Korail() as korail:
         print(train.train_no, train.departure_time)
 ```
 
-시간대가 없는 `datetime`은 한국 시각(KST)으로 읽고, 시간대가 있는 값은 KST로 변환합니다. 이미 지난 시각은 요청 전에 거절합니다. 시각을 생략하면 현재 KST를 사용합니다. 결과는 기존 `TrainSearchResult`이며 한 페이지씩 옵니다. `result.next_page()`가 값을 돌려주면 같은 조건과 `continuation=...`으로 다음 페이지를 조회하세요. `next_page()`가 `None`이어도 더 조회해야 하는 경우에는 [원래 조회 API의 마지막 열차 시각 방식](trains.md#next-page)을 사용합니다.
+시간대가 없는 `datetime`은 한국 시각(KST)으로 읽고, 시간대가 있는 값은 KST로 변환합니다. 이미 지난 시각은 요청 전에 거절합니다. 시각을 생략하면 현재 KST를 사용합니다. 결과는 기존 `TrainSearchResult`이며 한 페이지씩 옵니다. `result.next_page()`가 값을 돌려주면 같은 조건과 `continuation=...`으로 다음 페이지를 조회하세요. 2.6.2부터 이때 첫 페이지의 `depart_after`를 그대로 넘겨야 하며, 생략하면 `ValueError`입니다. 그 사이 시각이 지나도 이어보기 요청은 이미 지난 시각으로 거절하지 않습니다. `next_page()`가 `None`이어도 더 조회해야 하는 경우에는 [원래 조회 API의 마지막 열차 시각 방식](trains.md#next-page)을 사용합니다.
 
-기본적으로 첫 검색에서 역 목록을 가져와 역 이름·코드를 확인한 후 클라이언트 수명 동안 캐시합니다. 잘못된 역은 검색 요청 전에 `ValueError`로 거절하고 가까운 역 이름을 제안합니다. 이 추가 조회가 필요 없으면 `Korail(validate_stations=False)`로 생성하세요. 역 목록은 `korail.stations.all(refresh=True)`로 갱신할 수 있습니다.
+기본적으로 첫 검색에서 역 목록을 가져와 역 이름·코드를 확인한 후 클라이언트 수명 동안 캐시합니다. 2.6.2부터 이 목록은 한 번만 받아 간편 API와 `korail.client`가 함께 쓰며, 승객 구성은 역 목록을 받기 전에 검사합니다. 잘못된 역은 검색 요청 전에 `ValueError`로 거절하고 가까운 역 이름을 제안합니다. 이 추가 조회가 필요 없으면 `Korail(validate_stations=False)`로 생성하세요. 역 목록은 `korail.stations.all(refresh=True)`로 갱신할 수 있습니다.
 
 `include_nearby_stations=True`는 인접역 일정 표시 필드 `adjStnScdlOfrFlg=Y`를 보냅니다. 기본값은 이전과 같은 `N`입니다. 2026-09-28 실서버에서 두 값 모두 검색 성공 응답을 받았지만, 결과에 미치는 효과는 확인하지 못했습니다.
 

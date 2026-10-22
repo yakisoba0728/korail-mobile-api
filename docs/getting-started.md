@@ -2,6 +2,10 @@
 
 이 페이지는 라이브러리를 설치하고, 열차를 조회하고, 로그인해서 내 승차권을 확인하는 데까지 한 번에 따라 합니다.
 
+!!! warning "2026-10-23 현재 상태"
+    2026-10-21부터 기본 설정의 모든 요청이 `-8204`(앱 업데이트 안내)로 실패한다는 보고가 있습니다([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)).
+    2.6.2의 기본 조합(`2!`·7.0.8·250601003)은 실서버에서 시도하지 않았습니다. 시도해 볼 수 있는 설정과 기록된 관측 범위는 [요청 버전](guide/configuration.md#request-version)과 [실서버 확인 현황](status.md#current)에 있습니다.
+
 ## 요구 사항
 
 - Python 3.11 이상
@@ -18,6 +22,7 @@ pip install korail-mobile-api
 검색 필터·객실 우선 선택·메시지 사전과 신규 오류 분류는 2.5.0부터 제공합니다.
 환불 대상 연결 검증과 7.0.10 메시지 사전은 2.6.0부터 제공합니다.
 운임 입력 팩토리·검색 이어보기·멤버십·공항버스 간편 조회는 2.6.1부터 제공합니다.
+`-8204` 분류, `KORAIL_APP_VERSION`·`KORAIL_API_VERSION` 환경변수와 결제 안전 검사는 2.6.2부터 제공합니다.
 2.5.0에서 직접 생성한 수수료 응답으로 환불하던 코드는 [실제 수수료 조회 기반 흐름](guide/payments.md#commission)으로 바꾸세요.
 이전 버전은 `pip install --upgrade korail-mobile-api`로 갱신하세요.
 
@@ -48,7 +53,8 @@ SOCKS 프록시를 쓰려면 `pip install "korail-mobile-api[socks]"`로 설치�
 
 모든 기능은 [`KorailClient`][korail_mobile_api.client.KorailClient]의 메서드로 제공됩니다.
 자주 쓰는 역·열차·예약·승차권 작업은 선택형 [`Korail` 간편 API](guide/convenience.md)로도 호출할 수 있습니다.
-설정 없이 만들면 코레일+ 앱 7.0.8에서 확인한 `AppVersion` 기본값을 사용합니다. Unreleased의 기본 토큰은 SDK 2.0.1 `2!` 진단입니다. [설정과 검증 범위](guide/configuration.md#dynapath)를 참고하세요.
+설정 없이 만들면 코레일+ 앱 7.0.8에서 확인한 `AppVersion`과 API `Version` 기본값을 사용합니다. 2.6.2부터 기본 토큰은 SDK 2.0.1 `2!` 진단입니다. [설정과 검증 범위](guide/configuration.md#dynapath)를 참고하세요.
+위 현재 상태처럼 이 기본값의 요청이 거절될 수 있습니다.
 
 ```python
 from korail_mobile_api import KorailClient
@@ -164,7 +170,7 @@ finally:
 
 로그인에 실패하면 [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError]가 발생합니다.
 예외의 `code`에 서버가 돌려준 결과 코드가 들어 있습니다. 비밀번호를 여러 번 틀리면 계정이 잠길 수 있으니 반복해서 재시도하지 마세요.
-서비스 이용 불가 응답이나 앱 업데이트 요구 응답에는 `KorailAuthError` 대신 [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError]나 [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError]가 발생합니다.
+서비스 이용 불가 응답이나 앱 업데이트 요구 응답(`SUPDATE`, 2.6.2부터 `-8204` 포함)에는 `KorailAuthError` 대신 [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError]나 [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError]가 발생합니다.
 이런 응답은 로그인 요청을 보내기 전에 서비스 상태를 확인하는 단계에서 올 수도 있습니다.
 
 휴면 계정 해제나 비밀번호 변경처럼 웹 화면에서 처리해야 하는 경우에는 [`KorailAuthContinuationRequired`][korail_mobile_api.errors.KorailAuthContinuationRequired]가 발생합니다.
