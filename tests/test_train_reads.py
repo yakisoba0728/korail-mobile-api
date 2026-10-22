@@ -1070,7 +1070,7 @@ def test_local_auth_guard_is_retained_not_app_equivalence(name, rig):
 
 
 def test_ticket_maas_repeated_return_numbers_and_history_dates(rig):
-    """NetworkApi.java:403-404 @Field(tkRetNo) List; MaasDetailIn.java:51-63 dates."""
+    """NetworkApi.java:402-404 @Field(tkRetNo) List; MaasDetailIn.java:51-63 dates."""
     client, calls, _ = rig([ENVELOPE, ENVELOPE], auth=True)
     client.get_maas_menu_list(pnr_no="SYNTH-PNR", ticket_return_numbers=["SYNTH-RETURN-A", "SYNTH-RETURN-B"])
     exact_request(
@@ -1151,7 +1151,8 @@ def test_two_leg_fare_and_goods_column_order(rig):
 
 def test_price_fare_quote_sends_empty_goods_numbers_like_the_app(rig):
     """TrainOpInfoViewModel.java:794 passes null gdNo, so both legs carry the empty default and the joined
-    column is just the separator."""
+    column is just the separator. TrainOpInfoViewModel.java:941-962: the quote is a display fare; payment uses the
+    hold's received_amount."""
     second = PriceFareLeg("0099", "0100", DATE, "00008", "031", "102", "01")
     client, calls, _ = rig([ENVELOPE, ENVELOPE])
     client.get_price_fare_quote(PriceFareQuoteRequest((FARE_LEG,)))

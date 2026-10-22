@@ -224,7 +224,7 @@ CASES = [
         {"point_dv_cd": "0"},
         success(h_korail_point="001200"),
         (("korail_point", "001200"),),
-        "NetworkApi.java:515-516; MyXPointViewIn.java:49",
+        "NetworkApi.java:515-516; MyXPointViewIn.java:49; MyXPointViewOut.java:27-74",
     ),
     case(
         "get_mileage_history",
@@ -579,7 +579,7 @@ CASES = [
         {"saleWctNo": "TEST-WINDOW", "saleDt": DATE, "saleSqno": "TEST-SEQUENCE", "tkRetPwd": "TEST-RETURN"},
         success(**dict.fromkeys(RECIPIENT_KEYS, "TEST")),
         (("acceptance_customer_management_no", "TEST"), ("member_card_no", "TEST")),
-        "NetworkApi.java:372-373; DeliveryRcvCustOut.java:51; 검증 못 함",
+        "NetworkApi.java:372-373; DeliveryRcvCustOut.java:51; DeliveryTicketFormViewModel.java:697-700; 검증 못 함",
     ),
     case(
         "check_ticket_duplication",
@@ -783,7 +783,8 @@ CASES = [
         success(dlayList=[{**dict.fromkeys(DELAY_KEYS, "TEST"), "trnDlayTm": "15", "runDt": DATE}]),
         (("delays.0.delay_minutes", "15"), ("delays.0.run_date", DATE)),
         "NetworkApi.java:347-349; DelayCertificateIn.java:52; DelayCertificate.java:57; the detail's "
-        "h_orgtk_wct_no/h_orgtk_ret_sale_dt/h_orgtk_sale_sqno/h_orgtk_ret_pwd (DelayCertificateViewModel.java:94)",
+        "h_orgtk_wct_no/h_orgtk_ret_sale_dt/h_orgtk_sale_sqno/h_orgtk_ret_pwd (DelayCertificateViewModel.java:94); "
+        "delayed tickets only (NormalTicketSectionKt.java:786-808)",
     ),
     case(
         "get_delay_return_receipt",

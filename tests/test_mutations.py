@@ -545,6 +545,8 @@ def cases() -> list[Case]:
         # ReservationOut.java:49,400-409,444-448: deadline date/time, h_tot_fare (meaning unknown) and the displayed
         # h_tot_prc; PayViewModel.java:11297-11307,11314-11318 sums h_tot_rcvd_amt and shows h_tot_prc.
         # ReservationOutJrnyInfo.java:86,305,361: h_arv_dt and h_jrny_sqno, absent from observed reserve responses.
+        # TrainScheduleViewModel.java:2914-2930,6773-6781: seat attribute is explicit -> train row -> default, and a
+        # STANDBY hold is never card-paid.
         Case(
             "reserve",
             lambda c: c.reserve(train()),
@@ -556,7 +558,8 @@ def cases() -> list[Case]:
             {"pnr_no": PNR, "received_amount": "1200", "total_price": "9900"},
         ),
         # TrainScheduleViewModel.java:2937-3004: the transfer overload; both legs pass isTransfer=true (:2968) and
-        # TrainScheduleOutTrainInfo.java:3674-3683 picks the journey type.
+        # TrainScheduleOutTrainInfo.java:3674-3683 picks the journey type. TicketReservationIn.java:34-37,80: one PNR
+        # carries both legs in boarding order.
         Case(
             "reserve_transfer",
             lambda c: c.reserve_transfer([train(), train(True)], seat_classes=(Cabin.GENERAL, Cabin.SPECIAL)),
@@ -567,6 +570,8 @@ def cases() -> list[Case]:
             "parse_reservation_hold_response",
             {"pnr_no": PNR},
         ),
+        # ReservationMergeViewModel.java:1352,1556: the follow-up hold may be a separate PNR; the caller cancels the
+        # first hold.
         Case(
             "reserve_merge",
             lambda c: c.reserve_merge(train(), merge_rows()),
@@ -577,6 +582,8 @@ def cases() -> list[Case]:
             "parse_reservation_hold_response",
             {"received_amount": "1200"},
         ),
+        # NetworkApi.java:752-753: the general reservation route; TicketReservationInPassengerInfo.java:55,105: the
+        # per-passenger txtCardNo_.
         Case(
             "reserve_with_discount_card",
             lambda c: c.reserve_with_discount_card(train(), card_no="SYNTH-N-CARD"),
@@ -588,7 +595,7 @@ def cases() -> list[Case]:
             {"pnr_no": PNR},
         ),
         # ReservationWaitApplyUiData.java:85; ReservationWaitViewModel.java:503-513: SMS joins the three phone parts
-        # and checks 11 digits.
+        # and checks 11 digits. ReservationWaitViewModel.java:68-80: only the existing standby hold's options are saved.
         Case(
             "confirm_standby_hold",
             lambda c: c.confirm_standby_hold(
@@ -603,6 +610,7 @@ def cases() -> list[Case]:
         ),
         # ReservationCancelChkIn.java:29-32,53: four own fields; the journey count is echoed from the response
         # (ReservationWaitViewModel.java:398; MyReservationViewModel.java:1557; PayViewModel.java:4686).
+        # MyReservationViewModel.java:1557,1566,1720-1745: check first, then cancel; a failed check does not cancel.
         Case(
             "cancel_unpaid_hold",
             lambda c: c.cancel_unpaid_hold(hold()),
@@ -614,7 +622,8 @@ def cases() -> list[Case]:
             {},
         ),
         # ProductCancelIn.java:67-70: txtVrRsNo/txtGdSqno both come from get_product_detail
-        # (ProductReservationListScreenKt.java:1252-1253, MyTicketDetailViewModel.java:3290).
+        # (ProductReservationListScreenKt.java:1252-1253, MyTicketDetailViewModel.java:3290). The same GET cancels an
+        # unpaid product and refunds a paid one (MyTicketDetailViewModel.java:1183-1192,3271-3291).
         Case(
             "cancel_product_reservation",
             lambda c: c.cancel_product_reservation(
@@ -677,6 +686,8 @@ def cases() -> list[Case]:
         ),
         # AddCartListIn.java:25-30,79; NetworkApi.java:265-267: only hidPnrNo besides CommonIn.
         # AddCartListOut.java:76; PsgDiscAddInfos.java:81; PsgDiscAddInfo.java:81,85: response keys.
+        # NetworkApi.java:266-267; AddCartListIn.java:52; AddCartListOut.java:24-25,76: psgDiscAdd_infos.psgDiscAdd_info
+        # is read as discount_additions.
         Case(
             "add_to_cart",
             lambda c: c.add_to_cart(CartAddRequest(PNR)),
@@ -693,7 +704,8 @@ def cases() -> list[Case]:
             {},
         ),
         # NCardInfoOut.java:25-38: response keys are the Kotlin property names (serializer names are protected);
-        # dcntCrdKndMgNo (NCardInfoOut.java:30) is separate from dcntCrdStlTgtNo.
+        # dcntCrdKndMgNo (NCardInfoOut.java:30) is separate from dcntCrdStlTgtNo. NetworkApi.java:336-337: the Info
+        # route creates a purchase; NCardInfoOut.java:32-33 lump target and amount feed PayViewModel.java:6628.
         Case(
             "register_discount_card",
             lambda c: c.register_discount_card(purchase_request()),
@@ -747,6 +759,7 @@ def cases() -> list[Case]:
         ),
         # SelfCheckInInfoViewModel.java:224-225; SelfCheckInRegisterIn.java:59: seat fields from the seat row,
         # jrnySqno and saleDd from the detail. SelfCheckInRegisterOut.java:47-52: msgId required, nullable.
+        # Route: NetworkApi.java:682-684.
         Case(
             "register_self_checkin",
             lambda c: c.register_self_checkin(CHECKIN_DETAIL, CHECKIN_SEAT),
@@ -768,7 +781,7 @@ def cases() -> list[Case]:
             {"message_id": "SYNTH-MSG"},
         ),
         # SelfCheckInResultViewModel.java:111-112; SelfCheckInCancelIn.java:53: the info fields.
-        # SelfCheckInCancelOut.java:50-56: msgId optional.
+        # SelfCheckInCancelOut.java:50-56: msgId optional. Route: NetworkApi.java:288-290.
         Case(
             "cancel_self_checkin",
             lambda c: c.cancel_self_checkin(CHECKIN_DETAIL),

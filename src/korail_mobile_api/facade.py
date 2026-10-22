@@ -123,16 +123,7 @@ class TrainResource:
         include_no_seats: bool = True,
         include_waiting_list: bool = False,
     ) -> TrainSearchResult:
-        """직통 열차 한 페이지를 조회합니다. 결과의 ``next_page()``로 계속 조회하세요.
-
-        시간대가 없는 시각은 KST로 읽고, 시간대가 있으면 KST로 변환합니다.
-        과거 시각은 요청 전에 거절합니다. ``passengers``는 기존 예약 입력 모델을
-        사용하며 생략하면 성인 한 명입니다.
-
-        기본값은 매진을 포함한 전체 결과입니다. ``include_no_seats=False``이면
-        가용 좌석만 남기며 ``include_waiting_list=True``로 예약대기 가능 열차도
-        포함합니다. 필터 전 목록·원문·후속 조회 정보는 보존합니다.
-        """
+        """KST 출발 시각 이후의 직통 열차 한 페이지를 조회합니다. 결과의 ``next_page()``로 이어서 조회하세요."""
         if type(include_no_seats) is not bool or type(include_waiting_list) is not bool:
             raise TypeError("include_no_seats and include_waiting_list must be bool")
         # 다음 페이지는 첫 페이지와 같은 조건이어야 하므로 시각을 다시 읽지 않고 지난 시각도 허용합니다.
@@ -209,12 +200,7 @@ class TrainResource:
         include_no_seats: bool = True,
         include_waiting_list: bool = False,
     ) -> Iterator[TrainSummary]:
-        """직통 검색을 최대 1~20페이지 이어 읽으며 중복 열차를 제외합니다.
-
-        순회할 때 요청합니다. 커서가 없으면 필터 전 마지막 출발 시각을 사용하며,
-        빈 페이지·중복 페이지·반복 커서·출발 시각의 진전 없음에서 멈춥니다.
-        후속 조회 실패도 자동 재시도하지 않고 그대로 전달합니다.
-        """
+        """직통 검색을 순회할 때 최대 ``max_pages``(1~20) 페이지까지 이어 읽으며 중복 열차를 제외합니다."""
         if type(max_pages) is not int or not 1 <= max_pages <= 20:
             raise KorailInvalidInputError("max_pages must be an integer from 1 through 20")
         if type(include_no_seats) is not bool or type(include_waiting_list) is not bool:
@@ -404,11 +390,9 @@ class ReservationResource:
         job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
         option: KorailReserveOption | None = None,
     ) -> ReservationHoldResponse:
-        """실제 미결제 홀드를 만듭니다. 결제 또는 취소는 호출자 책임입니다.
+        """실제 미결제 홀드를 만듭니다(기본 일반실, ``option``은 조회 결과로 객실 선택).
 
-        기본 객실은 일반실입니다. ``option``은 즉시 예약에서 조회 결과를 기준으로
-        객실을 선택하며 ``seat_class``와 함께 지정할 수 없습니다. 자동 예약대기나
-        실패 후 다른 객실 재시도는 하지 않습니다."""
+        결제·취소는 호출자 몫이며, 실패해도 다른 객실이나 예약대기로 다시 보내지 않습니다."""
         if option is not None:
             if not isinstance(option, KorailReserveOption):
                 raise TypeError("option must be KorailReserveOption")

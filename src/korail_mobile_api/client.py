@@ -371,10 +371,7 @@ class KorailClient:
         self._station_names: dict[str, str] | None = None
 
     def close(self) -> None:
-        """HTTP·대기열 연결 풀을 닫습니다.
-
-        연결 풀만 닫으므로 로그인 폐기는 logout 또는 clear_session으로 별도 수행합니다.
-        두 연결의 정리를 모두 시도하며 실패하면 첫 오류를 발생시키고 후속 실패는 예외 note에 남깁니다."""
+        """HTTP·대기열 연결 풀을 닫습니다. 서버 로그아웃은 하지 않습니다."""
         closers = (self.http.close,) if self.netfunnel is None else (self.http.close, self.netfunnel.close)
         _close_connections(*closers)
 
@@ -399,9 +396,7 @@ class KorailClient:
         cust_id: str | None = "",
         etr_path: str | None = "",
     ) -> KorailSession:
-        """기존 세션을 비운 뒤 서비스 상태·암호화 파라미터를 읽고 로그인합니다.
-
-        앱처럼 서비스·암호화 사전 조회 후 로그인하며 웹 후속 조치는 자동 수행하지 않습니다(LoginViewModel.java:1390-1520)."""
+        """기존 세션을 비운 뒤 서비스 상태·암호화 키를 읽고 로그인합니다."""
         return self.session.login(
             member_no,
             password,
@@ -412,15 +407,11 @@ class KorailClient:
         )
 
     def clear_session(self) -> None:
-        """서버에 알리지 않고 로컬 로그인 상태만 버립니다.
-
-        서버 로그아웃 없이 쿠키와 로컬 세션만 폐기합니다. 역 이름 캐시는 유지합니다."""
+        """서버에 알리지 않고 로컬 로그인 상태(쿠키·세션)만 버립니다."""
         self.session.clear_session()
 
     def logout(self) -> None:
-        """로그인 상태이면 서버 로그아웃(login.Logout)을 보내고, 어느 경우든 finally 에서 로컬 세션·쿠키를 비웁니다.
-
-        FAIL 봉투는 예외가 아니지만(FAIL/P058 은 세션 만료) 전송 오류 등은 그대로 전파됩니다. 서버 세션 무효화까지 보장하지 않으며 연결 풀은 close 로 닫습니다."""
+        """로그인 상태이면 서버에 로그아웃을 보내고, 어느 경우든 로컬 세션·쿠키를 비웁니다."""
         self.session.logout()
 
     def _run_read(self, operation: Callable[[], T]) -> T:
@@ -437,7 +428,7 @@ class KorailClient:
 
     @staticmethod
     def _inquiry_gate(*, peak_season: bool, special: bool = False) -> KorailNetFunnelGateName:
-        """앱 근거: TrainScheduleViewModel.java:5213-5235."""
+        """앱이 열차 조회에 쓰는 대기열 관문을 고릅니다."""
         if special:
             return "product_inquiry"
         return "peak_season_inquiry" if peak_season else "inquiry"
@@ -584,10 +575,7 @@ class KorailClient:
         room_class_code: KorailRoomClassCode = "1",
         seat_attribute_code: str | None = None,
     ) -> SeatInventoryResponse:
-        """한 호차의 좌석 배치와 좌석별 판매 가능 여부를 조회합니다.
-
-        실서버 확인: 같은 세션에서 :meth:`get_seat_cars` 를 먼저 호출하지 않고 이 메서드를 바로 부르면 ``KorailAppError: [3]인증정보에 문제가
-        있습니다`` 가 돌아올 수 있습니다 — 실앱의 화면 진입 순서(호차 목록 → 좌석 배치도)와 같습니다."""
+        """한 호차의 좌석 배치와 판매 가능 여부를 조회합니다(같은 세션에서 get_seat_cars 를 먼저 부르십시오)."""
         self._require_session()
         form = build_seat_inventory_form(
             self.config,
@@ -659,11 +647,9 @@ class KorailClient:
         )
 
     def get_deposit_banks(self) -> DepositBankListResponse:
-        """입금 가능한 은행의 코드와 이름 목록을 조회합니다.
-
-        ``POST dlay.dptnBank.do``는 개별 ``@Field``를 사용합니다. 7.0.8은
-        ``Device``, ``Version``, ``Key``, ``AppVersion`` 순서입니다."""
+        """입금 가능한 은행의 코드와 이름 목록을 조회합니다."""
         self._require_session()
+        # 공통 DTO 가 아닌 개별 필드라 Device·Version·Key·AppVersion 순서이고 lang 이 없습니다.
         form = {"Device": self.config.device, "Version": self.config.version, "Key": self.config.key}
         if self.config.app_version is not None:
             form["AppVersion"] = self.config.app_version
@@ -679,10 +665,7 @@ class KorailClient:
         self,
         departure_date_to: str,
     ) -> DelayDiscountTicketListResponse:
-        """계정의 지연할인권 목록을 조회합니다.
-
-        ``POST passCard.DelayDiscountView`` (``NetworkApi.java:352-353`` —
-        ``postDelayDiscountView(@QueryMap)``."""
+        """계정의 지연할인권 목록을 조회합니다."""
         self._require_session()
         return self._run_read(
             lambda: parse_delay_discount_ticket_response(
@@ -700,10 +683,7 @@ class KorailClient:
         page_no: int = 1,
         pnr_no: str = "",
     ) -> DiscountCouponListResponse:
-        """계정의 할인쿠폰 목록을 조회합니다.
-
-        ``POST passCard.CouponView``(``NetworkApi.java:328-329`` — ``postCoupon(@FieldMap)``). 보유분 없으면
-        ``WRG000000`` 으로 빈 결과(예외 아님)."""
+        """계정의 할인쿠폰 한 페이지를 조회합니다(보유분이 없으면 빈 결과)."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.passCard.CouponView",
@@ -713,10 +693,7 @@ class KorailClient:
         )
 
     def get_korail_point_summary(self) -> KorailPointSummaryResponse:
-        """계정의 포인트·쿠폰·복지 자격 요약을 조회합니다.
-
-        라우트 선언은 ``NetworkApi.java:515-516``(``postMyXPointView(@FieldMap)``), 응답 필드는
-        ``MyXPointViewOut.java:27-74`` 입니다."""
+        """계정의 포인트·쿠폰·복지 자격 요약을 조회합니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.xPoint.MyXPointView",
@@ -740,9 +717,7 @@ class KorailClient:
         self,
         card_no: str,
     ) -> DiscountCardUsageListResponse:
-        """할인카드(N카드) 한 장을 이미 사용한 여행 내역을 조회합니다.
-
-        검증 못 함: N카드가 없는 계정이라 성공 응답을 본 적이 없습니다(ERR000100 조회 자료 없음)."""
+        """할인카드(N카드) 한 장의 사용 내역을 조회합니다. 검증 못 함: N카드가 없는 계정이라 성공 응답을 보지 못했습니다."""
         self._require_session()
         query = build_discount_card_usage_query(card_no)
         return self._post_read(
@@ -755,9 +730,7 @@ class KorailClient:
         self,
         request: DiscountCardScheduleRequest,
     ) -> DiscountCardScheduleResponse:
-        """할인카드로 아직 탈 수 있는 열차를 한 구간에 대해 조회합니다.
-
-        검증 못 함: N카드가 없는 계정이라 성공 응답을 본 적이 없습니다(WRR000100 사용횟수 입력값 오류)."""
+        """할인카드로 아직 탈 수 있는 열차를 한 구간에 대해 조회합니다. 검증 못 함: N카드가 없는 계정이라 성공 응답을 보지 못했습니다."""
         self._require_session()
         query = build_discount_card_schedule_query(request)
         return self._post_read(
@@ -789,9 +762,7 @@ class KorailClient:
         self,
         request: PassScheduleRequest,
     ) -> PassScheduleResponse:
-        """정기권으로 탈 수 있는 열차 스케줄 한 페이지를 조회합니다.
-
-        구매·예약은 하지 않습니다. ``WRG000000`` 응답은 빈 결과(예외 아님)로 반환하며, 정기권 보유 여부를 뜻한다고 단정하지 않습니다."""
+        """정기권으로 탈 수 있는 열차 스케줄 한 페이지를 조회합니다(WRG000000 은 빈 결과)."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.pass.passScheduleInfoList",
@@ -824,10 +795,7 @@ class KorailClient:
         *,
         timestamp_ms: int | None = None,
     ) -> CrewRequestListResponse:
-        """승무원 호출 화면에 띄울 요청 사유 선택지를 조회합니다.
-
-        이 라우트의 실제 DTO(``CrewCallCommonIn.java:50``)의 유일한 입력은 ``timeStamp`` 이며, 주지 않으면 호출 시점의 밀리초 epoch
-        입니다."""
+        """승무원 호출 화면의 요청 사유 선택지를 조회합니다."""
         return self._post_read(
             "/classes/com.korail.mobile.push.crwCallRq.do",
             build_cache_query(timestamp_ms),
@@ -897,7 +865,7 @@ class KorailClient:
     def cancel_product_reservation(self, detail: ProductDetailResponse) -> ProductCancelResponse:
         """여행상품 예약을 취소합니다.
 
-        같은 GET이 미결제 취소와 결제 후 환불에 쓰이므로 상세 수수료를 먼저 확인합니다(MyTicketDetailViewModel.java:1183-1192,3271-3291)."""
+        결제된 상품이면 환불이 실행되므로 get_product_detail 의 수수료를 먼저 확인하고, 실패해도 다시 보내지 마십시오."""
         self._require_session("product cancel requires")
         query = build_product_cancel_query(detail)
         return self._send_mutation(
@@ -950,10 +918,7 @@ class KorailClient:
         self,
         request: FreeSeatCarRequest,
     ) -> FreeSeatCarResponse:
-        """한 열차의 자유석 호차와 안내 문구를 조회합니다.
-
-        조회 행의 ``free_car_count`` 가 001·002 인 183편은 모두 SUCC/IRZ000001 과 호차 문구(예: "자유석 1량 : 18호차", "자유석 2량 :
-        17, 18호차")를, 000 인 20편은 SUCC/IRZ000005 와 ``car_no=None`` 을 돌려줬습니다. 호차는 숫자 목록이 아니라 문구로 옵니다."""
+        """한 열차의 자유석 호차 안내 문구를 조회합니다."""
         return self._post_read(
             "/classes/com.korail.mobile.trn.fresScar.do",
             build_free_seat_car_form(request),
@@ -964,10 +929,7 @@ class KorailClient:
         self,
         request: GuideSeatConditionRequest,
     ) -> GuideSeatConditionResponse:
-        """도우미석 안내문을 읽습니다.
-
-        날짜 있는 비교 관측은 GuideSeatConditionRequest 참고. FAIL/MRR800011 은 대피도우미석 대상(만20~50세, 시발~종착 이용)이 아니라는 회원
-        판정으로 보이며, 는 좌석코드 999 도 같은 응답이었습니다."""
+        """도우미석 안내문을 읽습니다."""
         return self._post_read(
             "/classes/com.korail.mobile.reservation.guideSeatCnd.do",
             build_guide_seat_condition_form(request),
@@ -981,10 +943,7 @@ class KorailClient:
         *,
         peak_season: bool = False,
     ) -> SeatAssignmentScheduleResponse:
-        """좌석배정 예매 화면의 열차 목록을 조회합니다.
-
-        앱 호출: TrainScheduleViewModel.java:2639-2754. A1/A2 는 행을 반환한 관측값이며, 날짜·구간에 따라 WRD000057 로 거절될 수
-        있습니다."""
+        """좌석배정 예매 화면의 열차 목록을 조회합니다."""
         return self._queued(
             self._inquiry_gate(peak_season=peak_season),
             lambda: self._post_read(
@@ -1069,11 +1028,9 @@ class KorailClient:
         self,
         request: PriceFareQuoteRequest,
     ) -> PriceFareQuoteResponse:
-        """열차 한두 편의 운임을 예매 전에 미리 계산해 받습니다.
-
-        표시용 기준 운임이며 결제액은 홀드 received_amount를 사용합니다(TrainOpInfoViewModel.java:941-962)."""
+        """열차 한두 편의 표시용 운임을 예매 전에 받습니다(결제액은 홀드의 received_amount)."""
         form = build_price_fare_quote_form(request)
-        # 앱의 평탄화기는 빈 값을 빼지만(NetworkService.java:15335-15343) 여덟 칸은 그 뒤에 직접 넣어 빈 gdNo 도 보냅니다(:9895-9902).
+        # 앱은 빈 값을 뺀 뒤 운임 여덟 칸을 직접 넣으므로 빈 gdNo 도 보냅니다.
         return self._post_read(
             "/classes/com.korail.mobile.trn.prcFare.do",
             form,
@@ -1085,9 +1042,7 @@ class KorailClient:
         self,
         ticket: OriginalTicketReference,
     ) -> DeliveryRecipientResponse:
-        """N카드 2인 승차권의 전달 전 수령자 후보를 조회합니다.
-
-        검증 못 함: 채워진 수령자 응답은 미확인이고 보호된 N카드 분기값을 추측하지 않습니다(DeliveryTicketFormViewModel.java:697-700)."""
+        """N카드 2인 승차권의 전달 전 수령자 후보를 조회합니다. 검증 못 함: 채워진 수령자 응답을 보지 못했습니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.tk.dlvRcvCust.do",
@@ -1122,7 +1077,7 @@ class KorailClient:
     def retrieve_delivered_ticket(self, ticket: PbpAcceptanceTicket) -> DeliveredTicketRetrievalResponse:
         """다른 회원에게 전달한 승차권을 회수합니다.
 
-        첫 여정의 PBP 번호로 회수하며 실서버 검증 못 함입니다(DeliveredTicketViewModel.java:185-205,283)."""
+        상태를 바꾸므로 실패해도 다시 보내지 말고 승차권 상태를 확인하십시오(실서버 검증 못 함)."""
         self._require_session()
         return self._mutation(
             "/classes/com.korail.mobile.tk.pbpWdrw.do",
@@ -1152,9 +1107,7 @@ class KorailClient:
         self,
         request: SelfSeatChangeInfoRequest,
     ) -> SelfSeatChangeInfoResponse:
-        """자율 좌석/열차 변경으로 갈 수 있는 승차역과 변경 사유를 조회합니다.
-
-        요청은 승차권 없이 열차 정보만 받습니다. 실서버 관측: 운행 중인 KTX 023 은 SUCC, 운행 시간 밖 열차는 WRT800176("좌석변경가능시간아님")이었습니다."""
+        """자율 좌석·열차 변경으로 갈 수 있는 승차역과 변경 사유를 조회합니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.self.seatChgInfo.do",
@@ -1185,16 +1138,7 @@ class KorailClient:
         )
 
     def get_reservation_hold(self, pnr_no: str) -> ReservationHoldResponse:
-        """이미 잡힌 예약을 PNR로 조회해 카드 결제용 홀드로 가져옵니다. 결제는 실행하지 않습니다.
-
-        같은 계정으로 앱이나 다른 도구에서 만든 예약에도 사용할 수 있습니다. 예약 상세를 한 번
-        조회하며 PNR 일치, 실제 창구번호, 여정·좌석과 양수 정산액을 요구합니다.
-        좌석 금액 합과 명시된 총액이 다르거나 필수값이 없으면 ``KorailProtocolError``가 발생하고
-        전체 응답은 ``.raw``에 남습니다. 목록의 마지막 예약을 자동 선택하지 않습니다.
-
-        실서버 상세에서 생략되는 결제 플래그는 None으로 보존하며, 명시된 경우에는 Y만 허용합니다.
-        반환 후에도 예약 상태는 바뀔 수 있습니다. 실제 청구는 ``pay_with_card``로 합니다.
-        """
+        """이미 잡힌 예약을 PNR 로 조회해 카드 결제용 홀드로 가져옵니다. 결제는 하지 않습니다."""
         detail = self.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no))
         return parse_existing_reservation_hold_response(detail.raw, pnr_no=pnr_no)
 
@@ -1203,10 +1147,7 @@ class KorailClient:
         ticket: OriginalTicketReference,
         companion: RefundCompanion = RefundCompanion(),
     ) -> RefundCommissionResponse:
-        """승차권 한 장의 예상 환불액과 수수료를 조회합니다.
-
-        실제 환불은 하지 않습니다. 반환값에 조회한 원표·동반자를 로컬 연결하며, ``refund``는 이 입력이
-        환불 대상과 일치해야 요청합니다. 직접 생성하거나 파싱한 수수료 응답에는 이 연결이 없습니다."""
+        """승차권 한 장의 예상 환불액과 수수료를 조회하고, refund 가 대조할 조회 대상을 결과에 연결합니다."""
         self._require_session()
         response = self._post_read(
             "/classes/com.korail.mobile.refunds.CommissionView",
@@ -1246,9 +1187,7 @@ class KorailClient:
         )
 
     def get_delay_certificate(self, ticket: OriginalTicketReference) -> DelayCertificateResponse:
-        """지난 승차권의 지연확인증(열차가 몇 분 늦게 도착했는지)을 조회합니다.
-
-        원표 반환일을 사용하며 지연 승차권만 대상입니다(DelayCertificateViewModel.java:94; NormalTicketSectionKt.java:786-808)."""
+        """지연된 승차권의 지연확인증(도착 지연 분)을 조회합니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.dlay.athnIsu.do",
@@ -1257,9 +1196,7 @@ class KorailClient:
         )
 
     def get_delay_return_receipt(self, ticket: OriginalTicketReference) -> DelayReturnReceiptResponse:
-        """열차 지연으로 돌려받은 지연료의 반환 영수증을 조회합니다.
-
-        지연확인증과 같은 원표 식별자를 사용하며 채워진 영수증은 실서버 미확인입니다(DelayReturnReceiptViewModel.java:88)."""
+        """열차 지연으로 돌려받은 지연료의 반환 영수증을 조회합니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.dlay.pymtRcet.do",
@@ -1268,8 +1205,7 @@ class KorailClient:
         )
 
     def get_self_checkin_info(self, detail: RefundTicketDetailResponse) -> SelfCheckInInfoResponse:
-        """셀프 체크인한 자유석 정보를 조회합니다(checkin.info.do, NetworkApi.java:674-676). detail 은 get_refund_ticket_detail
-        의 결과입니다(SelfCheckInResultViewModel.java:249-250). 대기열은 없습니다."""
+        """get_refund_ticket_detail 결과로 셀프 체크인한 자유석 정보를 조회합니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.checkin.info.do",
@@ -1280,10 +1216,7 @@ class KorailClient:
     def check_self_checkin_seat(
         self, detail: RefundTicketDetailResponse, qr_code: str
     ) -> SelfCheckInSeatCheckResponse:
-        """자유석에 앉아 좌석 테이블의 QR 을 스캔한 문자열로 체크인할 수 있는 좌석을 확인합니다.
-
-        상태를 바꾸지 않습니다. 실서버 검증 못 함(checkin.psbFlg.do, NetworkApi.java:678-680;
-        SelfCheckInInfoViewModel.java:102-108)."""
+        """좌석 QR 문자열로 셀프 체크인할 수 있는 좌석을 확인합니다. 상태는 바꾸지 않습니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.checkin.psbFlg.do",
@@ -1296,8 +1229,7 @@ class KorailClient:
     ) -> SelfCheckInRegisterResponse:
         """check_self_checkin_seat 의 좌석으로 셀프 체크인을 등록합니다.
 
-        상태를 바꾸므로 실패해도 다시 보내지 않습니다. 실서버 검증 못 함(checkin.reg.do, NetworkApi.java:682-684;
-        SelfCheckInInfoViewModel.java:224-225)."""
+        상태를 바꾸므로 실패해도 다시 보내지 마십시오(실서버 검증 못 함)."""
         self._require_session()
         return self._mutation(
             "/classes/com.korail.mobile.checkin.reg.do",
@@ -1308,8 +1240,7 @@ class KorailClient:
     def cancel_self_checkin(self, detail: RefundTicketDetailResponse) -> SelfCheckInCancelResponse:
         """셀프 체크인을 취소합니다.
 
-        상태를 바꾸므로 실패해도 다시 보내지 않습니다. 실서버 검증 못 함(checkin.cnc.do, NetworkApi.java:288-290;
-        SelfCheckInResultViewModel.java:111-112)."""
+        상태를 바꾸므로 실패해도 다시 보내지 마십시오(실서버 검증 못 함)."""
         self._require_session()
         return self._mutation(
             "/classes/com.korail.mobile.checkin.cnc.do",
@@ -1321,10 +1252,7 @@ class KorailClient:
         self,
         code: str | Sequence[str] = "",
     ) -> BaseKorailResponse:
-        """요청한 공통코드 종류의 설정값을 조회합니다.
-
-        바인딩: NetworkApi.java:315-321. 앱 부팅은 코드 목록을 한 호출로 전달합니다 (NetworkService.java:2015-2025). 실서버 관측: 부팅 상수
-        18개를 한 POST 로 보내 SUCC/API.I00000 과 18키를 받았으며 개별 요청 결과와 같았습니다."""
+        """요청한 공통코드 종류(하나 또는 목록)의 설정값을 조회합니다."""
         return self._post_read(
             "/classes/com.korail.mobile.common.code.do",
             build_common_code_form(self.config, code),
@@ -1373,9 +1301,7 @@ class KorailClient:
         pnr_no: str | None = None,
         ticket_return_numbers: Sequence[str] | None = None,
     ) -> MaasMenuListResponse:
-        """일반 또는 승차권별 MaaS 메뉴를 조회합니다.
-
-        NetworkApi.java:402-404 의 postGdMenuLt 선언을 따릅니다."""
+        """일반 또는 승차권별 MaaS 메뉴를 조회합니다."""
         form: Mapping[str, str] | list[tuple[str, str]]
         if pnr_no is None and ticket_return_numbers is None:
             form = build_maas_menu_form(self.config)
@@ -1440,10 +1366,7 @@ class KorailClient:
         use_special_schedule: bool = False,
         peak_season: bool = False,
     ) -> TrainSearchResult:
-        """한 구간·한 날짜의 직통 열차 한 페이지를 조회합니다.
-
-        ``peak_season`` 은 출발일이 성수기인지입니다 — 앱은 달력(``RunDateOutItem.isPeakSeason()``)으로 고르지만 그 판정 코드값이 보호돼 있어
-        호출자가 정합니다. 거짓이면 라이브러리 기본 관문 ``act_8`` 이며 앱 aid 평문은 미확인입니다."""
+        """한 구간·한 날짜의 직통 열차 한 페이지를 조회합니다(성수기 여부 peak_season 은 호출자가 정합니다)."""
         return self._run_read(
             lambda: self._search_trains(
                 query,
@@ -1479,9 +1402,7 @@ class KorailClient:
         use_special_schedule: bool = False,
         peak_season: bool = False,
     ) -> TrainSearchResult | TransferSearchResult:
-        """직통 조회가 KorailNoDirectTrainError(WRD000061)일 때만 같은 query 로 환승 첫 페이지를 자동 조회합니다.
-
-        WRD000061만 자동 환승 재조회하며 앱과 달리 확인창·열차군 변경은 없습니다(TrainScheduleViewModel.java:3216-3219,11051-11079)."""
+        """직통 조회가 KorailNoDirectTrainError(WRD000061)이면 같은 조건으로 환승 첫 페이지를 조회합니다."""
         try:
             return self.search_trains(
                 query,
@@ -1624,9 +1545,7 @@ class KorailClient:
         boarding_date_from: str = "",
         boarding_date_to: str = "",
     ) -> TicketListResponse:
-        """승차권 목록을 예약→승차권 구조로 읽습니다.
-
-        관측상 mode=1은 현재표, 2는 이력이며 날짜·쪽번호는 보정하지 않습니다(MyTicketListIn.java:62; 호출 리터럴은 보호됨)."""
+        """승차권 목록을 예약→승차권 구조로 읽습니다(mode 1 은 현재표, 2 는 이력)."""
         self._require_session("ticket list requires")
         return self._post_read(
             "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
@@ -1650,11 +1569,9 @@ class KorailClient:
         seats: Sequence[KorailSeatAssignment] | None = None,
         seat_attribute_code: str | None = None,
     ) -> ReservationHoldResponse:
-        """열차 한 편에 실제 미결제 예약(홀드)을 만듭니다. 결제 또는 취소는 호출자 책임입니다.
+        """열차 한 편에 실제 미결제 예약(홀드)을 만듭니다.
 
-        ``passengers.teenager > 0``은 요청 전에 ``KorailInvalidInputError``로 거절합니다. 환승·병합 예약에도 적용합니다.
-        응답을 읽지 못해도 홀드는 잡혔을 수 있으니 다시 보내지 말고 예외의 ``.raw`` 나 get_reservation_history 로 확인하십시오.
-        다른 예약 메서드도 같습니다. 좌석속성은 명시값→열차 행→기본값이며 STANDBY 홀드는 결제하지 않습니다(TrainScheduleViewModel.java:2914-2930,6773-6781)."""
+        결제·취소는 호출자 몫입니다. 응답을 읽지 못해도 홀드가 잡혔을 수 있으니 다시 보내지 말고 get_reservation_history 로 확인하십시오."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_reservation_form(
@@ -1686,7 +1603,7 @@ class KorailClient:
     ) -> BaseKorailResponse:
         """이미 만든 예약대기 홀드에 알림·좌석변경 옵션을 저장합니다.
 
-        기존 대기 홀드의 옵션만 저장하며 새 예약·결제는 만들지 않습니다(ReservationWaitViewModel.java:68-80)."""
+        서버 상태를 바꾸므로 실패해도 다시 보내지 마십시오."""
         self._require_session("standby options require")
         route = "/classes/com.korail.mobile.reservationWait.ReservationWait"
         form = build_standby_wait_form(
@@ -1708,10 +1625,9 @@ class KorailClient:
         seats: Sequence[Sequence[KorailSeatAssignment]] | None = None,
         seat_attribute_codes: Sequence[str | None] | None = None,
     ) -> ReservationHoldResponse:
-        """탑승 순서의 TrainSummary 두 개를 한 PNR 로 홀드합니다.
+        """탑승 순서의 열차 두 편을 한 PNR 로 홀드합니다.
 
-        ``passengers.teenager > 0``은 요청 전에 ``KorailInvalidInputError``로 거절합니다.
-        한 PNR에 탑승 순서의 두 여정을 넣습니다(TicketReservationIn.java:34-37,80)."""
+        결제·취소는 호출자 몫이며, 실패해도 다시 보내지 말고 get_reservation_history 로 확인하십시오."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_transfer_reservation_form(
@@ -1745,8 +1661,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """병합예약의 후속 요청으로 실제 미결제 예약을 만듭니다.
 
-        ``passengers.teenager > 0``과 ``MERGE_STANDING`` 이외의 ``job_type``은 요청 전에 ``KorailInvalidInputError``로 거절합니다.
-        첫 홀드는 호출자가 취소해야 하며 후속 홀드는 별도 PNR일 수 있습니다(ReservationMergeViewModel.java:1352,1556; 실서버 관측)."""
+        첫 홀드 취소는 호출자 몫이고 후속 홀드는 별도 PNR 일 수 있으니, 실패해도 다시 보내지 말고 예약 내역을 확인하십시오."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_merge_reservation_form(
@@ -1773,7 +1688,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """공항버스 좌석을 실제로 미결제 예약합니다.
 
-        어른·어린이만 같은 예약 DTO로 보내며 좌석 수가 인원과 같아야 합니다(AirportBusSeatMapViewModel.java:752-788,1914)."""
+        결제·취소는 호출자 몫이며, 실패해도 다시 보내지 말고 get_reservation_history 로 확인하십시오."""
         self._require_session("reservation requires")
         form = build_limousine_reservation_form(self.config, schedule, seat_nos, passengers=passengers)
         return self._mutation(
@@ -1788,9 +1703,9 @@ class KorailClient:
         *,
         check_first: bool = True,
     ) -> BaseKorailResponse:
-        """미결제 홀드를 취소합니다.
+        """미결제 홀드를 취소합니다(기본은 가능 여부 확인 뒤 취소).
 
-        기본은 가능 여부 확인→취소이며 확인 실패 시 취소하지 않습니다(MyReservationViewModel.java:1557,1566,1720-1745)."""
+        서버 상태를 바꾸므로 실패해도 다시 보내지 말고 예약 내역을 확인하십시오."""
         self._require_session("cancellation requires")
         form = build_unpaid_reservation_cancel_form(self.config, hold)
         if check_first:
@@ -1810,10 +1725,9 @@ class KorailClient:
         hold: ReservationHoldResponse,
         card: CardPayment,
     ) -> ReservationPaymentResponse:
-        """홀드를 카드로 결제합니다. 실제 청구가 발생합니다.
+        """홀드의 received_amount 를 카드로 결제합니다.
 
-        예약·할인 재계산 메서드 또는 ``get_reservation_hold``가 반환한 홀드를 넘깁니다.
-        금액은 홀드의 received_amount 입니다. 카드 거절은 FAIL 모델로 반환하며 0원·대기 홀드는 카드 결제를 거절합니다(PayViewModel.java:15572)."""
+        실제 청구가 발생하며 카드 거절은 FAIL 모델로 돌아옵니다. 실패해도 다시 보내지 말고 결제 상태를 확인하십시오."""
         self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"
         form = build_card_payment_form(self.config, hold, card)
@@ -1838,11 +1752,9 @@ class KorailClient:
         latitude: str | None = None,
         longitude: str | None = None,
     ) -> RefundTicketResponse:
-        """PaidTicket 이 가리키는 발권 승차권 한 장을 환불합니다. PNR 전체 환불이 아니며 수수료가 붙을 수 있습니다.
+        """get_refund_commission 으로 확인한 발권 승차권 한 장을 환불합니다.
 
-        먼저 get_refund_commission 을 부르고 그 성공 응답을 ``commission`` 으로 넘기십시오. 조회한 원표·동반자가
-        ``ticket``과 다르거나 ``ticket.return_sale_date``가 없으면 요청 전에 거절합니다. 직접 생성·파싱한
-        수수료 응답은 쓸 수 없습니다. 승차권 한 장씩 환불하며 자동 조회·재전송하지 않습니다."""
+        실제 환불과 수수료가 발생하며 자동 재전송하지 않으니, 실패하면 승차권 상태를 확인하십시오."""
         self._require_session("refund requires")
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
         form = build_refund_form(
@@ -1860,10 +1772,7 @@ class KorailClient:
         self,
         request: StationRefundVerificationRequest,
     ) -> StationRefundVerificationResponse:
-        """역발행 승차권의 온라인 환불 가능 여부와 금액을 확인합니다.
-
-        실서버 검증 못 함. 실제 환불은 실행하지 않습니다. VerifyOnlineRefundsOut은 CommonOut을 상속하지 않아 strResult 누락을 허용합니다
-        (http._NON_COMMON_OUT_READ_PATHS)."""
+        """역발행 승차권의 온라인 환불 가능 여부와 금액을 확인합니다. 환불은 하지 않습니다(실서버 검증 못 함)."""
         self._require_session("station ticket refund verification requires")
         return self._post_read(
             "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
@@ -1877,7 +1786,7 @@ class KorailClient:
     ) -> StationRefundExecutionResponse:
         """검증된 역발행 승차권의 환불을 요청합니다.
 
-        실제 환불·접수 상태를 바꿀 수 있으므로 반환 구분과 결과를 확인하십시오. 검증 못 함: 역발행 승차권이 없어 실행하지 못했습니다."""
+        실제 환불·접수 상태를 바꿀 수 있으니 다시 보내지 말고 결과를 확인하십시오(검증 못 함)."""
         self._require_session("station ticket refund requires")
         return self._mutation(
             "/classes/com.korail.mobile.refunds.executeOnlineRefunds",
@@ -1891,8 +1800,7 @@ class KorailClient:
     ) -> CartAddResponse:
         """미결제 예약을 실제 장바구니에 추가합니다.
 
-        psgDiscAdd_infos.psgDiscAdd_info는 discount_additions로 읽습니다(NetworkApi.java:266-267; AddCartListIn.java:52;
-        AddCartListOut.java:24-25,76). 실서버 관측: 열차·공항버스 예약 모두 SUCC/IRZ000002였으나 할인 행은 없었습니다."""
+        서버 상태를 바꾸므로 실패해도 다시 보내지 마십시오."""
         self._require_session("cart add requires")
         route = "/classes/com.korail.mobile.cart.addCartList"
         form = build_cart_add_form(self.config, request)
@@ -1904,8 +1812,7 @@ class KorailClient:
     ) -> DiscountCardPurchaseResponse:
         """N카드 미결제 구매를 만듭니다.
 
-        실서버 검증 못 함. 경로 이름의 Info 가 조회를 뜻하지 않습니다. NetworkApi.java:336-337; NCardInfoOut.java:32-33 의 일괄결제
-        대상과 금액은 PayViewModel.java:6628 의 결제 입력으로 이어집니다."""
+        서버 상태를 바꾸므로 실패해도 다시 보내지 마십시오(실서버 검증 못 함)."""
         self._require_session("discount card purchase requires")
         route = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
         form = build_discount_card_purchase_form(self.config, request)
@@ -1921,7 +1828,7 @@ class KorailClient:
     ) -> BaseKorailResponse:
         """N카드의 유효기간을 실제로 연장합니다.
 
-        검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
+        서버 상태를 바꾸므로 실패해도 다시 보내지 마십시오(검증 못 함: N카드가 없는 계정)."""
         self._require_session("discount card extension requires")
         route = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
         query = build_discount_card_extension_query(self.config, ticket)
@@ -1935,8 +1842,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """N카드로 좌석을 홀드합니다.
 
-        일반 예약 라우트(NetworkApi.java:752-753)에 승객별 txtCardNo_ 를
-        보냅니다(TicketReservationInPassengerInfo.java:55,105). 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
+        결제·취소는 호출자 몫이며 실패해도 다시 보내지 마십시오(검증 못 함: N카드가 없는 계정)."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_discount_card_reservation_form(
@@ -1961,7 +1867,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """홀드의 할인 조합을 재계산합니다.
 
-        재계산 성공 뒤에만 선택적으로 장바구니에 추가하며 추가 실패는 결과에 남깁니다(PayViewModel.java:14428-14436)."""
+        재계산된 홀드는 서버에 반영되므로 실패해도 다시 보내지 마십시오. add_to_cart=True 의 장바구니 실패는 결과에 남습니다."""
         if not isinstance(add_to_cart, bool):
             raise KorailInvalidInputError("add_to_cart must be a bool")
         self._require_session("price recalculation requires")

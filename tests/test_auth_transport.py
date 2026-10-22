@@ -279,7 +279,9 @@ def test_login_does_not_gate_encryption_on_pwd_aes_flag(factory, value):
 
 
 def test_login_overrides_and_common_code_repeated_fields(factory):
-    """LoginIn.java:57-76; CommonCodeIn.java:31-34,55; NetworkService.java:15342-15343."""
+    """LoginIn.java:57-76; CommonCodeIn.java:31-34,55; NetworkService.java:15342-15343. NetworkApi.java:315-321 and
+    NetworkService.java:2015-2025: boot sends the code list in one call. LoginViewModel.java:1390-1520: service and
+    crypto reads precede login, and no web follow-up runs."""
     client, requests = factory([*bootstrap(idx=""), login_response()])
     client.login(
         ID,

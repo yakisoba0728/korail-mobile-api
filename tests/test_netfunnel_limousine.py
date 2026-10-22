@@ -1000,7 +1000,8 @@ def expected_reservation_form() -> dict[str, str]:
 
 
 def test_full_reservation_form_adult_child(config, schedule) -> None:
-    """AirportBusScheduleViewModel.java:165-184; AirportBusSeatMapViewModel.java:752-788; ScdlQryOutTrain.java:613-620."""
+    """AirportBusScheduleViewModel.java:165-184; AirportBusSeatMapViewModel.java:752-788,1914 (adults and children
+    only, one seat per passenger); ScdlQryOutTrain.java:613-620."""
     assert (
         build_limousine_reservation_form(
             config,
