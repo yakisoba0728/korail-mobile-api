@@ -48,10 +48,10 @@ class KorailPassengerCounts:
     """승객 종류별 검색·예약 인원을 구성합니다.
 
     인원이 0인 승객 종류는 요청에 싣지 않습니다. 유아·안내견을 포함한 전체 인원은 1~9명이어야 합니다. 인원에 음수나 정수가
-    아닌 값이 있거나 전체 인원이 이 범위를 벗어나면 ``KorailProtocolError``가 발생합니다.
+    아닌 값이 있거나 전체 인원이 이 범위를 벗어나면 ``KorailInvalidInputError``가 발생합니다.
 
     ``teenager``는 검색 호환용으로 유지하며 검색에서는 어른 수에 합산합니다. 열차 예약 메서드는 이 값이 0보다 크면
-    요청 전에 ``KorailProtocolError``로 거절합니다. 청소년드림 할인 상품을 선택하는 필드가 아닙니다."""
+    요청 전에 ``KorailInvalidInputError``로 거절합니다. 청소년드림 할인 상품을 선택하는 필드가 아닙니다."""
 
     adult: int = 1
     teenager: int = 0
@@ -105,7 +105,7 @@ class KorailSeatAssignment:
     """호차 번호와 좌석 식별자로 좌석 지정 입력을 구성합니다.
 
     ``seat_no``에는 좌석 재고 응답의 ``seat_no``를 그대로 넣으세요. 보통 ``from_inventory()``로 만듭니다. ``car_no``는 1
-    이상의 정수, ``seat_no``는 비어 있지 않은 문자열이어야 하며, 아니면 ``KorailProtocolError``가 발생합니다."""
+    이상의 정수, ``seat_no``는 비어 있지 않은 문자열이어야 하며, 아니면 ``KorailInvalidInputError``가 발생합니다."""
 
     car_no: int
     seat_no: str
@@ -127,7 +127,7 @@ class KorailSeatAssignment:
 
         ``inventory.car_no``가 없으면 이 메서드를 쓸 수 없으므로 ``KorailSeatAssignment(car_no=..., seat_no=...)``로 직접
         만드세요. 호차 번호가 없거나, ``seat``이 ``inventory.seats``에 없거나, ``seat.sale_possible``이 ``"Y"``가 아니면
-        ``KorailProtocolError``가 발생합니다."""
+        ``KorailInvalidInputError``가 발생합니다."""
         if not isinstance(inventory, SeatInventoryResponse):
             raise KorailInvalidInputError("inventory must be a SeatInventoryResponse")
         if not isinstance(seat, PhysicalSeat):
@@ -151,7 +151,7 @@ class KorailSeatAssignment:
 class CartAddRequest:
     """홀드를 장바구니에 추가할 PNR 입력을 구성합니다.
 
-    PNR은 ``hidPnrNo``로 보내며, 비어 있으면 요청을 보내기 전에 ``KorailProtocolError``가 발생합니다."""
+    PNR은 ``hidPnrNo``로 보내며, 비어 있으면 요청을 보내기 전에 ``KorailInvalidInputError``가 발생합니다."""
 
     pnr_no: str
 
@@ -178,7 +178,7 @@ def build_ticket_duplication_check_form(
 class TicketReservationDetailRequest:
     """PNR 기준 예약 상세 조회 입력을 구성합니다.
 
-    PNR은 ``hidPnrNo``로 보냅니다. ``pnr_no``가 비어 있으면 ``KorailProtocolError``가 발생합니다."""
+    PNR은 ``hidPnrNo``로 보냅니다. ``pnr_no``가 비어 있으면 ``KorailInvalidInputError``가 발생합니다."""
 
     pnr_no: str
 

@@ -14,6 +14,7 @@ from korail_mobile_api import (
     Korail,
     KorailConfig,
     KorailDeviceProfile,
+    KorailInvalidInputError,
     KorailPassengerCounts,
     ReservationHoldResponse,
     TrainSearchContinuation,
@@ -90,9 +91,9 @@ def test_past_date_and_unknown_station_do_not_send_search() -> None:
         return httpx.Response(200, json={"stns": {"stn": [{"stn_cd": "0001", "stn_nm": "서울"}]}})
 
     with Korail(_config(), transport=httpx.MockTransport(handler)) as korail:
-        with pytest.raises(ValueError, match="지난 출발"):
+        with pytest.raises(KorailInvalidInputError, match="지난 출발"):
             korail.trains.search("서울", "부산", depart_after=datetime(2000, 1, 1))
-        with pytest.raises(ValueError, match="역을 찾을 수 없습니다"):
+        with pytest.raises(KorailInvalidInputError, match="역을 찾을 수 없습니다"):
             korail.trains.search("서울", "부산", depart_after=datetime(2099, 1, 1))
     assert len(calls) == 1
 
@@ -235,7 +236,7 @@ def test_continuation_keeps_the_first_page_moment() -> None:
     calls: list[httpx.Request] = []
     cursor = TrainSearchContinuation("0001", "0123")
     with Korail(_config(), transport=httpx.MockTransport(_station_and_search_handler(calls))) as korail:
-        with pytest.raises(ValueError, match="depart_after"):
+        with pytest.raises(KorailInvalidInputError, match="depart_after"):
             korail.trains.search("서울", "부산", continuation=cursor)
         first_page_moment = datetime(2000, 1, 2, 9, 0, tzinfo=timezone.utc)
         korail.trains.search("서울", "부산", depart_after=first_page_moment, continuation=cursor)

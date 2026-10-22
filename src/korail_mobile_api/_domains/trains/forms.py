@@ -380,7 +380,7 @@ class PriceFareLeg:
     """예매 전 운임을 조회할 열차 한 구간을 구성합니다.
 
     ``goods_no``가 ``None``이면 앱처럼 상품 번호(``gdNo``) 칸을 빈 문자열로 보냅니다. ``None``이 아닌 값은 모두 비어 있지
-    않은 문자열이어야 하고 쉼표를 포함할 수 없으며, 아니면 ``KorailProtocolError``가 발생합니다."""
+    않은 문자열이어야 하고 쉼표를 포함할 수 없으며, 아니면 ``KorailInvalidInputError``가 발생합니다."""
 
     departure_station_code: str
     arrival_station_code: str
@@ -427,7 +427,7 @@ class PriceFareQuoteRequest:
     """한두 구간의 운임 조회 조건과 메뉴를 구성합니다.
 
     ``legs``는 ``PriceFareLeg`` 한 개 또는 두 개여야 하고, ``goods_no``는 모든 구간에 넣거나 모두 비워 둬야 하며, 아니면
-    생성할 때 ``KorailProtocolError``가 발생합니다. 앱이 보내는 메뉴 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다."""
+    생성할 때 ``KorailInvalidInputError``가 발생합니다. 앱이 보내는 메뉴 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다."""
 
     legs: tuple[PriceFareLeg, ...]
     # evidence: app TrainOpInfoViewModel.java:794 (메뉴 평문은 보호돼 미확인)

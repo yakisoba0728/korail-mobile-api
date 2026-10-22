@@ -45,7 +45,7 @@ class StationRefundVerificationRequest:
     """역에서 발권한 승차권의 환불 확인에 필요한 이름과 반환 식별자를 구성합니다.
 
     ``return_no_1``~``return_no_4``에는 반환번호 네 칸을 차례로 넣습니다. 모든 필드는 비어 있지 않은
-    문자열이어야 하며, 아니면 ``KorailProtocolError``가 발생합니다."""
+    문자열이어야 하며, 아니면 ``KorailInvalidInputError``가 발생합니다."""
 
     customer_name: str
     return_no_1: str
@@ -63,7 +63,7 @@ class StationRefundExecutionRequest:
 
     보통 ``from_verification()``으로 환불 확인 결과에서 만듭니다. 만들기만 해서는 요청을 보내지 않으며, 실제 환불은
     ``KorailClient.execute_station_ticket_refund()``를 호출해야 합니다. 모든 필드는 비어 있지 않은 문자열이어야 하며,
-    아니면 ``KorailProtocolError``가 발생합니다."""
+    아니면 ``KorailInvalidInputError``가 발생합니다."""
 
     pnr_no: str
     original_sale_date: str
@@ -91,7 +91,7 @@ class StationRefundExecutionRequest:
     ) -> StationRefundExecutionRequest:
         """환불 확인 응답의 첫 원표와 확인된 환불액·수수료로 실행 입력을 만듭니다.
 
-        확인 응답이 성공(``"SUCC"``)이 아니거나 원표가 없거나 옮겨 담을 값이 비어 있으면 ``KorailProtocolError``가
+        확인 응답이 성공(``"SUCC"``)이 아니거나 원표가 없거나 옮겨 담을 값이 비어 있으면 ``KorailInvalidInputError``가
         발생합니다."""
         if verification.str_result != "SUCC" or not verification.original_tickets:
             raise KorailInvalidInputError(
@@ -153,7 +153,7 @@ class CardPayment:
     # evidence: app InstallmentViewModel.java:55,94-96 (INS_0; its value is protected, so "0" vs "00" is unconfirmed)
     #: 할부 개월 수입니다. 숫자 1~2자리이며 기본값 ``"0"``은 일시불입니다.
     installment: str = field(default="0", repr=False)
-    #: 카드 종류입니다. ``"J"``(기본값)는 개인 카드, ``"S"``는 법인 카드입니다. 다른 값이면 ``KorailProtocolError``가
+    #: 카드 종류입니다. ``"J"``(기본값)는 개인 카드, ``"S"``는 법인 카드입니다. 다른 값이면 ``KorailInvalidInputError``가
     #: 발생합니다.
     card_type: Literal["J", "S"] = field(default="J", repr=False)
 
@@ -180,7 +180,7 @@ class PaidTicket:
 
     보통 ``from_refund_detail()``로 승차권 상세 응답에서 만드세요. 환불 요청은 상세 응답의 판매일(``sale_date``)을 쓰고,
     수수료 조회는 원표 반환일을 쓰므로 두 값을 섞어 쓰지 마세요. ``refund()``에는 이 값과 함께 ``get_refund_commission()``의
-    응답을 ``commission``으로 넘겨야 합니다. 앞의 다섯 필드가 비어 있으면 만들 때 ``KorailProtocolError``가 발생합니다."""
+    응답을 ``commission``으로 넘겨야 합니다. 앞의 다섯 필드가 비어 있으면 만들 때 ``KorailInvalidInputError``가 발생합니다."""
 
     pnr_no: str
     #: 환불 요청의 판매일(``h_orgtk_sale_dt``)입니다. 재발행된 승차권은 원표의 판매일과 다를 수 있습니다.
@@ -217,7 +217,7 @@ class PaidTicket:
         """승차권 상세 응답에서 환불 입력을 앱과 같은 방식으로 만듭니다.
 
         ``train_no``를 주지 않으면 첫 여정의 열차 번호를 씁니다. 상세 응답에 PNR, 판매일, 원표 창구번호·일련번호·반환
-        비밀번호 중 빈 값이 있으면 ``KorailProtocolError``가 발생합니다."""
+        비밀번호 중 빈 값이 있으면 ``KorailInvalidInputError``가 발생합니다."""
         candidate_parts = {
             "pnr_no": detail.pnr_no,
             "sale_date": detail.sale_date,
@@ -294,7 +294,7 @@ class PriceRecalculationRequest:
         """홀드의 첫 여정 좌석마다 한 행씩, 앱과 같은 방식으로 재계산 조건을 만듭니다.
 
         좌석별 승객 유형·객실 등급·기존 할인 코드·증빙 번호를 옮겨 담으므로 ``requested_discount_codes``는 첫 여정 좌석 수와
-        같은 개수여야 합니다. 홀드가 성공(``"SUCC"``)이 아니거나 PNR·좌석 행이 없거나 개수가 다르면 ``KorailProtocolError``가
+        같은 개수여야 합니다. 홀드가 성공(``"SUCC"``)이 아니거나 PNR·좌석 행이 없거나 개수가 다르면 ``KorailInvalidInputError``가
         발생합니다."""
         pnr_no = hold.pnr_no
         if hold.str_result != "SUCC" or not isinstance(pnr_no, str) or not pnr_no.strip():

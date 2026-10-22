@@ -67,7 +67,7 @@ class Row:
     id: str
     call: Callable[[api.KorailClient], object]
     match: str | None = None
-    error: type[Exception] = api.KorailProtocolError
+    error: type[Exception] = INVALID
     logged_in: bool = True
     defect: str | None = None
 
@@ -633,6 +633,7 @@ FIXES = [
             api.PriceRecalculationRequest.for_hold(replace(SEATED_HOLD, payable=False), ["000"])
         ),
     ),
+    Row("recalc-add-to-cart-type", lambda c: c.recalculate_price(RECALC, add_to_cart="Y"), "add_to_cart"),
     # D9: login sends the service check and crypto key request before rejecting the password.
     Row("login-password-none", lambda c: c.login("0000000000", None), logged_in=False),
     Row("login-password-not-text", lambda c: c.login("0000000000", 123), logged_in=False),

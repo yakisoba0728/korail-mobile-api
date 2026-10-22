@@ -18,7 +18,7 @@ from ..errors import (
     KorailAppUpdateRequiredError,
     KorailAuthContinuationRequired,
     KorailAuthError,
-    KorailProtocolError,
+    KorailInvalidInputError,
     KorailRateLimitError,
     KorailServiceUnavailableError,
     classify_app_error,
@@ -63,7 +63,7 @@ def infer_login_input_flag(login_id: str) -> KorailLoginInputFlag:
     if "@" in login_id:
         return KORAIL_LOGIN_TYPE_EMAIL
     if not (login_id.isascii() and login_id.isdigit()):
-        raise KorailProtocolError(
+        raise KorailInvalidInputError(
             "KORAIL login ID must be digits only (member number, or phone number without hyphens) or an email"
         )
     if len(login_id) == 11:
@@ -163,14 +163,14 @@ class KorailSessionClient:
         # 앱과 달리 로그인마다 키를 새로 받습니다. 캐시한 키가 서버에서 바뀌면 비밀번호 오류로 보이고, 반복되면 계정이 잠깁니다.
         # 서비스 확인과 키 요청을 보내기 전에 입력을 검사합니다.
         if not isinstance(member_no, str):
-            raise KorailProtocolError("KORAIL login member_no must be a str")
+            raise KorailInvalidInputError("KORAIL login member_no must be a str")
         resolved_input_flag = input_flag or infer_login_input_flag(member_no)
         if not isinstance(password, str):
-            raise KorailProtocolError("KORAIL login password must be a str")
+            raise KorailInvalidInputError("KORAIL login password must be a str")
         try:
             password.encode("utf-8")
         except UnicodeEncodeError as exc:
-            raise KorailProtocolError("KORAIL login password cannot be encoded as UTF-8") from exc
+            raise KorailInvalidInputError("KORAIL login password cannot be encoded as UTF-8") from exc
         self.check_service()
         crypto_info = self.get_login_crypto_info()
         transformed = transform_login_password(password, crypto_info)

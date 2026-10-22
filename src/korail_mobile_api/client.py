@@ -316,6 +316,7 @@ from .constants import KorailLoginInputFlag, KorailReservationJobType, KorailRoo
 from .errors import (
     KorailApiError,
     KorailAuthError,
+    KorailInvalidInputError,
     KorailNoDirectTrainError,
     KorailProtocolError,
     KorailSessionExpiredError,
@@ -1697,7 +1698,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """열차 한 편에 실제 미결제 예약(홀드)을 만듭니다. 결제 또는 취소는 호출자 책임입니다.
 
-        ``passengers.teenager > 0``은 요청 전에 ``KorailProtocolError``로 거절합니다. 환승·병합 예약에도 적용합니다.
+        ``passengers.teenager > 0``은 요청 전에 ``KorailInvalidInputError``로 거절합니다. 환승·병합 예약에도 적용합니다.
         응답을 읽지 못해도 홀드는 잡혔을 수 있으니 다시 보내지 말고 예외의 ``.raw`` 나 get_reservation_history 로 확인하십시오.
         다른 예약 메서드도 같습니다. 좌석속성은 명시값→열차 행→기본값이며 STANDBY 홀드는 결제하지 않습니다(TrainScheduleViewModel.java:2914-2930,6773-6781)."""
         self._require_session("reservation requires")
@@ -1755,7 +1756,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """탑승 순서의 TrainSummary 두 개를 한 PNR 로 홀드합니다.
 
-        ``passengers.teenager > 0``은 요청 전에 ``KorailProtocolError``로 거절합니다.
+        ``passengers.teenager > 0``은 요청 전에 ``KorailInvalidInputError``로 거절합니다.
         한 PNR에 탑승 순서의 두 여정을 넣습니다(TicketReservationIn.java:34-37,80)."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -1790,7 +1791,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """병합예약의 후속 요청으로 실제 미결제 예약을 만듭니다.
 
-        ``passengers.teenager > 0``과 ``MERGE_STANDING`` 이외의 ``job_type``은 요청 전에 ``KorailProtocolError``로 거절합니다.
+        ``passengers.teenager > 0``과 ``MERGE_STANDING`` 이외의 ``job_type``은 요청 전에 ``KorailInvalidInputError``로 거절합니다.
         첫 홀드는 호출자가 취소해야 하며 후속 홀드는 별도 PNR일 수 있습니다(ReservationMergeViewModel.java:1352,1556; 실서버 관측)."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -1881,11 +1882,6 @@ class KorailClient:
         ``ticket``과 다르거나 ``ticket.return_sale_date``가 없으면 요청 전에 거절합니다. 직접 생성·파싱한
         수수료 응답은 쓸 수 없습니다. 승차권 한 장씩 환불하며 자동 조회·재전송하지 않습니다."""
         self._require_session("refund requires")
-        # 앱은 두 환불 화면 모두 수수료 조회가 성공해야 환불합니다. commission=None 을 명시해도 건너뛰지 못하게 합니다.
-        if not isinstance(commission, RefundCommissionResponse):
-            raise KorailProtocolError(
-                "KORAIL refund requires the get_refund_commission response as commission="
-            )
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
         form = build_refund_form(
             self.config,
@@ -2005,7 +2001,7 @@ class KorailClient:
 
         재계산 성공 뒤에만 선택적으로 장바구니에 추가하며 추가 실패는 결과에 남깁니다(PayViewModel.java:14428-14436)."""
         if not isinstance(add_to_cart, bool):
-            raise KorailProtocolError("add_to_cart must be a bool")
+            raise KorailInvalidInputError("add_to_cart must be a bool")
         self._require_session("price recalculation requires")
         route = "/classes/com.korail.mobile.certification.PriceReCalculation"
         form = build_price_recalculation_form(self.config, request)

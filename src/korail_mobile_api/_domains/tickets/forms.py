@@ -88,7 +88,7 @@ def build_mileage_history_form(
 class OriginalTicketReference:
     """원표 조회와 환불·대리수령 같은 후속 처리에 쓰는 반환 식별자를 구성합니다.
 
-    네 필드 모두 비어 있지 않은 문자열이어야 하며, 아니면 ``KorailProtocolError``가 발생합니다. ``sale_date``의 형식은
+    네 필드 모두 비어 있지 않은 문자열이어야 하며, 아니면 ``KorailInvalidInputError``가 발생합니다. ``sale_date``의 형식은
     메서드마다 다릅니다. 수령자·대리수령 조회 두 메서드는 승차권의 ``sale_date``(``YYYYMMDD``)를 받고, 그 밖의 메서드는
     ``return_sale_date``(``MMDD``)를 받습니다. 메서드 사이에 값을 섞어 쓰지 마세요."""
 
@@ -159,7 +159,7 @@ class SelfSeatChangeInfoRequest:
 
     앱처럼 승차권의 운행일·열차 번호·출발역·도착역을 그대로 넣습니다. ``room_class_code``가 ``None``이면 객실 등급을 보내지
     않습니다. ``run_date``는 8자리 숫자, ``train_no``는 5자리 이하 숫자여야 하고 역 코드는 비어 있으면 안 되며, 아니면
-    ``KorailProtocolError``가 발생합니다."""
+    ``KorailInvalidInputError``가 발생합니다."""
 
     run_date: str
     train_no: str

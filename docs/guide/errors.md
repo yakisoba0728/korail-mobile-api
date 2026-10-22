@@ -16,6 +16,7 @@ Exception
 └── KorailApiError
     ├── KorailTransportError
     ├── KorailProtocolError
+    │   └── KorailInvalidInputError (ValueError 도 상속)
     ├── KorailAuthError
     │   ├── KorailSessionExpiredError
     │   ├── KorailAccountLockedError
@@ -44,6 +45,7 @@ Exception
 | [`KorailApiError`][korail_mobile_api.KorailApiError] | `Exception` | 모든 라이브러리 예외의 기반 클래스입니다. 이 클래스 자체를 발생시키지는 않습니다. |
 | [`KorailTransportError`][korail_mobile_api.KorailTransportError] | `KorailApiError` | 연결 실패나 시간 초과 같은 네트워크 오류가 났을 때, 서버가 2xx가 아닌 HTTP 상태로 응답했을 때(3xx 포함, 리다이렉트는 따라가지 않음) |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `KorailApiError` | 요청 전 입력 검사에 실패했을 때, 응답이 JSON 객체가 아니거나 봉투 필드의 타입이 틀렸을 때, 필수 값이 없어 응답을 읽을 수 없을 때, 닫힌 클라이언트로 요청하려 할 때, DynaPath 토큰 함수가 예외를 발생시키거나 문자열이 아니거나 ASCII가 아닌 값을 돌려줬을 때 |
+| [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError] | `KorailProtocolError`, `ValueError` | 요청 전 입력 검사에 실패했을 때(입력 모델 생성, 폼 구성, 간편 API 인자). 요청을 보내지 않습니다. |
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | `KorailApiError` | 로그인에 실패했을 때, 로그인이 필요한 메서드를 로그인하지 않고 호출했을 때(요청을 보내지 않음), 고객번호가 필요한 메서드인데 세션에 고객번호가 없을 때 |
 | [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError] | `KorailAuthError` | 서버가 결과 코드 `P058`로 세션 만료를 알려 왔을 때. 로컬 세션을 비웁니다. |
 | [`KorailAccountLockedError`][korail_mobile_api.KorailAccountLockedError] | `KorailAuthError` | 로그인 응답이 비밀번호 오류 허용 횟수 초과(`WRC000390`)를 알렸을 때. 로그인을 반복하지 말고 계정 상태를 확인하세요. |

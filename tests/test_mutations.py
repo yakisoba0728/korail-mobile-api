@@ -1041,7 +1041,7 @@ def test_refund_requires_the_commission_lookup(mutation_client) -> None:
         client.refund(ticket())  # type: ignore[call-arg]
     # 빈 값을 명시해도 수수료 조회를 건너뛸 수 없습니다.
     for missing in (None, {"strResult": "SUCC"}):
-        with pytest.raises(KorailProtocolError, match="get_refund_commission"):
+        with pytest.raises(KorailInvalidInputError, match="get_refund_commission"):
             client.refund(ticket(), commission=missing)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="commission"):
         payload_module.build_refund_form(KorailConfig(), ticket(), settle_mileage=True)  # type: ignore[call-arg]

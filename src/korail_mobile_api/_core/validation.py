@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date
 
 from ..constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
-from ..errors import KorailProtocolError
+from ..errors import KorailInvalidInputError
 from .wire import _is_ascii_digits
 
 
@@ -17,21 +17,21 @@ def _int_text(value: int, name: str) -> str:
     """앱 DTO 는 String 이고 범위 검사가 없어 값의 판정은 서버에 맡깁니다 (CouponIn.java:29-30, ProductListIn.java:30-35,
     AmtSpecIn.java:30-36)."""
     if type(value) is not int:
-        raise KorailProtocolError(f"{name} must be an integer")
+        raise KorailInvalidInputError(f"{name} must be an integer")
     return str(value)
 
 
 def _required_text(value: str | None, name: str) -> str:
     """``value`` 를 그대로 돌려주되 없거나 빈 문자열이면 거부합니다. 호출자 대부분이 서버 응답에서 파싱한 선택 필드를 그대로 넘기므로, ``None`` 도 인자로 받아
-    ``errors.KorailProtocolError`` 로 거절합니다."""
+    ``errors.KorailInvalidInputError`` 로 거절합니다."""
     if not isinstance(value, str) or not value.strip():
-        raise KorailProtocolError(f"{name} must not be empty")
+        raise KorailInvalidInputError(f"{name} must not be empty")
     return value
 
 
 def _optional_text(value: str, name: str) -> str:
     if not isinstance(value, str):
-        raise KorailProtocolError(f"{name} must be a string")
+        raise KorailInvalidInputError(f"{name} must be a string")
     return value
 
 
@@ -51,19 +51,19 @@ def _ascii_digits(
         if not _is_ascii_digits(value, lengths):
             if len(lengths) == 1:
                 (length,) = lengths
-                raise KorailProtocolError(f"{name} must contain exactly {length} ASCII digits")
+                raise KorailInvalidInputError(f"{name} must contain exactly {length} ASCII digits")
             expected = ", ".join(str(length) for length in sorted(lengths))
-            raise KorailProtocolError(f"{name} must contain {expected} ASCII digit(s)")
+            raise KorailInvalidInputError(f"{name} must contain {expected} ASCII digit(s)")
         return value
     if not _is_ascii_digits(value) or (maximum_length is not None and len(value) > maximum_length):
         suffix = f" with at most {maximum_length} digits" if maximum_length is not None else ""
-        raise KorailProtocolError(f"{name} must be an ASCII decimal string{suffix}")
+        raise KorailInvalidInputError(f"{name} must be an ASCII decimal string{suffix}")
     return value
 
 
 def _passenger_count(value: int, name: str) -> int:
     if type(value) is not int or not 1 <= value <= KORAIL_MAX_PASSENGERS_PER_RESERVATION:
-        raise KorailProtocolError(
+        raise KorailInvalidInputError(
             f"{name} must be an integer from 1 through {KORAIL_MAX_PASSENGERS_PER_RESERVATION}"
         )
     return value
@@ -74,13 +74,13 @@ def _calendar_date(value: str, name: str) -> date:
     try:
         return date(int(value[:4]), int(value[4:6]), int(value[6:]))
     except ValueError as exc:
-        raise KorailProtocolError(f"{name} must be a valid calendar date") from exc
+        raise KorailInvalidInputError(f"{name} must be a valid calendar date") from exc
 
 
 def _wire_component(value: str, name: str) -> str:
     resolved = _required_text(value, name)
     if "," in resolved:
-        raise KorailProtocolError(f"{name} must not contain a comma")
+        raise KorailInvalidInputError(f"{name} must not contain a comma")
     return resolved
 
 
@@ -92,5 +92,5 @@ def _required_mutation_text(
     allow_blank: bool = False,
 ) -> str:
     if not isinstance(value, str) or (not allow_blank and not value.strip()):
-        raise KorailProtocolError(f"KORAIL {context} requires a non-empty {field}")
+        raise KorailInvalidInputError(f"KORAIL {context} requires a non-empty {field}")
     return value

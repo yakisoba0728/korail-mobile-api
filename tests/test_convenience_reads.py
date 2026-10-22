@@ -13,6 +13,7 @@ from korail_mobile_api import (
     BaseKorailResponse,
     Korail,
     KorailConfig,
+    KorailInvalidInputError,
     KorailNoResultsError,
     KorailPassengerCounts,
     KorailProtocolError,
@@ -151,7 +152,7 @@ def test_fare_factory_does_not_normalize_invalid_goods_to_missing(goods):
 def test_iterator_validates_budget_without_requests(scripted_client_factory, config, max_pages):
     client, requests, _ = scripted_client_factory([], config=config)
     trains = TrainResource(client, StationResource(client), validate_stations=False)
-    with pytest.raises(ValueError, match="max_pages"):
+    with pytest.raises(KorailInvalidInputError, match="max_pages"):
         list(trains.iter_search("출발", "도착", depart_after=MOMENT, max_pages=max_pages))
     assert requests == []
 
@@ -400,7 +401,7 @@ def test_membership_explicit_early_dates_do_not_compute_default_range(
     membership.mileage(start_date=date.min, end_date=date.min)
     form = parse_qs(requests[0].content.decode())
     assert form["qryStDt"] == form["qryClsDt"] == ["00010101"]
-    with pytest.raises(ValueError, match="30-day"):
+    with pytest.raises(KorailInvalidInputError, match="30-day"):
         membership.mileage(end_date=date.min)
     assert len(requests) == 1
 
@@ -472,7 +473,7 @@ def test_bad_bus_catalog_keeps_full_raw_and_is_not_cached(scripted_client_factor
 
 def test_unknown_bus_stop_does_not_send_schedule(scripted_client_factory, config):
     client, requests, _ = scripted_client_factory([_stops()], config=config)
-    with pytest.raises(ValueError, match="정류장"):
+    with pytest.raises(KorailInvalidInputError, match="정류장"):
         AirportBusResource(client).search("없는 정류장", "시험도착", service_code="980", depart_after=MOMENT)
     assert len(requests) == 1 and requests[0].url.path.endswith("common.code.do")
 
@@ -480,7 +481,7 @@ def test_unknown_bus_stop_does_not_send_schedule(scripted_client_factory, config
 def test_ambiguous_bus_name_or_code_does_not_pick_the_first_match(scripted_client_factory, config):
     raw = _stops(**{"app.limousine.stationNm": ["9903", "시험도착"]})
     client, requests, _ = scripted_client_factory([raw], config=config)
-    with pytest.raises(ValueError, match="구분"):
+    with pytest.raises(KorailInvalidInputError, match="구분"):
         AirportBusResource(client).search("9903", "시험도착", service_code="980", depart_after=MOMENT)
     assert len(requests) == 1 and requests[0].url.path.endswith("common.code.do")
 

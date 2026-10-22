@@ -12,7 +12,7 @@ from typing import Literal
 from ..._core.validation import _required_mutation_text, _required_text
 from ..._core.wire import _device_version_key
 from ...config import KorailConfig
-from ...errors import KorailProtocolError
+from ...errors import KorailInvalidInputError
 from ..payments.models import RefundTicketDetailResponse
 from ..tickets.forms import OriginalTicketReference, _exact_original_ticket_reference, _ticket_reference_tuple
 from .models import PbpAcceptanceTicket, SelfCheckInSeat
@@ -56,7 +56,9 @@ def self_checkin_ticket_fields(
     """가능 여부·등록은 saleDd 에 h_orgtk_ret_sale_dt 를, 정보·취소는 saleDt 에 h_sale_dt 를 넣습니다. jrnySqno 는 첫 여정의
     h_jrny_sqno 이며 여정이 없으면 뺍니다."""
     if not isinstance(detail, RefundTicketDetailResponse):
-        raise KorailProtocolError("detail must be a RefundTicketDetailResponse from get_refund_ticket_detail")
+        raise KorailInvalidInputError(
+            "detail must be a RefundTicketDetailResponse from get_refund_ticket_detail"
+        )
     sale_date = detail.original_sale_date if sale_date_key == "saleDd" else detail.sale_date
     fields = {
         "saleWctNo": _required_text(detail.original_window_no, "original_window_no"),
@@ -91,7 +93,7 @@ def build_self_checkin_register_form(
 ) -> dict[str, str]:
     """좌석 칸은 좌석 확인(check_self_checkin_seat)의 행에서, 승차권 칸은 상세에서 옵니다. jrnySqno 는 좌석 행이 아닌 상세의 값입니다."""
     if not isinstance(seat, SelfCheckInSeat):
-        raise KorailProtocolError("seat must be a SelfCheckInSeat from check_self_checkin_seat")
+        raise KorailInvalidInputError("seat must be a SelfCheckInSeat from check_self_checkin_seat")
     return {
         **_device_version_key(config),
         "cpsNo": _required_mutation_text(seat.cps_no, field="cps_no", context="self check-in"),
@@ -113,9 +115,11 @@ def build_delivered_ticket_retrieval_form(
     """앱은 첫 여정의 pbpRsvNo 로 묶은 승차권마다 한 번, 그 묶음의 pbpRsvNo 와 첫 승차권의 pnrNo 를 보냅니다. pbpCnt 는 쌍의 수
     1 이고, 두 목록은 FieldMap 뒤의 @Field 반복 키입니다."""
     if not isinstance(ticket, PbpAcceptanceTicket):
-        raise KorailProtocolError("ticket must be a PbpAcceptanceTicket from get_pbp_acceptance_specifications")
+        raise KorailInvalidInputError(
+            "ticket must be a PbpAcceptanceTicket from get_pbp_acceptance_specifications"
+        )
     if not ticket.journeys:
-        raise KorailProtocolError("KORAIL delivered ticket retrieval needs the ticket's first journey")
+        raise KorailInvalidInputError("KORAIL delivered ticket retrieval needs the ticket's first journey")
     context = "delivered ticket retrieval"
     return {
         **_device_version_key(config),

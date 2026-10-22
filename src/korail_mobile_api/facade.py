@@ -52,7 +52,7 @@ from ._domains.trains.models import (
 from .client import KorailClient
 from .config import KorailConfig
 from .constants import KorailReservationJobType, KorailReserveOption, KorailSeatClass
-from .errors import KorailNoResultsError, KorailProtocolError
+from .errors import KorailInvalidInputError, KorailNoResultsError
 
 KST = timezone(timedelta(hours=9))
 _PAST_TOLERANCE = timedelta(minutes=1)
@@ -64,7 +64,7 @@ def _departure_moment(depart_after: datetime | None, *, allow_past: bool = False
         raise TypeError("depart_after must be a datetime")
     moment = moment.replace(tzinfo=KST) if moment.tzinfo is None else moment.astimezone(KST)
     if not allow_past and moment < datetime.now(KST) - _PAST_TOLERANCE:
-        raise ValueError("이미 지난 출발 시각입니다")
+        raise KorailInvalidInputError("이미 지난 출발 시각입니다")
     return moment
 
 
@@ -97,7 +97,7 @@ class StationResource:
                 continue
             suggestions = get_close_matches(value, sorted(names), n=3)
             hint = f"; 가까운 역: {', '.join(suggestions)}" if suggestions else ""
-            raise ValueError(f"역을 찾을 수 없습니다: {reference!r}{hint}")
+            raise KorailInvalidInputError(f"역을 찾을 수 없습니다: {reference!r}{hint}")
 
 
 class TrainResource:
@@ -137,7 +137,7 @@ class TrainResource:
             raise TypeError("include_no_seats and include_waiting_list must be bool")
         # 다음 페이지는 첫 페이지와 같은 조건이어야 하므로 시각을 다시 읽지 않고 지난 시각도 허용합니다.
         if continuation is not None and depart_after is None:
-            raise ValueError("continuation needs the depart_after of the first page")
+            raise KorailInvalidInputError("continuation needs the depart_after of the first page")
         moment = _departure_moment(depart_after, allow_past=continuation is not None)
         query = self._query(
             departure, arrival, moment, passengers, train_group_code, include_srt, include_nearby_stations
@@ -216,7 +216,7 @@ class TrainResource:
         후속 조회 실패도 자동 재시도하지 않고 그대로 전달합니다.
         """
         if type(max_pages) is not int or not 1 <= max_pages <= 20:
-            raise ValueError("max_pages must be an integer from 1 through 20")
+            raise KorailInvalidInputError("max_pages must be an integer from 1 through 20")
         if type(include_no_seats) is not bool or type(include_waiting_list) is not bool:
             raise TypeError("include_no_seats and include_waiting_list must be bool")
         moment = _departure_moment(depart_after)
@@ -301,7 +301,7 @@ class MembershipResource:
             try:
                 start = end - timedelta(days=30)
             except OverflowError as error:
-                raise ValueError("end_date must allow a 30-day default range") from error
+                raise KorailInvalidInputError("end_date must allow a 30-day default range") from error
         else:
             start = self._date(start_date, end)
         return self._client.get_mileage_history(
@@ -361,9 +361,9 @@ class AirportBusResource:
         for reference in references:
             matches = [stop for stop in stops if reference in (stop.name, stop.code)]
             if not matches:
-                raise ValueError(f"공항버스 정류장을 찾을 수 없습니다: {reference!r}")
+                raise KorailInvalidInputError(f"공항버스 정류장을 찾을 수 없습니다: {reference!r}")
             if len(matches) != 1:
-                raise ValueError(f"공항버스 정류장 이름·코드를 구분할 수 없습니다: {reference!r}")
+                raise KorailInvalidInputError(f"공항버스 정류장 이름·코드를 구분할 수 없습니다: {reference!r}")
             codes.append(matches[0].code)
         return self._client.get_limousine_schedules(
             LimousineScheduleQuery(
@@ -413,7 +413,7 @@ class ReservationResource:
             if not isinstance(option, KorailReserveOption):
                 raise TypeError("option must be KorailReserveOption")
             if seat_class is not None or job_type is not KorailReservationJobType.IMMEDIATE:
-                raise ValueError("option requires immediate reservation without seat_class")
+                raise KorailInvalidInputError("option requires immediate reservation without seat_class")
             if not isinstance(train, TrainSummary):
                 raise TypeError("train must be TrainSummary")
             candidates = {
@@ -435,7 +435,7 @@ class ReservationResource:
                 None,
             )
             if seat_class is None:
-                raise KorailProtocolError("KORAIL reservation option requires an evidenced available seat")
+                raise KorailInvalidInputError("KORAIL reservation option requires an evidenced available seat")
         selected = KorailSeatClass.GENERAL if seat_class is None else seat_class
         return self._client.reserve(train, passengers=passengers, seat_class=selected, job_type=job_type)
 
@@ -447,7 +447,7 @@ class ReservationResource:
         """이미 생성된 예약을 별도 조회합니다. 생성 직후 자동 재조회하지 않습니다."""
         pnr_no = hold.pnr_no if isinstance(hold, ReservationHoldResponse) else hold
         if not pnr_no:
-            raise ValueError("a successful hold with a PNR is required")
+            raise KorailInvalidInputError("a successful hold with a PNR is required")
         return self._client.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no))
 
     def all(self) -> ReservationHistoryResponse:
