@@ -48,7 +48,7 @@ SOCKS 프록시를 쓰려면 `pip install "korail-mobile-api[socks]"`로 설치�
 
 모든 기능은 [`KorailClient`][korail_mobile_api.client.KorailClient]의 메서드로 제공됩니다.
 자주 쓰는 역·열차·예약·승차권 작업은 선택형 [`Korail` 간편 API](guide/convenience.md)로도 호출할 수 있습니다.
-설정 없이 만들면 코레일+ 앱 7.0.8에서 확인한 `AppVersion` 기본값을 사용합니다.
+설정 없이 만들면 코레일+ 앱 7.0.8에서 확인한 `AppVersion` 기본값을 사용합니다. Unreleased의 기본 토큰은 SDK 2.0.1 `2!` 진단입니다. [설정과 검증 범위](guide/configuration.md#dynapath)를 참고하세요.
 
 ```python
 from korail_mobile_api import KorailClient

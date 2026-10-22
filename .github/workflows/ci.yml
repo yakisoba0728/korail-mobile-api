@@ -113,7 +113,7 @@ jobs:
           clean = target / 'exercise'
           clean.mkdir()
           wheel, = (root / 'dist').glob('*.whl')
-          args = [str(python), '-m', 'pip', 'install', str(wheel), 'pytest>=8.3']
+          args = [str(python), '-m', 'pip', 'install', str(wheel) + '[socks]', 'pytest>=8.3']
           if '${{ matrix.dependencies }}' == 'minimum':
               config = tomllib.loads((root / 'pyproject.toml').read_text())
               for text in config['project']['dependencies']:
@@ -141,7 +141,7 @@ jobs:
               subprocess.check_call([str(python), str(clean / 'checks' / check)], cwd=clean, env=env)
           tests = clean / 'tests'
           tests.mkdir()
-          for name in ('conftest.py', 'test_public_api_smoke.py', 'test_7010_contract.py', 'test_refund_binding.py', 'test_convenience_reads.py'):
+          for name in ('conftest.py', 'test_public_api_smoke.py', 'test_7010_contract.py', 'test_dynapath_diagnostic.py', 'test_auth_transport.py', 'test_facade.py', 'test_proxy.py', 'test_refund_binding.py', 'test_convenience_reads.py'):
               shutil.copy2(root / 'tests' / name, tests / name)
           subprocess.check_call([str(python), '-m', 'pytest', '-q', str(tests)], cwd=clean, env=env)
           PY

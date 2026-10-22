@@ -1,5 +1,9 @@
 # 동작 계약과 확인 한계
 
+Unreleased의 기본 DynaPath는 SDK 2.0.1 `2!` native-unavailable 진단입니다. 기기값은 기본 토큰에 합성하지 않으며
+profile/env로 제공한 값만 padding 없는 Base64url로 추가합니다. 명시적 v1/외부 공급자·기존 경로 gate·필수 토큰·대기열·무재시도 계약은 유지합니다.
+[실서버 관측의 버전·입력·한계](../docs/verification-7010.md#diagnostic-20261023)는 별도로 기록합니다.
+
 ## 전송과 원문
 
 DTO 필드는 선언 순서로 평탄화하고 배열은 1기반 인덱스를 사용합니다

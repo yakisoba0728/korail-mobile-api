@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- 기본 DynaPath를 SDK 2.0.1 `2!` native-unavailable 진단으로 전환합니다. 기본 헤더에 기기값을 합성하지 않고 profile/env로 제공한 값만 `os`·`dm`·`iid`에 넣습니다. 명시적 v1 설정·외부 공급자·기존 allowlist·대기열·무재시도 정책은 유지하며 env builder는 v1 전용 `KORAIL_DYNAPATH_AS_VALUE`를 더 이상 읽지 않습니다. 같은 헤더 형식의 실서버 관측은 [실행 당시 조건](https://github.com/yakisoba0728/korail-mobile-api/blob/main/docs/verification-7010.md#diagnostic-20261023)으로 별도 기록합니다.
+
 ## [2.6.1] - 2026-10-19
 
 - `PriceFareLeg.from_train()`으로 조회한 열차의 운임 입력을 만들고, `korail.trains.iter_search(..., max_pages=...)`로 직통 검색을 선택적으로 이어 읽습니다. 기존 한 페이지 검색·기본 필터는 유지하며, 이어보기는 요청 상한·복합 식별자 중복 제거·진전 없음 중단을 적용합니다.

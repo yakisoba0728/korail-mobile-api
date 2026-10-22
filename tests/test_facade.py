@@ -10,6 +10,7 @@ import pytest
 
 from korail_mobile_api import (
     DynapathConfig,
+    DynapathRequestContext,
     Korail,
     KorailConfig,
     KorailDeviceProfile,
@@ -169,10 +170,14 @@ def test_profile_keeps_token_queue_and_device_fields_consistent() -> None:
         height=2400,
     )
     config = build_config_from_profile(profile)
-    assert config.dynapath.token_settings is not None
-    assert config.dynapath.token_settings.device_id == "SYNTHETIC-DEVICE-ID"
-    assert config.dynapath.token_settings.device_model == "SYNTHETIC-MODEL"
-    assert config.dynapath.token_settings.os_version == "16"
+    assert config.dynapath.token_settings is None
+    assert config.dynapath.token_provider is not None
+    context = DynapathRequestContext(*("synthetic",) * 9)
+    token = config.dynapath.token_provider(context)
+    assert token == (
+        "2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus"
+        "&os=MTY&dm=U1lOVEhFVElDLU1PREVM&iid=U1lOVEhFVElDLURFVklDRS1JRA"
+    )
     assert "Android 16; SYNTHETIC-MODEL Build/SYNTHETIC-BUILD" in config.netfunnel_user_agent
     assert (config.android_sdk_int, config.device_width, config.device_height) == (36, 1080, 2400)
     assert config.user_agent == "korailtalk"

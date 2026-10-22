@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""설정마다 합성 기기값을 만들며 base_url·netfunnel_url의 신뢰 여부는 호출자가 판단합니다."""
+"""기본 DynaPath 진단 설정. base_url·netfunnel_url의 신뢰 여부는 호출자가 판단합니다."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -23,7 +23,7 @@ from .constants import (
     KORAIL_TIMEOUT_SECONDS,
     KORAIL_USER_AGENT,
 )
-from .dynapath import DynapathConfig, build_default_token_settings
+from .dynapath import DynapathConfig, _DiagnosticTokenProvider
 
 _PROXY_SCHEMES = frozenset({"http", "https", "socks5", "socks5h"})
 
@@ -46,11 +46,8 @@ def _validate_proxy(proxy: object) -> None:
 
 
 def enabled_dynapath_config() -> DynapathConfig:
-    """설정 간 식별자·시작 시각을 공유하지 않도록 DynaPath 기기 값을 새로 합성합니다."""
-    return DynapathConfig(
-        enabled=True,
-        token_settings=build_default_token_settings(),
-    )
+    """등록·키·합성 기기값 없이 SDK 2.0.1 native-unavailable 진단 경로를 켭니다."""
+    return DynapathConfig(enabled=True, token_provider=_DiagnosticTokenProvider())
 
 
 @dataclass(frozen=True)
@@ -128,7 +125,7 @@ class KorailConfig:
             return
         if self.dynapath.enabled:
             return
-        # 비활성 구성을 합성값으로 덮지 않고 명시적 disable_dynapath 사용을 요구합니다.
+        # 비활성 사용자 구성을 덮지 않고 명시적 disable_dynapath 사용을 요구합니다.
         if self.dynapath != default:
             raise ValueError(
                 "pass disable_dynapath=True to turn DynaPath off, or "

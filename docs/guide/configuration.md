@@ -42,7 +42,7 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 | `key` | `str` | `"korail1234567890"` | 공통 필드 `Key`의 값입니다. |
 | `timeout` | `float` | `60.0` | API 요청의 제한 시간(초)입니다. |
 | `user_agent` | `str` | `"korailtalk"` | API 요청의 `User-Agent` 헤더입니다. |
-| `dynapath` | [`DynapathConfig`][korail_mobile_api.dynapath.DynapathConfig] | 설정마다 새로 합성 | DynaPath 토큰 설정입니다. [DynaPath](#dynapath)를 참고하세요. |
+| `dynapath` | [`DynapathConfig`][korail_mobile_api.dynapath.DynapathConfig] | SDK 2.0.1 `2!` 진단 | DynaPath 토큰 설정입니다. [DynaPath](#dynapath)를 참고하세요. |
 | `device_width` | `int` | `1440` | 공통 코드 조회(로그인 포함)의 `deviceWidth` 값입니다. |
 | `device_height` | `int` | `3120` | 공통 코드 조회(로그인 포함)의 `deviceHeight` 값입니다. |
 | `android_sdk_int` | `int` | `37` | 공통 코드 조회(로그인 포함)의 `OSVersion` 값입니다. |
@@ -69,7 +69,13 @@ API `Version` 값을 앱 버전으로 바꾸지 않습니다. [정적 검토 범
 ## DynaPath {#dynapath}
 
 DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-token`)입니다. 기본으로 켜져 있습니다.
-토큰은 기기 식별자, 앱 시작 시각, 안드로이드 버전, 기기 모델 같은 기기값과 요청 시각으로 만듭니다.
+Unreleased의 기본 `KorailClient()`·`Korail()`은 다음 SDK 2.0.1 native-unavailable 진단을 사용합니다.
+
+```text
+2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus
+```
+
+기본 토큰에 기기값을 합성하지 않습니다. [확인 근거와 실서버 관측 범위](../verification-7010.md#diagnostic-20261023)를 참고하세요.
 
 토큰을 붙이는 경로는 [`DynapathConfig`][korail_mobile_api.dynapath.DynapathConfig]의 `allowlist_paths`이며, 기본값은 다음 여섯 경로입니다.
 앱이 토큰을 붙이는 경로 목록과 같은지는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
@@ -83,9 +89,9 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 
 ### 기본 기기값
 
-`dynapath`를 지정하지 않으면 `KorailConfig`를 만들 때마다 기기값을 새로 합성합니다.
-기기 식별자는 16자리 16진수 무작위 값, 앱 시작 시각은 설정을 만든 시각, 안드로이드 버전은 `"17"`, 기기 모델은 `"SM-S948N"`입니다.
-같은 설정 객체를 쓰는 동안에는 같은 기기값을 씁니다. 실제 기기의 값을 쓰려면 [환경변수로 설정 만들기](#from-env)를 참고하세요.
+`dynapath`를 지정하지 않으면 위 진단 공급자를 사용합니다.
+프로파일·[환경변수](#from-env)로 제공한 OS·모델·기기 식별자만 UTF-8의 padding 없는 Base64url로 `os`·`dm`·`iid`에 추가합니다.
+대기열 `User-Agent`·화면/SDK 설정은 기존 프로파일 규칙을 유지합니다.
 
 ### 직접 지정하기
 
@@ -104,7 +110,7 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 | `device_name` | `str` | `"SM-S948N"` | `token_provider`에 넘기는 기기 이름입니다. |
 | `os_version` | `str` | `"17"` | `token_provider`에 넘기는 안드로이드 버전입니다. |
 
-[`DynapathTokenSettings`][korail_mobile_api.dynapath.DynapathTokenSettings]는 다섯 값을 반드시 받습니다. 비어 있거나 공백뿐이면 `ValueError`가 발생하며, `app_start_ts`는 정수로 읽을 수 있어야 합니다.
+명시적으로 v1을 사용할 때의 [`DynapathTokenSettings`][korail_mobile_api.dynapath.DynapathTokenSettings]는 다섯 값을 반드시 받습니다. 비어 있거나 공백뿐이면 `ValueError`가 발생하며, `app_start_ts`는 정수로 읽을 수 있어야 합니다.
 나머지 필드에는 라이브러리 기본값이 있으며, 바꾸면 앱과 다른 토큰이 됩니다.
 
 | 필드 | 뜻 |
@@ -121,7 +127,7 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 ### 끄기
 
 `disable_dynapath=True`로 끕니다. 켜진 `DynapathConfig`를 함께 넘기면 `ValueError`가 발생합니다.
-꺼진 `DynapathConfig(enabled=False, ...)`만 넘기는 것으로는 끌 수 없습니다. 기본값과 다른 꺼진 설정을 넘기면 `ValueError`가 발생하고, 기본값과 같으면 기기값을 합성해 켭니다.
+꺼진 `DynapathConfig(enabled=False, ...)`만 넘기는 것으로는 끌 수 없습니다. 기본값과 다른 꺼진 설정을 넘기면 `ValueError`가 발생하고, 기본값과 같으면 기본 진단 공급자로 켭니다.
 
 ```python
 from korail_mobile_api import KorailClient, KorailConfig
@@ -250,17 +256,16 @@ finally:
 ## 환경변수 설정 {#from-env}
 
 [`build_config_from_env`][korail_mobile_api.live.build_config_from_env]는 환경변수에서 실제 기기의 값을 읽어 `KorailConfig`를 만듭니다.
-DynaPath 토큰의 기기값과 대기열 `User-Agent`에 같은 기기값을 씁니다. 앱 시작 시각은 함수를 호출한 시각입니다.
-계정 ID, 비밀번호, 카드 정보 같은 자격 증명은 읽거나 저장하지 않습니다.
+제공한 기기값을 진단 토큰의 `os`·`dm`·`iid`와 대기열 `User-Agent`에 연결합니다.
+v1 전용 `KORAIL_DYNAPATH_AS_VALUE`는 더 이상 읽지 않습니다. 계정 ID, 비밀번호, 카드 정보 같은 자격 증명은 읽거나 저장하지 않습니다.
 
 | 환경변수 | 필수 | 기본값 | 쓰이는 곳 |
 |---|:-:|---|---|
-| `KORAIL_DYNAPATH_DEVICE_ID` | 예 | - | 토큰의 기기 식별자(`device_id`) |
-| `KORAIL_DYNAPATH_OS_VERSION` | 예 | - | 토큰의 `os_version`, `DynapathConfig.os_version`, 대기열 `User-Agent`의 안드로이드 버전 |
-| `KORAIL_DYNAPATH_DEVICE_MODEL` | 예 | - | 토큰의 `device_model`, `DynapathConfig.device_name`, 대기열 `User-Agent`의 기기 모델 |
+| `KORAIL_DYNAPATH_DEVICE_ID` | 예 | - | 토큰의 `iid` |
+| `KORAIL_DYNAPATH_OS_VERSION` | 예 | - | 토큰의 `os`, `DynapathConfig.os_version`, 대기열 `User-Agent`의 안드로이드 버전 |
+| `KORAIL_DYNAPATH_DEVICE_MODEL` | 예 | - | 토큰의 `dm`, `DynapathConfig.device_name`, 대기열 `User-Agent`의 기기 모델 |
 | `KORAIL_ANDROID_BUILD_ID` | `KORAIL_NETFUNNEL_USER_AGENT`가 없을 때 | - | 대기열 `User-Agent`의 `Build/...` 부분 |
 | `KORAIL_NETFUNNEL_USER_AGENT` | 아니요 | 위 기기값으로 만든 `Dalvik/2.1.0 (...)` 문자열 | `netfunnel_user_agent` |
-| `KORAIL_DYNAPATH_AS_VALUE` | 아니요 | 라이브러리 기본값 | 토큰의 `as_value` |
 | `KORAIL_ADVERTISING_ID` | 아니요 | `""` | `advertising_id` |
 | `KORAIL_BASE_URL` | 아니요 | `"https://smart.letskorail.com:443"` | `base_url` |
 | `KORAIL_USER_AGENT` | 아니요 | `"korailtalk"` | `user_agent` |
