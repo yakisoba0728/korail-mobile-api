@@ -119,7 +119,7 @@ def resolve_station_name(reference: str, names: Mapping[str, str]) -> str:
 @_preserve_read_raw
 def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
     """ebizcross/getUUID.do 의 mutMrkVrfCd 를 문자열로 정규화하며 없거나 비면 KorailProtocolError 입니다. 완전한 KORAIL 봉투는 요구하지
-    않습니다. strResult 만 동반된 관측과 부분 봉투 보존은 http.KorailHttpClient._finish_read 참고."""
+    않습니다. strResult 만 동반된 관측과 부분 봉투 보존은 http.KorailHttpClient._exchange 참고."""
     value = _typed_required_string(response.raw, "mutMrkVrfCd", context="UUID response", non_empty=True)
     return UuidResponse(
         **_model_response_fields(response),

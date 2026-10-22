@@ -1,6 +1,8 @@
 """Message lookups and error policy stay offline and never change raw responses or retry decisions."""
 
+import copy
 import hashlib
+import io
 import json
 import pickle
 import runpy
@@ -244,3 +246,56 @@ def test_catalog_is_loaded_lazily(f8_subprocess_env):
         timeout=30,
     )
     assert result.returncode == 0, result.stderr
+
+
+def _v2_reduce(error: E.KorailApiError) -> tuple[object, ...]:
+    """The __reduce__ shapes 2.6.2 wrote; unset attributes lived on the class, not in the state."""
+    state = {name: value for name, value in error.__dict__.items() if value is not None}
+    if isinstance(error, E.KorailAuthContinuationRequired):
+        return (type(error), (error.redirect_url,), state)
+    if isinstance(
+        error,
+        (E.KorailAppError, E.KorailNetFunnelError, E.KorailSessionExpiredError, E.KorailAccountLockedError),
+    ):
+        return (type(error), (error.code, error.message), state)
+    return (type(error), error.args, state)
+
+
+class _V2Pickler(pickle.Pickler):
+    def reducer_override(self, obj: object) -> object:
+        return _v2_reduce(obj) if isinstance(obj, E.KorailApiError) else NotImplemented
+
+
+V2_ERRORS = [
+    E.KorailTransportError("synthetic transport", raw=b"synthetic body"),
+    E.KorailProtocolError("synthetic protocol", raw={"synthetic": True}),
+    E.KorailAuthError("synthetic auth", code="SYNTH", message="synthetic", raw={"k": "v"}),
+    E.KorailSessionExpiredError("P058", "synthetic", raw={"k": "v"}),
+    E.KorailAccountLockedError("WRC000390", "synthetic", raw={"k": "v"}),
+    E.KorailDynaPathError("synthetic block", raw={"code": -2000}),
+    E.KorailAuthContinuationRequired("/synthetic", raw={"h_msg_cd": "WRC000116", "h_msg_txt": "synthetic"}),
+    E.KorailSoldOutError("ERR211161", "synthetic", raw={"k": "v"}),
+    E.KorailQueueRejectedError("301", "synthetic", raw="301:key=synthetic"),
+    E.KorailDynaPathRequiredError("synthetic"),
+]
+
+
+@pytest.mark.parametrize("error", V2_ERRORS, ids=lambda error: type(error).__name__)
+def test_errors_pickled_by_2x_still_load(error: E.KorailApiError) -> None:
+    buffer = io.BytesIO()
+    _V2Pickler(buffer, protocol=2).dump(error)
+    # Bytes produced in this test from synthetic values, not untrusted input.
+    restored = pickle.loads(buffer.getvalue())
+    assert type(restored) is type(error) and restored.args == error.args and str(restored) == str(error)
+    for name in ("code", "message", "raw", "redirect_url"):
+        assert getattr(restored, name, None) == getattr(error, name, None)
+
+
+@pytest.mark.parametrize("error", V2_ERRORS, ids=lambda error: type(error).__name__)
+def test_errors_survive_pickle_and_copy_with_notes_and_3x_fields(error: E.KorailApiError) -> None:
+    error = copy.copy(error)
+    error.request_sent = True
+    error.add_note("synthetic note")
+    for restored in (pickle.loads(pickle.dumps(error)), copy.copy(error), copy.deepcopy(error)):
+        assert type(restored) is type(error) and restored.args == error.args
+        assert restored.__dict__ == error.__dict__

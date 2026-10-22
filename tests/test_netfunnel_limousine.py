@@ -149,8 +149,10 @@ def test_immediate_pass_and_release(queue_factory, mode: int) -> None:
     }  # sid is the library default, NOT a recovered KORAIL app literal.
     assert world.events[2][2] == {"opcode": "5004", "key": "SYNTHETIC-KEY"}
     assert clock.sleeps == []
-    # SDK headers (http/Client.java:259-260) plus what Android's HttpURLConnection adds for a doOutput request:
-    # its http.agent UA (not the API's korailtalk), a form Content-Type, Content-Length 0, and no Accept.
+    # SDK headers (http/Client.java:259-260) plus what Android's HttpURLConnection adds for a doOutput request
+    # (Client.java:257 setDoOutput(true) turns the SDK's GET into an empty-body POST; AOSP external/okhttp
+    # HttpURLConnectionImpl): its http.agent UA (not the API's korailtalk), a form Content-Type, Content-Length 0,
+    # and no Accept.
     headers = world.requests[0].headers
     assert headers["Accept-Charset"] == "UTF-8"
     assert headers["Context_Type"] == "application/x-www-form-urlencoded;charset=UTF-8"

@@ -927,6 +927,7 @@ def test_numeric_station_codes_are_resolved_once_then_cached(rig):
 
 def test_direct_no_results_falls_back_once_and_resets_continuation(rig):
     """TrainScheduleViewModel.smali:35513-35566 confirms dialog, not plaintext WRD000061 (protected).
+    The app's filter switch is TrainScheduleViewModel.java:3216-3219,11051-11079 (request field TrainScheduleIn.java:95).
     Library WRD000061 policy is fixed; user confirmation/filter reset are not emulated.
     """
     failure = {"strResult": "FAIL", "h_msg_cd": "WRD000061", "h_msg_txt": "SYNTH_NO_DIRECT"}

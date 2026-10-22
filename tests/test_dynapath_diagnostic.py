@@ -23,16 +23,11 @@ def test_default_client_uses_diagnostic_header_without_extra_requests(f8_client_
 
     client = f8_client_factory(handler, logged_in=False)
     login = "/classes/com.korail.mobile.login.Login"
-    for path, include in [(login, True), (login, True), ("/synthetic-unprotected", True), (login, False)]:
-        client.http.post_form(path, include_dynapath=include)
+    for path in (login, login, "/synthetic-unprotected"):
+        client.http.post_form(path)
     expected = "2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus"
-    assert [request.headers.get("x-dynapath-m-token") for request in requests] == [
-        expected,
-        expected,
-        None,
-        None,
-    ]
-    assert [request.url.path for request in requests] == [login, login, "/synthetic-unprotected", login]
+    assert [request.headers.get("x-dynapath-m-token") for request in requests] == [expected, expected, None]
+    assert [request.url.path for request in requests] == [login, login, "/synthetic-unprotected"]
     assert client.config.dynapath.token_settings is None
     restored = pickle.loads(pickle.dumps(client.config))
     assert restored == client.config

@@ -4,7 +4,8 @@
 
 """5101→필요한 5002→API→5004 순서를 유지하며 노드·오류 정책은 checks/BEHAVIOR.md에 명시합니다.
 
-서버가 준 노드라도 허용 범위 밖이면 신뢰하지 않고 정문을 사용합니다."""
+서버가 준 노드라도 허용 범위 밖이면 신뢰하지 않고 정문을 사용합니다. SDK 근거는 tests/test_netfunnel_limousine.py 에
+있습니다."""
 
 from __future__ import annotations
 
@@ -14,20 +15,14 @@ import time
 import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import TypeVar
+from enum import StrEnum
+from typing import Literal, TypeAlias, TypeVar
 from urllib.parse import urlencode, urlsplit
 
 import httpx
 
 from ..config import KorailConfig
-from ..constants import (
-    KORAIL_NETFUNNEL_PATH,
-    KORAIL_NETFUNNEL_RETRY,
-    KORAIL_NETFUNNEL_SERVICE_ID,
-    KORAIL_NETFUNNEL_URL,
-    KorailNetFunnelAction,
-    KorailNetFunnelOpcode,
-)
+from ..constants import KORAIL_NETFUNNEL_URL
 from ..errors import KorailNetFunnelError, KorailProtocolError, KorailQueueRejectedError, KorailTransportError
 from .http import build_transport, redact_failed_request
 
@@ -35,22 +30,59 @@ T = TypeVar("T")
 
 # Logger names predate the _core move; docs/guide/configuration.md names this one.
 _log = logging.getLogger("korail_mobile_api.netfunnel")
+_safety_log = logging.getLogger("korail_mobile_api.netfunnel_safety")
 
-#: ``Code.Success`` — ``com/netfunnel/api/Code.java:27``.
+# evidence: app 7.0.6 NetworkConstants.java:80-99 (보호 문자열, 미확인)
+KORAIL_NETFUNNEL_PATH = "/ts.wseq"
+KORAIL_NETFUNNEL_SERVICE_ID = "service_1"
+# 첫 시도 외 재시도 횟수입니다. SDK 는 실패한 시도의 제한 시간을 채운 뒤 다시 보냅니다.
+# evidence: app 7.0.6 NetworkConstants.java:83, KorailTalkApplication.java:388
+KORAIL_NETFUNNEL_RETRY = 1
+
+
+class KorailNetFunnelAction(StrEnum):
+    """대기열 관문별로 대기열 서버에 보내는 식별값(``aid``)입니다.
+
+    앱이 쓰는 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다. 다른 값이 필요하면 ``KorailConfig.netfunnel_actions``로
+    관문별 값을 바꾸세요."""
+
+    # 앱의 액션 상수 일곱 개는 보호 문자열이라 기본값은 길이와 호출부 문맥으로 고른 미확인 값입니다.
+    # evidence: app 7.0.6 NetworkConstants.java:88-94; 호출부 TrainScheduleViewModel.java:5213-5234,
+    # PayViewModel.java:6724, MyReservationViewModel.java:2528, KorailTalkApplication.java:382-386
+
+    INQUIRY = "act_8"
+    PEAK_SEASON_INQUIRY = "act_8_2"
+    PRODUCT = "act_6"
+    RESERVE = "act_14"
+    PAY = "act_18"
+    RESERVED = "act_21"
+    # 앱에 선언만 있고 라이브러리는 쓰지 않습니다.
+    TEST = "act_4"
+
+
+class KorailNetFunnelOpcode(StrEnum):
+    """대기열 서버에 보내는 명령 코드(``opcode``)입니다."""
+
+    # evidence: app 7.0.6 com/netfunnel/api/Command.java:4-21
+
+    CHK_ENTER = "5002"
+    ALIVE_NOTICE = "5003"
+    SET_COMPLETE = "5004"
+    GET_TID_CHK_ENTER = "5101"
+    INIT = "5105"
+    STOP = "5106"
+
+
+# evidence: app 7.0.6 com/netfunnel/api/Code.java:27-33
 SUCCESS_CODE = "200"
-#: SDK 대기 루프는 ``Code.Continue``(201)/``ContinueDebug``(202)에서만 돕니다 (``Netfunnel.java:622``,
-#: ``com/netfunnel/api/Code.java:28-29``).
+# SDK 대기 루프는 Continue(201)/ContinueDebug(202)에서만 돕니다.
 CONTINUE_CODES = frozenset({"201", "202"})
-#: ``EvnetCode.isBlocking()``(``Netfunnel.java:114-116``)이 참인 ``Block``(301)/ ``IpBlock``(302).
 BLOCK_CODES = frozenset({"301", "302"})
-#: 호출부가 ``getTTL(getProperty().getMaxTTL(), 1)`` 로 부르고 (``Netfunnel.java:634``) ``max_ttl_`` 의 기본값이 30
-#: 입니다(``com/netfunnel/api/Property.java:22``).
+# evidence: app 7.0.6 Netfunnel.java:634, com/netfunnel/api/Property.java:22
 MIN_TTL_SECONDS = 1
 MAX_TTL_SECONDS = 30
 
-#: 앞의 둘은 SDK 가 싣고(``com/netfunnel/api/http/Client.java:259-260``, ``Context_Type`` 은 SDK 의 철자 그대로), 나머지는 안드로이드
-#: HttpURLConnection 이 붙입니다: 본문을 쓰는 요청의 Content-Type 은 AOSP external/okhttp HttpURLConnectionImpl.newHttpEngine,
-#: Connection·Accept-Encoding 은 HttpEngine.networkRequest.
+# 앞의 둘은 SDK 가 싣고(Context_Type 은 SDK 의 철자 그대로), 나머지는 안드로이드 HttpURLConnection 이 붙입니다.
 _APP_HEADERS = {
     "Accept-Charset": "UTF-8",
     "Context_Type": "application/x-www-form-urlencoded;charset=UTF-8",
@@ -58,6 +90,10 @@ _APP_HEADERS = {
     "Connection": "Keep-Alive",
     "Accept-Encoding": "gzip",
 }
+
+KorailNetFunnelGateName: TypeAlias = Literal[
+    "inquiry", "peak_season_inquiry", "product_inquiry", "reserve", "pay", "reservation_view"
+]
 
 
 @dataclass(frozen=True)
@@ -67,25 +103,16 @@ class KorailNetFunnelGate:
     success_only: bool
 
 
-def _gate(name: str, action: KorailNetFunnelAction, *, success_only: bool) -> KorailNetFunnelGate:
-    return KorailNetFunnelGate(name, action.value, success_only)
-
-
-#: 라이브러리 관문 목록. netfunnel_actions 로 aid 를 덮어쓸 수 있습니다. aid 값은 보호 문자열의 길이와 호출 문맥으로 고른 미확인 값입니다(constants 참고).
-#: inquiry/peak_season_inquiry/product_inquiry: TrainScheduleViewModel.java:5208-5244, 다음 페이지 :1126, 요청 :7216.
+#: 라이브러리 관문 목록입니다. ``netfunnel_actions`` 로 aid 를 덮어쓸 수 있습니다.
 KORAIL_NETFUNNEL_GATES: Mapping[str, KorailNetFunnelGate] = {
     gate.name: gate
     for gate in (
-        _gate("inquiry", KorailNetFunnelAction.INQUIRY, success_only=False),
-        _gate(
-            "peak_season_inquiry",
-            KorailNetFunnelAction.PEAK_SEASON_INQUIRY,
-            success_only=False,
-        ),
-        _gate("product_inquiry", KorailNetFunnelAction.PRODUCT, success_only=False),
-        _gate("reserve", KorailNetFunnelAction.RESERVE, success_only=True),
-        _gate("pay", KorailNetFunnelAction.PAY, success_only=True),
-        _gate("reservation_view", KorailNetFunnelAction.RESERVED, success_only=True),
+        KorailNetFunnelGate("inquiry", KorailNetFunnelAction.INQUIRY.value, False),
+        KorailNetFunnelGate("peak_season_inquiry", KorailNetFunnelAction.PEAK_SEASON_INQUIRY.value, False),
+        KorailNetFunnelGate("product_inquiry", KorailNetFunnelAction.PRODUCT.value, False),
+        KorailNetFunnelGate("reserve", KorailNetFunnelAction.RESERVE.value, True),
+        KorailNetFunnelGate("pay", KorailNetFunnelAction.PAY.value, True),
+        KorailNetFunnelGate("reservation_view", KorailNetFunnelAction.RESERVED.value, True),
     )
 }
 
@@ -104,7 +131,6 @@ class KorailNetFunnelToken:
 
     @property
     def wait_seconds(self) -> int:
-        """앱 근거: com/netfunnel/api/Response.java:59-66."""
         ttl = _java_int(self.params.get("ttl", "")) or 0
         return max(MIN_TTL_SECONDS, min(ttl, MAX_TTL_SECONDS))
 
@@ -128,35 +154,30 @@ def _java_int(text: str) -> int | None:
 
 
 def parse_netfunnel_body(body: str) -> KorailNetFunnelToken:
-    """SDK처럼 첫 콜론으로 나누고 코드는 Java int32로 읽습니다(com/netfunnel/api/Response.java:128-163)."""
+    """SDK처럼 첫 콜론으로 나누고 코드는 Java int32로 읽습니다."""
     head, separator, tail = body.strip().partition(":")
     code = _java_int(head) if separator else None
     if code is None:
-        raise KorailNetFunnelError(
-            None,
-            "KORAIL NetFunnel reply is not '<code>:<params>'",
-            raw=body,
-        )
+        raise KorailNetFunnelError(None, "KORAIL NetFunnel reply is not '<code>:<params>'", raw=body)
     params: dict[str, str] = {}
     for item in tail.split("&"):
         name, found, value = item.partition("=")
         if found:
             params[name] = value
-    key = params.get("key", "")
     return KorailNetFunnelToken(
         code=str(code),
-        key=key,
+        key=params.get("key", ""),
         params=params,
         node=korail_netfunnel_node_url(params.get("ip", ""), params.get("port", "")),
         raw=body,
     )
 
 
+@dataclass
 class _Slot:
-    def __init__(self) -> None:
-        self.token: KorailNetFunnelToken | None = None
-        self.node = ""
-        self.retries_left = KORAIL_NETFUNNEL_RETRY
+    token: KorailNetFunnelToken | None = None
+    node: str = ""
+    retries_left: int = KORAIL_NETFUNNEL_RETRY
 
 
 class KorailNetFunnelClient:
@@ -184,14 +205,14 @@ class KorailNetFunnelClient:
     def close(self) -> None:
         self._client.close()
 
-    def gate(self, name: str) -> KorailNetFunnelGate:
+    def gate(self, name: KorailNetFunnelGateName) -> KorailNetFunnelGate:
         gate = KORAIL_NETFUNNEL_GATES[name]
         override = (self.config.netfunnel_actions or {}).get(name)
         if override:
             return KorailNetFunnelGate(gate.name, override, gate.success_only)
         return gate
 
-    def run(self, gate: KorailNetFunnelGate | str, send: Callable[[], T]) -> T:
+    def run(self, gate: KorailNetFunnelGate | KorailNetFunnelGateName, send: Callable[[], T]) -> T:
         """차단은 KorailQueueRejectedError이며, mode=1은 통신 오류에도 진행할 수 있지만 mode=0은 API를 보내지 않습니다. 반납 실패는 로그만 남기며,
         전체 정책과 앱의 차이는 모듈 설명을 따릅니다."""
         if isinstance(gate, str):
@@ -218,8 +239,7 @@ class KorailNetFunnelClient:
         return f"{origin}{KORAIL_NETFUNNEL_PATH}?{urlencode(params)}"
 
     def _post(self, url: str) -> str:
-        """SDK 는 GET 으로 부르지만 setDoOutput(true)(Client.java:257) 때문에 안드로이드 HttpURLConnection 이 빈 본문 POST 로
-        보냅니다(AOSP external/okhttp HttpURLConnectionImpl.initHttpEngine)."""
+        """SDK 는 GET 으로 부르지만 setDoOutput(true) 때문에 안드로이드 HttpURLConnection 이 빈 본문 POST 로 보냅니다."""
         if self._client.is_closed:
             raise KorailProtocolError(
                 f"KORAIL NetFunnel client is closed; POST {KORAIL_NETFUNNEL_PATH} was not sent"
@@ -233,12 +253,13 @@ class KorailNetFunnelClient:
             ) from exc
         if response.is_error:
             raise KorailTransportError(
-                f"KORAIL NetFunnel HTTP {response.status_code} for POST {KORAIL_NETFUNNEL_PATH}"
+                f"KORAIL NetFunnel HTTP {response.status_code} for POST {KORAIL_NETFUNNEL_PATH}",
+                status_code=response.status_code,
             )
         return response.text
 
     def _request(self, url: str, slot: _Slot) -> KorailNetFunnelToken:
-        """공유 재시도 예산을 쓰며 마지막 실패도 timeout 을 채웁니다 (Netfunnel.java:352-363,592)."""
+        """공유 재시도 예산을 쓰며 마지막 실패도 timeout 을 채웁니다."""
         while True:
             started = self._clock()
             try:
@@ -251,31 +272,35 @@ class KorailNetFunnelClient:
                     raise
                 slot.retries_left -= 1
 
-    def _admit(self, gate: KorailNetFunnelGate, slot: _Slot) -> None:
-        started = self._clock()
+    def _enter(
+        self, gate: KorailNetFunnelGate, slot: _Slot, origin: str, params: tuple[tuple[str, str], ...]
+    ) -> KorailNetFunnelToken | None:
+        """5101·5002 한 번입니다. 실패하면 ErrorBypass 정책을 적용하고 None 을 돌려줍니다."""
         try:
-            token = self._request(
-                self._url(
-                    self._front,
-                    (
-                        ("opcode", KorailNetFunnelOpcode.GET_TID_CHK_ENTER.value),
-                        ("sid", KORAIL_NETFUNNEL_SERVICE_ID),
-                        ("aid", gate.action),
-                    ),
-                ),
-                slot,
-            )
+            token = self._request(self._url(origin, params), slot)
         except (KorailTransportError, KorailNetFunnelError) as exc:
             self._error_bypass(gate, exc)
-            return
+            return None
         slot.token, slot.node = token, token.node
-        while token.code in CONTINUE_CODES:
+        return token
+
+    def _admit(self, gate: KorailNetFunnelGate, slot: _Slot) -> None:
+        started = self._clock()
+        token = self._enter(
+            gate,
+            slot,
+            self._front,
+            (
+                ("opcode", KorailNetFunnelOpcode.GET_TID_CHK_ENTER.value),
+                ("sid", KORAIL_NETFUNNEL_SERVICE_ID),
+                ("aid", gate.action),
+            ),
+        )
+        while token is not None and token.code in CONTINUE_CODES:
             if not token.key:
-                # SDK 는 빈 키에서 5002 를 보내지 않고 대기합니다(CommandClient.java:104-108).
+                # SDK 는 빈 키에서 5002 를 보내지 않고 대기합니다.
                 raise KorailNetFunnelError(
-                    token.code,
-                    "KORAIL NetFunnel told this request to wait but gave no key",
-                    raw=token.raw,
+                    token.code, "KORAIL NetFunnel told this request to wait but gave no key", raw=token.raw
                 )
             wait = token.wait_seconds
             limit = self.config.netfunnel_wait_limit
@@ -287,28 +312,16 @@ class KorailNetFunnelClient:
                     raw=token.raw,
                 )
             self._sleep(wait)
-            try:
-                token = self._request(
-                    self._url(
-                        slot.node or self._front,
-                        (
-                            ("opcode", KorailNetFunnelOpcode.CHK_ENTER.value),
-                            ("key", token.key),
-                        ),
-                    ),
-                    slot,
-                )
-            except (KorailTransportError, KorailNetFunnelError) as exc:
-                # 실패한 5002 는 ErrorCheckEnter→ErrorBypass 로 처리됩니다(Netfunnel.java:654-664).
-                self._error_bypass(gate, exc)
-                return
-            slot.token, slot.node = token, token.node
-        if token.code in BLOCK_CODES:
-            raise KorailQueueRejectedError(
-                token.code,
-                "KORAIL NetFunnel blocked this request",
-                raw=token.raw,
+            token = self._enter(
+                gate,
+                slot,
+                slot.node or self._front,
+                (("opcode", KorailNetFunnelOpcode.CHK_ENTER.value), ("key", token.key)),
             )
+        if token is None:
+            return
+        if token.code in BLOCK_CODES:
+            raise KorailQueueRejectedError(token.code, "KORAIL NetFunnel blocked this request", raw=token.raw)
         if token.code == SUCCESS_CODE or not gate.success_only:
             return
         raise KorailNetFunnelError(
@@ -333,7 +346,7 @@ class KorailNetFunnelClient:
         )
 
     def _complete(self, slot: _Slot) -> None:
-        """재시도·응답 파싱은 하지 않습니다 (Netfunnel.java:848-880, CommandClient.java:158-199). 실패는 경고 로그만 남깁니다."""
+        """재시도·응답 파싱은 하지 않으며 실패는 경고 로그만 남깁니다."""
         token = slot.token
         if token is None or not token.key:
             return
@@ -341,10 +354,7 @@ class KorailNetFunnelClient:
             self._post(
                 self._url(
                     slot.node or self._front,
-                    (
-                        ("opcode", KorailNetFunnelOpcode.SET_COMPLETE.value),
-                        ("key", token.key),
-                    ),
+                    (("opcode", KorailNetFunnelOpcode.SET_COMPLETE.value), ("key", token.key)),
                 )
             )
         except Exception as exc:
@@ -352,20 +362,14 @@ class KorailNetFunnelClient:
             _log.warning("KORAIL NetFunnel setComplete failed: %s", exc)
 
 
-_safety_log = logging.getLogger("korail_mobile_api.netfunnel_safety")
-
 KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
-
-#: SDK 기본값 host_notmodify=true는 응답 노드 이동을 막습니다 (com/netfunnel/api/Response.java:143-146;
-#: CommandClient.java:33-38; com/netfunnel/api/Property.java:23). 앱 기동 시 변경 여부는 보호된 setter 때문에
-#: 미확인입니다(KorailTalkApplication.java:361-389).
+# SDK 기본값 host_notmodify=true 는 응답 노드 이동을 막으며, 앱 기동 시 바꾸는지는 보호된 setter 때문에 미확인입니다.
 KORAIL_NETFUNNEL_NODE_HOST_RE = re.compile(r"rnf[1-9][0-9]?\.letskorail\.com")
-
 KORAIL_NETFUNNEL_NODE_PORT = 443
 
 
 def korail_netfunnel_node_url(ip: str, port: str) -> str:
-    """노드가 없거나 허용 범위 밖이면 빈 문자열이며, 호출자는 정문을 씁니다. SDK 기본값은 노드를 따르지 않습니다(com/netfunnel/api/Property.java:23)."""
+    """노드가 없거나 허용 범위 밖이면 빈 문자열이며, 호출자는 정문을 씁니다."""
     if not ip and not port:
         return ""
     host_allowed = ip == KORAIL_NETFUNNEL_HTTPS_HOST or KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(ip) is not None

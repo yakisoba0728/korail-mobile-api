@@ -4,6 +4,7 @@
 
 - 3.0 구조 개편 1단계(순수 이동): 공개 import 경로는 패키지 루트(`korail_mobile_api`)뿐입니다. 구현은 `_core/`(HTTP·세션·대기열·DynaPath·공통 파싱·검증)와 `_domains/<도메인>/{models,forms,parsers}.py`로 옮기고, `read_payloads`·`read_parsers`의 재노출과 `__module__` 재작성을 없앴습니다. `device.py`·`live.py`는 `config.py`에, `error_messages.py`는 `errors.py`에 합쳤습니다. 루트가 내보내는 이름·시그니처와 요청 바이트는 같습니다. `korail_mobile_api.models`·`korail_mobile_api.read_payloads`·`korail_mobile_api.device` 같은 이전 모듈 경로와 그 경로를 가리키는 pickle(응답 모델, `KorailDeviceProfile`, `KorailConfig` 안의 `DynapathConfig` 등)은 더 이상 열리지 않는 의도된 3.0 변경입니다. 대기열 로거 이름(`korail_mobile_api.netfunnel`, `korail_mobile_api.netfunnel_safety`)은 유지합니다. 옛 `models.py` 모델의 주석은 이제 지연 평가 문자열이며 `typing.get_type_hints` 결과는 같습니다. 문서의 타입 앵커는 `korail_mobile_api.<이름>`입니다.
 - 미지원 호출 기록 `_maas_unsupported`·`_social_login_unsupported`·`_travel_search_unsupported`와 그 호출만 쓰던 빌더·파서·모델(부가서비스 취소 수수료·장바구니 상태·미결제 해제, 여행상품 검색)은 `tests/records/`로 옮겨 wheel에 넣지 않습니다. sdist에는 테스트와 함께 들어갑니다.
+- 3.0 핵심 정리: `KorailInvalidInputError`(`KorailProtocolError`이자 `ValueError`)를 추가했습니다. 모든 예외에 `request_sent`가 생겨, 요청을 전송 계층에 넘긴 뒤 전송·응답 해석에 실패하면 `True`이고 상태 변경 메서드에서는 "서버가 처리했을 수 있다"는 note도 붙습니다. 요청 전에 거절한 예외는 `None`입니다. `KorailTransportError.status_code`는 2xx가 아닌 HTTP 상태를 담습니다. `KorailClient`를 `with` 문으로 쓸 수 있습니다(블록이 끝나면 `close`). `DynapathRequestContext`에 보낼 본문 바이트(`body`)와 `app_version`이 들어갑니다. DynaPath 헤더는 `DynapathConfig.allowlist_paths`만으로 정하며, 기본 목록에서 요청 바이트는 같습니다. 예외 pickle은 생성자를 거치지 않는 형식으로 바뀌었고 2.x가 만든 pickle도 읽습니다.
 
 ## [2.6.2] - 2026-10-23
 
