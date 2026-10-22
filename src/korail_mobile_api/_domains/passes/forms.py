@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Literal
-from typing import cast as _cast
 
 from ..._core.validation import (
     _ascii_digits,
@@ -23,7 +22,7 @@ from ..._core.validation import (
 )
 from ..._core.wire import _device_version, _device_version_key
 from ...config import KorailConfig
-from ...errors import KorailProtocolError
+from ...errors import KorailInvalidInputError
 from ..reservations.forms import _PASSENGER_ROWS, _in_reservation_order, build_reservation_form
 from ..tickets.forms import OriginalTicketReference
 from ..trains.models import TrainSummary
@@ -34,6 +33,7 @@ KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
 # 발권 응답의 ResDiscount.N_CARD("443")와 별개입니다. 예약 성공은 실서버 미확인입니다.
 # evidence: app 7.0.8 ReqDiscount.N_CARD (복호화), DiscountHelper.java:818, TCReservationRequestHelper.java:284
 KORAIL_DISCOUNT_CARD_DISCOUNT_CODE = "153"
+# 미확인: 좌석배정 메뉴 값을 재사용합니다. 앱은 SEAT_ASSIGN 과 N_CARD 를 따로 선언하며 두 값은 보호돼 있습니다.
 # evidence: app 7.0.6 TicketReservationIn.java:43, ReservationMenuId.java:21-22
 KORAIL_DISCOUNT_CARD_MENU_ID = "A2"
 
@@ -43,9 +43,6 @@ class DiscountCardSectionRequest:
     """구매할 N카드의 적용 구간을 구성합니다.
 
     요청에는 구간마다 1부터 매긴 번호를 붙여 보냅니다."""
-
-    # 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. DTO 키는 밑줄로 끝나며(NCardjrny.java:96-112) 공통
-    # 평탄화가 1-기반 인덱스를 붙입니다(NetworkService.java:15345-15366).
 
     run_date: str
     train_no: str
@@ -60,9 +57,6 @@ class DiscountCardAdditionalUser:
 
     요청 키 이름은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다."""
 
-    # 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. NCardInfoIn.java:30-34 의 속성명 자체에 _1 이
-    # 포함됩니다. serializer 이름은 보호돼 전송 키는 속성명에 따른 추정입니다.
-
     customer_no: str
     name: str
     phone: str
@@ -71,8 +65,6 @@ class DiscountCardAdditionalUser:
 @dataclass(frozen=True)
 class DiscountCardPurchaseRequest:
     """N카드 구매에 필요한 구간·사용자·상품 정보를 구성합니다."""
-
-    # 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 라우트는 NetworkApi.java:335-337 입니다.
 
     card_kind_management_no: str
     customer_no: str
@@ -85,9 +77,6 @@ class DiscountCardPurchaseRequest:
 @dataclass(frozen=True)
 class DiscountCardTicket:
     """N카드 기간연장에 필요한 원표의 반환 식별자를 구성합니다."""
-
-    # 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 기간연장용 원표 식별자(MyTicketDetailViewModel.java:1049,
-    # NCardExtensionIn.java:180).
 
     sale_window_no: str
     sale_date: str
@@ -106,8 +95,6 @@ class PassScheduleRequest:
     pass_kind_code: str
     pass_period_code: str
     pass_age_code: str
-    # txtSelPage: 관측에서 요청값을 바꿔도 h_page_no=1 이었습니다. 앱의 해당 인자도 고정이지만 평문은 보호돼
-    # 있습니다(CheckUsagePeriodSectionViewModel.java:389). 페이징 신호의 관측 한계는 PassScheduleMainInfo 참고.
     #: 요청할 페이지 번호(``txtSelPage``)입니다. 이 값을 바꿔도 서버가 첫 페이지를 돌려줄 수 있으므로, 받을 건수는
     #: ``page_size``로 정하세요.
     page_no: str
@@ -115,6 +102,12 @@ class PassScheduleRequest:
     departure_station_name: str
     arrival_station_name: str
     weekend_use_flag: str
+
+    def __post_init__(self) -> None:
+        # 문자열이 아닌 값은 만들 때 거절합니다. "" 는 이전처럼 전송 단계에서 생략됩니다.
+        for item in fields(self):
+            if not isinstance(getattr(self, item.name), str):
+                raise KorailInvalidInputError(f"{item.name} must be a string")
 
 
 def build_pass_schedule_form(
@@ -150,8 +143,6 @@ class DiscountCardScheduleRequest:
     ``usable_trip_count``(``usePsbTno``)에는 카드의 실제 값을 넣으세요. 앱의 기본 코드는 앱 내부 값이 공개돼 있지 않아
     확인하지 못했습니다. 보통 ``for_card()``로 만듭니다."""
 
-    # 보호된 기본 코드는 미확인입니다. 실서버 검증 못 함(NCardScheduleIn.java:30-40).
-
     card_kind_management_no: str
     departure_station_name: str
     arrival_station_name: str
@@ -178,9 +169,9 @@ class DiscountCardScheduleRequest:
     ) -> DiscountCardScheduleRequest:
         """카드 종류 관리번호로 할인카드 종류 코드(``card_kind_code``, ``dcntCrdKndCd``)를 정해 조회 조건을 만듭니다.
 
-        일부 관리번호는 ``"B2N"``, 나머지는 ``"MMM"``을 씁니다. 이 구분이 앱과 같은지는 확인하지 못했습니다."""
-        # 앱 대응 함수는 NCardDefine.findDcntCrdKndCd(NCardDefine.java:58-88)이며 그 함수가 특별 취급하는 관리번호 집합은
-        # 이 구현과 다릅니다(_B2N_CARD_KIND_MANAGEMENT_NOS 참고).
+        ``B2N18120402``·``B2N18120403``만 ``"B2N"``, 나머지는 ``"MMM"``으로 정합니다. 이 ``B2N``·``MMM`` 구분은 앱 7.0.6 정적
+        근거(``B2N1906…`` 네 상품을 따로 다룸)와 다르고 실서버에서도 확인하지 못했으므로, 카드 종류 코드를 알면 생성자의
+        ``card_kind_code``로 직접 넘기세요."""
         kind_code = "B2N" if card_kind_management_no in _B2N_CARD_KIND_MANAGEMENT_NOS else "MMM"
         return cls(
             card_kind_management_no=card_kind_management_no,
@@ -194,15 +185,13 @@ class DiscountCardScheduleRequest:
         )
 
 
-#: 라이브러리 B2N 상품 집합으로 앱과의 일치는 미확인입니다. NCardDefine.java:56-88 은 jadx 복원 실패이며 NCardDefine.smali:689,1180-1225 에 분기와
-#: 보호된 반환값이 있습니다.
+# 이전 앱 규칙의 2018 상품 집합입니다. 7.0.6 분기의 B2N1906… 네 상품과 달라 for_card() 문서에 적어 둡니다.
 _B2N_CARD_KIND_MANAGEMENT_NOS = frozenset({"B2N18120402", "B2N18120403"})
 
 
 def build_discount_card_schedule_query(
     request: DiscountCardScheduleRequest,
 ) -> dict[str, str]:
-    """선택값은 None이면 생략하되 보호된 Json 설정·전송 키와 실서버 검증 못 함은 남습니다(NetworkService.java:2387-2393)."""
     query = {
         "dptDt": _ascii_digits(request.departure_date, "departure_date", lengths=frozenset({8})),
         "dptRsStnNm": _required_text(
@@ -286,7 +275,7 @@ class CommuterPassengerRequest:
         object.__setattr__(instance, "pass_data", pass_data)
         object.__setattr__(instance, "source", source)
         if isinstance(passenger_counts, (str, bytes)) or not isinstance(passenger_counts, Sequence):
-            raise KorailProtocolError("passenger_counts must be a sequence of integers")
+            raise KorailInvalidInputError("passenger_counts must be a sequence of integers")
         object.__setattr__(instance, "passenger_counts", tuple(passenger_counts))
         _validate_commuter_passenger_request(instance)
         return instance
@@ -299,16 +288,16 @@ def _validate_commuter_passenger_request(
     # 0명 선택 거절은 빌더에 남습니다.
     options = getattr(request.source, "passenger_options", None)
     if not isinstance(options, Sequence) or isinstance(options, (str, bytes)):
-        raise KorailProtocolError("source must carry passenger_options")
+        raise KorailInvalidInputError("source must carry passenger_options")
     validated_age_codes = [
         _required_text(getattr(option, "commuter_usage_age_code", None), "commuter_usage_age_code")
         for option in options
     ]
     if not validated_age_codes or len(validated_age_codes) != len(request.passenger_counts):
-        raise KorailProtocolError("passenger counts must match the response age-code rows")
+        raise KorailInvalidInputError("passenger counts must match the response age-code rows")
     for count in request.passenger_counts:
         if type(count) is not int or count < 0:
-            raise KorailProtocolError("passenger counts must be non-negative integers")
+            raise KorailInvalidInputError("passenger counts must be non-negative integers")
     return tuple(validated_age_codes)
 
 
@@ -321,9 +310,9 @@ class CommuterTicketInquiryRequest:
 
     def __post_init__(self) -> None:
         if self.inquiry_type not in {"0", "1"}:
-            raise KorailProtocolError("inquiry_type must be '0' or '1'")
+            raise KorailInvalidInputError("inquiry_type must be '0' or '1'")
         if not isinstance(self.original_ticket, OriginalTicketReference):
-            raise KorailProtocolError("original_ticket must be an OriginalTicketReference")
+            raise KorailInvalidInputError("original_ticket must be an OriginalTicketReference")
 
 
 #: ``get_commuter_info()``에 넘기는 세 단계 입력 중 하나입니다. 초기 조건(``CommuterInitialRequest``), 승객·인원
@@ -337,15 +326,12 @@ def build_commuter_info_form(
     if isinstance(request, CommuterInitialRequest):
         return (
             ("jobDvCd", "a"),
-            ("cmtrKndCd", _cast(str, request.pass_data.commuter_kind_code)),
+            ("cmtrKndCd", _exact_server_pass_data(request.pass_data)),
             ("psgCnt", "0"),
         )
     if isinstance(request, CommuterPassengerRequest):
-        age_codes = tuple(
-            _cast(str, option.commuter_usage_age_code) for option in request.source.passenger_options
-        )
-        # cmtrUtlAgeCd 는 종류 행당이 아니라 승객당 반복합니다(CommutationInfoIn.java:31,38). kind=0046 관측: E05/E06 을 행당 한 번 보내면
-        # WRT800115, 인원 1+E05, 1+E06, 2+E05/E05 는 IRZ000008 이었습니다. 실서버 관측: 이 키를 빼면 1명·2명 모두 FAIL/ERR000100 이었습니다.
+        age_codes = _validate_commuter_passenger_request(request)
+        # cmtrUtlAgeCd 는 종류 행당이 아니라 승객당 반복합니다(실서버: 행당 한 번이면 WRT800115, 빼면 ERR000100).
         selected = tuple(
             code
             for code, count in zip(
@@ -356,10 +342,10 @@ def build_commuter_info_form(
             for _ in range(count)
         )
         if not selected:
-            raise KorailProtocolError("passenger_counts must select at least one passenger")
+            raise KorailInvalidInputError("passenger_counts must select at least one passenger")
         return (
             ("jobDvCd", "b"),
-            ("cmtrKndCd", _cast(str, request.pass_data.commuter_kind_code)),
+            ("cmtrKndCd", _exact_server_pass_data(request.pass_data)),
             ("psgCnt", str(len(selected))),
             *(("cmtrUtlAgeCd", value) for value in selected),
         )
@@ -374,7 +360,7 @@ def build_commuter_info_form(
             ("ogtkRetPwd", ticket.return_password),
             ("inquiryType", request.inquiry_type),
         )
-    raise KorailProtocolError("request must be a commuter request variant")
+    raise KorailInvalidInputError("request must be a commuter request variant")
 
 
 def build_pass_availability_form(
@@ -415,7 +401,7 @@ def build_product_reservations_query(
         "txtSelPage": _int_text(page_no, "page_no"),
         "txtCntPerPage": _int_text(page_size, "page_size"),
     }
-    # 상태 기본값은 보호돼 있습니다(ProductReservationViewModel.java:836). 입력 DTO 의 두 상태 필드는 호출자가 관측한 값으로 지정해야 합니다.
+    # 앱의 상태 기본값은 보호돼 있어 호출자가 준 값만 보냅니다.
     if reservation_status_code is not None:
         query["txtRsvSttCd"] = _required_text(reservation_status_code, "reservation_status_code")
     if payment_status_code is not None:
@@ -436,7 +422,6 @@ def build_product_detail_query(
 
 
 def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. ``ticket.dcntCrdUseQry.do`` — ``NetworkApi.java:218``."""
     return {"dcntCrdNo": _required_text(card_no, "card_no")}
 
 
@@ -444,10 +429,10 @@ def build_discount_card_purchase_form(
     config: KorailConfig,
     request: DiscountCardPurchaseRequest,
 ) -> dict[str, str]:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 단일 FieldMap 라우트(NetworkApi.java:336-337)와
-    NCardInfoIn.java:29-39, NCardjrny.java:55 의 @SerialName 을 따릅니다."""
     if not isinstance(request, DiscountCardPurchaseRequest):
-        raise KorailProtocolError("KORAIL discount card purchase requires an exact DiscountCardPurchaseRequest")
+        raise KorailInvalidInputError(
+            "KORAIL discount card purchase requires an exact DiscountCardPurchaseRequest"
+        )
     form = _device_version_key(config)
     form.update(
         {
@@ -462,13 +447,13 @@ def build_discount_card_purchase_form(
     )
     sections = tuple(request.sections)
     if not sections or len(sections) > KORAIL_MAX_DISCOUNT_CARD_SECTIONS:
-        raise KorailProtocolError(
+        raise KorailInvalidInputError(
             f"KORAIL discount card purchase needs 1 to {KORAIL_MAX_DISCOUNT_CARD_SECTIONS} sections"
         )
     form["jrnyCnt"] = str(len(sections))
     for index, section in enumerate(sections, start=1):
         if not isinstance(section, DiscountCardSectionRequest):
-            raise KorailProtocolError(
+            raise KorailInvalidInputError(
                 "KORAIL discount card purchase requires exact DiscountCardSectionRequest values"
             )
         for wire, attr in (
@@ -483,14 +468,14 @@ def build_discount_card_purchase_form(
                 field=attr,
             )
     users = tuple(request.additional_users)
-    # 이 입력 모델은 부가사용자 _1 키 한 묶음만 표현합니다(NCardInfoIn.java:29-39).
+    # 앱 DTO 는 부가사용자 _1 키 한 묶음만 선언합니다.
     if len(users) > 1:
-        raise KorailProtocolError("KORAIL discount card purchase takes at most 1 additional user")
+        raise KorailInvalidInputError("KORAIL discount card purchase takes at most 1 additional user")
     if users:
         form["apdUsrCnt"] = str(len(users))
         for index, user in enumerate(users, start=1):
             if not isinstance(user, DiscountCardAdditionalUser):
-                raise KorailProtocolError(
+                raise KorailInvalidInputError(
                     "KORAIL discount card purchase requires exact DiscountCardAdditionalUser values"
                 )
             for wire, attr in (
@@ -509,9 +494,9 @@ def build_discount_card_extension_query(
     config: KorailConfig,
     ticket: DiscountCardTicket,
 ) -> dict[str, str]:
-    """이름과 달리 POST이며 키는 속성명 추정·실서버 검증 못 함입니다(NetworkApi.java:518-520; NCardExtensionIn.java:31-34)."""
+    """이름과 달리 POST 로 보냅니다. 전송 키는 앱 DTO 의 속성명에서 추정했습니다."""
     if not isinstance(ticket, DiscountCardTicket):
-        raise KorailProtocolError("KORAIL discount card extension requires an exact DiscountCardTicket")
+        raise KorailInvalidInputError("KORAIL discount card extension requires an exact DiscountCardTicket")
     query = _device_version_key(config)
     query.update(
         {
@@ -527,7 +512,7 @@ def build_discount_card_extension_query(
     return query
 
 
-#: 일반 예약에서는 0명 행을 전송하지 않으며, N카드 홀드는 존재하는 행을 한 행으로 대체합니다.
+# 일반 예약에서는 0명 행을 전송하지 않으며, N카드 홀드는 존재하는 행을 한 행으로 대체합니다.
 _PASSENGER_ROW_KEYS = frozenset(
     f"{prefix}{index}"
     for prefix in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd")
@@ -541,7 +526,7 @@ def build_discount_card_reservation_form(
     *,
     card_no: str,
 ) -> dict[str, str]:
-    """생성만으로 예약하거나 결제하지 않습니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
+    """N카드 좌석 홀드 폼을 만듭니다. 생성만으로 예약하거나 결제하지 않습니다."""
     form = build_reservation_form(config, train)
     rebuilt: dict[str, str] = {}
     for name, value in form.items():
@@ -563,11 +548,9 @@ def build_discount_card_reservation_form(
 
 
 def build_product_cancel_query(detail: ProductDetailResponse) -> dict[str, str]:
-    """여행상품 예약 취소의 GET 쿼리를 구성하며 전송하지 않습니다. ProductCancelIn.java:67-70 의 txtVrRsNo·txtGdSqno 이며 둘 다
-    get_product_detail 결과에서 옵니다(ProductReservationListScreenKt.java:1252-1253,
-    MyTicketDetailViewModel.java:3290)."""
+    """여행상품 예약 취소의 GET 쿼리를 구성하며 전송하지 않습니다. 두 값은 get_product_detail 결과에서 옵니다."""
     if not isinstance(detail, ProductDetailResponse):
-        raise KorailProtocolError("detail must be a ProductDetailResponse from get_product_detail")
+        raise KorailInvalidInputError("detail must be a ProductDetailResponse from get_product_detail")
     return {
         "txtVrRsNo": _required_mutation_text(
             detail.virtual_reservation_no, field="virtual_reservation_no", context="product cancel"
