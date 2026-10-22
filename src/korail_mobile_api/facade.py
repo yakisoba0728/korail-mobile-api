@@ -16,8 +16,10 @@ import httpx
 
 from ._core.cleanup import _close_connections
 from ._core.validation import _optional_text, _passenger_count, _required_text
-from ._domains.airport_bus.forms import LIMOUSINE_CAR_NO, LimousineScheduleQuery, LimousineSeatInventoryQuery
+from ._domains.airport_bus.forms import LimousineScheduleQuery, LimousineSeatInventoryQuery
 from ._domains.airport_bus.models import (
+    LIMOUSINE_ROOM_CLASS_CODE,
+    LIMOUSINE_SEAT_ATTRIBUTE_CODE,
     LimousineSchedule,
     LimousineScheduleResponse,
     LimousineSeatInventoryResponse,
@@ -334,7 +336,7 @@ class AirportBusResource:
         """정류장 이름·코드 목록을 한 번 조회해 캐시합니다. 잘못된 응답은 캐시하지 않습니다."""
         if self._stops is None or refresh:
             response = self._client.get_common_code(["app.limousine.stationNm", "app.limousine.stationCd"])
-            self._stops = parse_limousine_stops(response)
+            self._stops = parse_limousine_stops(response.raw)
         return self._stops
 
     def search(
@@ -369,10 +371,10 @@ class AirportBusResource:
                 codes[0],
                 codes[1],
                 service_code,
-                "1",
+                LIMOUSINE_ROOM_CLASS_CODE,
                 moment.strftime("%H%M%S"),
                 "",
-                "015",
+                LIMOUSINE_SEAT_ATTRIBUTE_CODE,
                 reservation_sale_division_code,
             )
         )
@@ -383,22 +385,7 @@ class AirportBusResource:
             raise TypeError("schedule must be a LimousineSchedule")
         _passenger_count(passenger_count, "passenger_count")
         return self._client.get_limousine_seat_inventory(
-            LimousineSeatInventoryQuery(
-                train_class_code=_required_text(schedule.train_class_code, "train_class_code"),
-                service_code=_required_text(schedule.service_code, "service_code"),
-                run_date=_required_text(schedule.run_date, "run_date"),
-                train_no=_required_text(schedule.train_no, "train_no"),
-                car_no=LIMOUSINE_CAR_NO,
-                room_class_code="1",
-                departure_station_code=_required_text(
-                    schedule.departure_station_code, "departure_station_code"
-                ),
-                arrival_station_code=_required_text(schedule.arrival_station_code, "arrival_station_code"),
-                seat_attribute_code="015",
-                departure_run_order=_required_text(schedule.departure_run_order, "departure_run_order"),
-                arrival_run_order=_required_text(schedule.arrival_run_order, "arrival_run_order"),
-                passenger_count=passenger_count,
-            )
+            LimousineSeatInventoryQuery.from_schedule(schedule, passenger_count=passenger_count)
         )
 
 

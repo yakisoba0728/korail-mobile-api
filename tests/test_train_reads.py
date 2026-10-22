@@ -627,7 +627,9 @@ OPTIONAL = [
 )
 def test_optional_strings_are_lenient_and_accept_integers(name, wire, model, value, expected, rig):
     """Optional constructors: TrainScheduleOutTrainInfo.java:172-563; seat:62-105;
-    RunDateOutItem.java:104-161; MobilePlusMainVersion.java:52.
+    RunDateOutItem.java:104-161; MobilePlusMainVersion.java:52. MaaS detail rows and ticket addSrvInfo share AddSrvItem
+    (AddSrvItem.java:28-49, MaasDetailOut.java:27, MyTicketListOutReservation.java:39); without @SerialName its keys
+    follow property names.
     """
     case = BY_NAME[name]
     raw = deepcopy(case[5])
@@ -1249,7 +1251,8 @@ def test_all_public_methods_have_contract_cases():
 def test_read_forms_follow_the_app_dto_order(name, expected, rig):
     """TrainResearchIn.java:68; TResidualSeatsResearchIn.java:65; MergeSeatsCIn.java:63; CommonCodeIn.java:31-34,55;
     MaasMenuLtIn.java:58: the app flattens each DTO in declaration order (NetworkService.java:15335-15392),
-    Key before lang."""
+    Key before lang. The general MaaS menu uses the CommonIn default constructor (GdMenuLtIn.java:59-61,
+    CommonIn.java:448-465)."""
     case = BY_NAME[name]
     client, calls, _ = rig([case[5]], auth=case[7])
     getattr(client, name)(*case[1], **case[2])
