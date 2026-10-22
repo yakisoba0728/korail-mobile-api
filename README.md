@@ -1,10 +1,14 @@
 > [!IMPORTANT]
 > 이전 [`srt-mobile-api`](https://github.com/yakisoba0728/srt-mobile-api)의 개발과 기록은 이 저장소에서 이어갑니다.
+>
+> 이 프로젝트는 누구나 이슈와 Pull Request로 참여하고, 이 저장소를 중심으로 함께 개선하는 방식을 지향합니다.
+> 저작자의 사전 승인 없이 포크나 다른 저장소를 이 프로젝트의 공식 운영본·공식 후속 프로젝트로 표방하거나, 공식 승인·제휴가 있는 것처럼 안내하는 행위를 금합니다.
+> 기여를 위한 포크를 환영하며, 코드의 이용·수정·재배포에는 [Apache License 2.0](https://github.com/yakisoba0728/korail-mobile-api/blob/main/LICENSE)이 그대로 적용됩니다.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yakisoba0728/korail-mobile-api/main/docs/assets/banner-dark.svg">
-    <img src="https://raw.githubusercontent.com/yakisoba0728/korail-mobile-api/main/docs/assets/banner-light.svg" alt="korail-mobile-api" width="100%">
+    <img src="https://raw.githubusercontent.com/yakisoba0728/korail-mobile-api/main/docs/assets/banner-light.svg" alt="korail-mobile-api — 코레일+ 앱 기반 비공식 Python 클라이언트" width="100%">
   </picture>
 </p>
 

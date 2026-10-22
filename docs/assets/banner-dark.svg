@@ -1,22 +1,65 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="korail-mobile-api">
-  <rect x="1" y="1" width="1278" height="318" rx="22" fill="#0d1117" stroke="#30363d" stroke-width="2"/>
-  <g font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, 'D2Coding', monospace">
-    <text x="64" y="118" font-size="56" font-weight="700"><tspan fill="#3fb8b2">korail</tspan><tspan fill="#e6edf3">-mobile-api</tspan></text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-labelledby="title description">
+  <title id="title">korail-mobile-api — an unofficial Python client for Korean rail</title>
+  <desc id="description">A Python client with typed responses. An original train illustration crosses a schematic route from request to response.</desc>
+  <defs>
+    <pattern id="markers" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M14 16h4m-2-2v4" fill="none" stroke="#2a494b" stroke-width="1"/>
+    </pattern>
+    <clipPath id="map-clip"><rect x="784" y="32" width="464" height="336" rx="24"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="1278" height="398" rx="24" fill="#0e1b20" stroke="#294047" stroke-width="2"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Arial, sans-serif">
+    <circle cx="65" cy="64" r="5" fill="#64dcb5"/>
+    <text x="82" y="69" fill="#9eb7b5" font-size="14" font-weight="600" letter-spacing="2">UNOFFICIAL / OPEN SOURCE</text>
+    <text x="58" y="164" fill="#eef6ef" font-size="64" font-weight="700" letter-spacing="-2.6">korail<tspan fill="#64dcb5">-mobile-api</tspan></text>
+    <text x="62" y="218" fill="#eef6ef" font-size="28" letter-spacing="-.5">Korean rail, through Python.</text>
+    <text x="63" y="257" fill="#9eb7b5" font-size="20" font-family="'Noto Sans CJK KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif">코레일+ 앱 기반 비공식 Python 클라이언트</text>
+    <g fill="#9eb7b5" font-size="13" font-weight="600" letter-spacing="1">
+      <text x="63" y="327">PYTHON 3.11+</text>
+      <text x="223" y="327">TYPED RESPONSES</text>
+      <text x="421" y="327">SYNC API</text>
+    </g>
+    <g fill="#2a494b"><circle cx="201" cy="322" r="2"/><circle cx="400" cy="322" r="2"/></g>
+    <path d="M63 351h48" stroke="#64dcb5" stroke-width="4" stroke-linecap="round"/>
+    <path d="M123 351h24" stroke="#2a494b" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="161" cy="351" r="2" fill="#e8bd72"/>
   </g>
-  <g font-family="Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif">
-    <text x="66" y="166" font-size="25" fill="#e6edf3">코레일+ 앱과 같은 요청을 보내는 비공식 Python 클라이언트</text>
-    <text x="66" y="206" font-size="19" fill="#8b949e">Python 3.11+  |  타입 완비</text>
+  <rect x="784" y="32" width="464" height="336" rx="24" fill="#13272b"/>
+  <g clip-path="url(#map-clip)">
+    <rect x="784" y="32" width="464" height="336" fill="url(#markers)"/>
+    <g fill="none" stroke="#2a494b" stroke-width="2">
+      <path d="M784 113h114q26 0 44-18l63-63"/>
+      <path d="M1082 368v-47q0-24 24-24h142"/>
+      <path d="M784 290h50q20 0 20-20v-27"/>
+    </g>
+    <path d="M824 368v-19q0-24 17-41l187-187q17-17 41-17h60q24 0 41-17l55-55" fill="none" stroke="#234e48" stroke-width="22"/>
+    <path d="M824 368v-19q0-24 17-41l187-187q17-17 41-17h60q24 0 41-17l55-55" fill="none" stroke="#64dcb5" stroke-width="4"/>
+    <g fill="#13272b" stroke="#64dcb5" stroke-width="3">
+      <circle cx="864" cy="285" r="7"/>
+      <circle cx="1107" cy="104" r="7"/>
+    </g>
+    <circle cx="1184" cy="73" r="4" fill="#e8bd72"/>
   </g>
-  <rect x="600" y="196" width="120" height="4" rx="2" fill="#3fb8b2" opacity="0.35"/><rect x="640" y="214" width="80" height="4" rx="2" fill="#3fb8b2" opacity="0.25"/><rect x="580" y="232" width="140" height="4" rx="2" fill="#3fb8b2" opacity="0.3"/>
-  <g>
-    <path d="M760 152 H1090 C1156 152 1210 178 1240 222 C1246 231 1242 240 1230 240 H760 Z" fill="#2d333b" stroke="#e6edf3" stroke-width="3" stroke-linejoin="round"/>
-    <rect x="778" y="166" width="300" height="28" rx="7" fill="#0d1117"/>
-    <rect x="830" y="166" width="4" height="28" fill="#2d333b"/><rect x="882" y="166" width="4" height="28" fill="#2d333b"/><rect x="934" y="166" width="4" height="28" fill="#2d333b"/><rect x="986" y="166" width="4" height="28" fill="#2d333b"/><rect x="1038" y="166" width="4" height="28" fill="#2d333b"/>
-    <path d="M1096 166 C1140 168 1172 181 1195 200 C1198 203 1196 206 1191 206 H1096 Z" fill="#0d1117"/>
-    <path d="M760 214 H1226" stroke="#3fb8b2" stroke-width="7" stroke-linecap="round"/>
-    <rect x="760" y="240" width="476" height="9" rx="3" fill="#e6edf3" opacity="0.8"/>
-    <rect x="784" y="249" width="70" height="7" rx="3" fill="#6e7681"/><rect x="1110" y="249" width="70" height="7" rx="3" fill="#6e7681"/>
+  <g font-family="'SFMono-Regular', Consolas, 'Liberation Mono', monospace" font-size="12" letter-spacing="1.2" fill="#9eb7b5">
+    <text x="812" y="64">01 / CLIENT</text>
+    <text x="1125" y="91">REQUEST</text>
+    <text x="883" y="300">RESPONSE</text>
   </g>
-  <rect x="30" y="256" width="1220" height="4" rx="2" fill="#6e7681"/>
-  <rect x="40" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="78" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="116" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="154" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="192" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="230" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="268" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="306" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="344" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="382" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="420" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="458" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="496" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="534" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="572" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="610" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="648" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="686" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="724" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="762" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="800" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="838" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="876" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="914" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="952" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="990" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="1028" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="1066" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="1104" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="1142" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="1180" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/><rect x="1218" y="262" width="14" height="6" rx="1" fill="#6e7681" opacity="0.45"/>
+  <g stroke-linejoin="round">
+    <path d="M831 180h236c51 0 91 17 120 47l17 18q8 9-5 13H831Z" fill="#203b40" stroke="#eef6ef" stroke-width="2"/>
+    <path d="M831 180h236c34 0 65 8 89 22H831Z" fill="#234e48"/>
+    <rect x="848" y="194" width="164" height="23" rx="5" fill="#10262d"/>
+    <path d="M888 194v23m41-23v23m41-23v23" stroke="#203b40" stroke-width="3"/>
+    <path d="M1034 194h31q41 0 70 23h-101Z" fill="#10262d"/>
+    <path d="M832 235h353" stroke="#64dcb5" stroke-width="5"/>
+    <path d="M831 258h363" stroke="#eef6ef" stroke-width="3"/>
+    <path d="M854 264h40m231 0h40" stroke="#9eb7b5" stroke-width="5" stroke-linecap="round"/>
+    <path d="M808 274h411" stroke="#2a494b" stroke-width="2"/>
+    <path d="M1167 230h12" stroke="#e8bd72" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <g fill="#64dcb5" opacity=".6">
+    <rect x="805" y="208" width="14" height="3" rx="1.5"/>
+    <rect x="795" y="220" width="24" height="3" rx="1.5"/>
+    <rect x="807" y="232" width="12" height="3" rx="1.5"/>
+  </g>
 </svg>
