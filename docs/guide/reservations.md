@@ -66,7 +66,7 @@
 예약에 보내는 `ReqDiscount`와 발권 응답의 `ResDiscount`는 구분합니다. 어린이 예약 요청은 승객 유형 `3`과
 할인 코드 `000`을 보내며, 발권 응답의 어린이 할인 코드 `201`을 요청에 넣지 않습니다.
 이 값은 7.0.8 할인 상수 복호화로 확인했습니다. 승객별 실서버 확인 범위는
-[실서버 현황](../status.md#passenger-report-20261007)에 있습니다.
+[날짜별 실서버 기록](../records.md#passenger-report-20261007)에 있습니다.
 
 ```python
 from korail_mobile_api import KorailPassengerCounts
