@@ -17,7 +17,6 @@ import pytest
 import korail_mobile_api as api
 from korail_mobile_api import KorailSession
 from korail_mobile_api._core.parsing import (
-    _nullable_scalar_fields,
     defaulted_str,
     nullable_str,
     optional_bool,
@@ -1660,11 +1659,8 @@ def test_ticket_list_parser_reads_the_response_mapping() -> None:
         ({}, None),
     ],
 )
-def test_nullable_field_map_preserves_optional_policy(value: object, expected: str | None) -> None:
+def test_nullable_str_preserves_optional_policy(value: object, expected: str | None) -> None:
     raw = {"wire": value}
-    fields = {"present": "wire", "missing": "absent"}
-    assert _nullable_scalar_fields(raw, fields) == {"present": expected, "missing": None}
-    # The field-metadata reader kind keeps the same lenient policy.
     assert (nullable_str(raw, "wire", "synthetic"), nullable_str(raw, "absent", "synthetic")) == (
         expected,
         None,

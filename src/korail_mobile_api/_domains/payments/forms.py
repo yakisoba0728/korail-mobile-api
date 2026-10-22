@@ -296,9 +296,9 @@ class PriceRecalculationRequest:
         좌석별 승객 유형·객실 등급·기존 할인 코드·증빙 번호를 옮겨 담으므로 ``requested_discount_codes``는 첫 여정 좌석 수와
         같은 개수여야 합니다. 홀드가 성공(``"SUCC"``)이 아니거나 PNR·좌석 행이 없거나 개수가 다르면 ``KorailInvalidInputError``가
         발생합니다."""
-        pnr_no = hold.pnr_no
-        if hold.str_result != "SUCC" or not isinstance(pnr_no, str) or not pnr_no.strip():
-            raise KorailInvalidInputError("KORAIL price recalculation needs a successful hold with a PNR")
+        pnr_no = _successful_hold_pnr(
+            hold, context="KORAIL price recalculation needs a successful hold with a PNR"
+        )
         # 재계산 결과는 결제 가능한 새 홀드로 돌아오므로 예약대기 홀드를 여기서 막습니다.
         if hold.payable is False:
             raise KorailInvalidInputError(

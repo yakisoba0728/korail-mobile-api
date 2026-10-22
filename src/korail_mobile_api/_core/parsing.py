@@ -47,7 +47,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import MISSING, field, fields
 from functools import wraps
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeAlias, TypedDict, TypeVar, overload
+from typing import TYPE_CHECKING, ParamSpec, TypeAlias, TypedDict, TypeVar, overload
 
 from ..errors import (
     SESSION_EXPIRED_CODE,
@@ -60,9 +60,6 @@ from .wire import _is_ascii_digits
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
-
-    # 도메인 모델이 이 모듈의 wire() 를 쓰므로 실행 시 모델을 가져오면 순환 import 가 됩니다.
-    from .._domains.common.models import BaseKorailResponse
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
@@ -134,15 +131,6 @@ def _response_fields(raw: Mapping[str, object]) -> _ResponseFields:
     }
 
 
-def _model_response_fields(response: BaseKorailResponse) -> _ResponseFields:
-    return {
-        "h_msg_cd": response.h_msg_cd,
-        "h_msg_txt": response.h_msg_txt,
-        "str_result": response.str_result,
-        "raw": response.raw,
-    }
-
-
 def _optional_mapping(data: Mapping[str, object], key: str) -> Mapping[str, object] | None:
     value = data.get(key)
     return value if isinstance(value, Mapping) else None
@@ -159,8 +147,15 @@ def _nested_rows(raw: Mapping[str, object], outer_key: str, inner_key: str) -> l
 
 def _row(value: object, context: str) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
-        raise KorailProtocolError(f"KORAIL {context} contained a non-object item")
+        raise KorailProtocolError(f"KORAIL {context} must be an object")
     return value
+
+
+def _response_mapping(raw: Mapping[str, object]) -> dict[str, object]:
+    """얕은 복사본을 돌려줍니다. 봉투 필드 타입은 ``_envelope`` 가 검사하며 성공 여부는 보지 않습니다."""
+    if not isinstance(raw, Mapping):
+        raise KorailProtocolError("KORAIL response must be a JSON object")
+    return dict(raw)
 
 
 def _rows(data: Mapping[str, object] | None, key: str) -> list[Mapping[str, object]]:
@@ -248,12 +243,6 @@ def _required_integer(
     raise KorailProtocolError(f"KORAIL {context} field {key} must be an integer or an ASCII decimal string")
 
 
-def _optional_bool(data: Mapping[str, object], key: str) -> bool | None:
-    """불리언을 그대로 반환하고 누락·다른 타입은 None으로 처리합니다."""
-    value = data.get(key)
-    return value if isinstance(value, bool) else None
-
-
 def _inventory_ratio(data: Mapping[str, object], key: str) -> float | None:
     """창측 비율(String 선언, TResidualSeatsResearchOutWindow.java:51-56)을 읽습니다. 누락과 앱 기본값 "" 은 None 입니다."""
     value = data.get(key, "")
@@ -276,12 +265,6 @@ def _inventory_ratio(data: Mapping[str, object], key: str) -> float | None:
     if not math.isfinite(ratio):
         raise KorailProtocolError(f"KORAIL seat inventory field {key} must be finite")
     return ratio
-
-
-# superseded by wire()/wire_model; remove after all domains migrate
-def _nullable_scalar_fields(data: Mapping[str, object], field_map: Mapping[str, str]) -> dict[str, Any]:
-    """값 타입이 Any 인 것은 str 아닌 필드도 가진 모델 생성자에 **로 풀어 넣기 때문입니다."""
-    return {attribute: _optional_scalar_string(data, wire_name) for attribute, wire_name in field_map.items()}
 
 
 def _validate_envelope(
@@ -343,15 +326,6 @@ def _required_read_rows(data: Mapping[str, object], key: str, context: str) -> l
     return value
 
 
-# superseded by wire()/wire_model; remove after all domains migrate
-def _required_read_strings(
-    data: Mapping[str, object],
-    fields: Mapping[str, str],
-    context: str,
-) -> dict[str, str]:
-    return {attr: required_str(data, key, context) for attr, key in fields.items()}
-
-
 def _optional_read_rows(data: Mapping[str, object], key: str, context: str) -> list[Mapping[str, object]]:
     """선택·nullable 객체 목록을 읽습니다. 누락·null 은 빈 목록이고, 목록이 아니거나 객체가 아닌 행은 거절합니다."""
     if data.get(key) is None:
@@ -402,13 +376,13 @@ def _typed_non_negative_integer_value(
     return parsed
 
 
-def _typed_defaulted_string(data: Mapping[str, object], key: str, context: str) -> str:
+# 필드 메타데이터 읽기 규칙: 모두 (data, key, context) 를 받습니다. 표는 모듈 docstring 참고.
+def defaulted_str(data: Mapping[str, object], key: str, context: str) -> str:
     """누락은 앱 합성 생성자의 기본값 "" 이고, 값이 있으면 문자열·JSON 정수만 받습니다(일반 좌석 재고의 layout_type 정수 관측). null 과 다른
     타입은 앱의 Json 설정이 보호돼 있어 받아도 되는지 확인할 수 없으므로 거절합니다."""
     return required_str(data, key, context) if key in data else ""
 
 
-# 필드 메타데이터 읽기 규칙: 모두 (data, key, context) 를 받습니다. 표는 모듈 docstring 참고.
 def nullable_str(data: Mapping[str, object], key: str, context: str) -> str | None:
     return _optional_scalar_string(data, key)
 
@@ -418,11 +392,11 @@ def optional_int(data: Mapping[str, object], key: str, context: str) -> int | No
 
 
 def optional_bool(data: Mapping[str, object], key: str, context: str) -> bool | None:
-    return _optional_bool(data, key)
+    value = data.get(key)
+    return value if isinstance(value, bool) else None
 
 
 strict_str = _strict_scalar_string
-defaulted_str = _typed_defaulted_string
 required_int = _required_integer
 
 

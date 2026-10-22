@@ -7,6 +7,7 @@
 from typing import TypeGuard
 
 from ..config import KorailConfig
+from ..constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 
 
 def _device_version(config: KorailConfig) -> dict[str, str]:
@@ -39,3 +40,60 @@ def _is_ascii_digits(value: object, lengths: frozenset[int] | None = None) -> Ty
         and value.isdigit()
         and (lengths is None or len(value) in lengths)
     )
+
+
+# 열차·공항버스·N카드 예약이 함께 쓰는 TicketReservationIn 합성 생성자의 선언 순서입니다.
+_RESERVATION_KEY_ORDER: tuple[str, ...] = (
+    *(
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "lang",
+        "txtMenuId",
+        "txtJobId",
+        "txtGdNo",
+        "hidFreeFlg",
+        "txtStndFlg",
+        "txtTotPsgCnt",
+    ),
+    *("txtSeatAttCd1", "txtSeatAttCd2", "txtSeatAttCd3", "txtSeatAttCd4", "txtSeatAttCd5", "txtSeatAttCd4_1"),
+    *("txtJrnyCnt", "txtSrcarCnt", "txtSrcarCnt1"),
+    *(
+        f"{field}{row}"
+        for row in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+        for field in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd", "txtCardNo_")
+    ),
+    *(
+        f"{field}{journey}"
+        for journey in (1, 2)
+        for field in (
+            *(
+                "txtJrnyTpCd",
+                "txtJrnySqno",
+                "txtTrnNo",
+                "txtTrnClsfCd",
+                "txtTrnGpCd",
+                "txtRunDt",
+                "txtDptDt",
+                "txtDptTm",
+            ),
+            *("txtDptRsStnCd", "txtDptStnConsOrdr", "txtDptStnRunOrdr", "txtArvRsStnCd", "txtArvStnConsOrdr"),
+            *("txtArvStnRunOrdr", "txtChgFlg", "txtPsrmClCd"),
+        )
+    ),
+    *(
+        f"{prefix}{seat}"
+        for prefixes in (("txtSrcarNo", "txtSeatNo"), ("txtSrcarNo1_", "txtSeatNo1_"))
+        for seat in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+        for prefix in prefixes
+    ),
+    *("txtMidRsStnCd", "txtMidStnConsOrdr", "txtMidStnRunOrdr"),
+)
+
+
+def _in_reservation_order(form: dict[str, str]) -> dict[str, str]:
+    """표에 없는 키는 원래 순서대로 뒤에 둡니다."""
+    ordered = {key: form[key] for key in _RESERVATION_KEY_ORDER if key in form}
+    ordered.update(form)
+    return ordered

@@ -15,6 +15,8 @@ from ..._core.parsing import (
     _preserve_read_raw,
     _required_integer,
     _response_fields,
+    _response_mapping,
+    _row,
     _rows,
     _strict_scalar_string,
     _validate_envelope,
@@ -164,19 +166,6 @@ def parse_ticket_reservation_detail_response(
         passengers=_reservation_passengers(raw),
         **_response_fields(raw),
     )
-
-
-def _response_mapping(raw: Mapping[str, object]) -> dict[str, object]:
-    """봉투 3필드의 타입은 _core.parsing._envelope 가 검사하며 성공 여부는 이 모듈이 검사하지 않습니다."""
-    if not isinstance(raw, Mapping):
-        raise KorailProtocolError("KORAIL response must be a JSON object")
-    return dict(raw)
-
-
-def _row(value: object, context: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise KorailProtocolError(f"KORAIL {context} must be an object")
-    return value
 
 
 def _received_amount(

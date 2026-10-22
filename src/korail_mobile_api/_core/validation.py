@@ -6,11 +6,17 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from ..constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from ..errors import KorailInvalidInputError
 from .wire import _is_ascii_digits
+
+# 열차·공항버스 예약 폼이 되울리는 운행 필드의 모양입니다.
+_DATE_RE = re.compile(r"[0-9]{8}")
+_TIME_RE = re.compile(r"[0-9]{6}")
+_DIGITS_RE = re.compile(r"[0-9]+")
 
 
 def _int_text(value: int, name: str) -> str:
@@ -75,6 +81,13 @@ def _calendar_date(value: str, name: str) -> date:
         return date(int(value[:4]), int(value[4:6]), int(value[6:]))
     except ValueError as exc:
         raise KorailInvalidInputError(f"{name} must be a valid calendar date") from exc
+
+
+def _txt_index(value: object) -> str:
+    """None 생략은 호출부가 정하고, 공백뿐인 값은 조용히 빼지 않고 거절합니다."""
+    if not isinstance(value, str) or not value.strip():
+        raise KorailInvalidInputError("txt_index must be a non-empty string or None")
+    return value
 
 
 def _wire_component(value: str, name: str) -> str:

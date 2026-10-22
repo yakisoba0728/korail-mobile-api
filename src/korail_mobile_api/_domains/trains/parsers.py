@@ -123,7 +123,7 @@ def _present_rows(data: Mapping[str, object], key: str, context: str) -> Iterato
     rows = data.get(key, [])
     if not isinstance(rows, list):
         raise KorailProtocolError(f"KORAIL {context} field {key} must be a list")
-    return (_row(row, context) for row in rows)
+    return (_row(row, f"{context} field {key} item") for row in rows)
 
 
 @_preserve_read_raw

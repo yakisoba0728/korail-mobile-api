@@ -20,10 +20,10 @@ from ..._core.validation import (
     _required_mutation_text,
     _required_text,
 )
-from ..._core.wire import _device_version, _device_version_key
+from ..._core.wire import _device_version, _device_version_key, _in_reservation_order
 from ...config import KorailConfig
 from ...errors import KorailInvalidInputError
-from ..reservations.forms import _PASSENGER_ROWS, _in_reservation_order, build_reservation_form
+from ..reservations.forms import build_reservation_form
 from ..tickets.forms import OriginalTicketReference
 from ..trains.models import TrainSummary
 from .models import CommuterInfoResponse, PassMenuData, ProductDetailResponse
@@ -512,12 +512,8 @@ def build_discount_card_extension_query(
     return query
 
 
-# 일반 예약에서는 0명 행을 전송하지 않으며, N카드 홀드는 존재하는 행을 한 행으로 대체합니다.
-_PASSENGER_ROW_KEYS = frozenset(
-    f"{prefix}{index}"
-    for prefix in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd")
-    for index in range(1, len(_PASSENGER_ROWS) + 1)
-)
+# N카드 홀드는 기본 승객(어른 1명)으로 만든 폼의 승객 행 하나를 N카드 행으로 대체합니다.
+_PASSENGER_ROW_KEYS = frozenset({"txtCompaCnt1", "txtPsgTpCd1", "txtDiscKndCd1"})
 
 
 def build_discount_card_reservation_form(

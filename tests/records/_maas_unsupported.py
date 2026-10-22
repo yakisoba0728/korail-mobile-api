@@ -21,6 +21,7 @@ from korail_mobile_api._core.parsing import (
     _optional_scalar_string,
     _preserve_read_raw,
     _response_fields,
+    _response_mapping,
     _validate_envelope,
 )
 from korail_mobile_api._core.parsing import _response_fields as _base_fields
@@ -29,7 +30,6 @@ from korail_mobile_api._core.wire import _device_version_key
 from korail_mobile_api._domains.airport_bus.models import MaasServiceDetail
 from korail_mobile_api._domains.common.models import BaseKorailResponse
 from korail_mobile_api._domains.reservations.models import CartItem
-from korail_mobile_api._domains.reservations.parsers import _response_mapping
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import KorailProtocolError
 

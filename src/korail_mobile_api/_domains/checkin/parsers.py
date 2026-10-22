@@ -13,6 +13,7 @@ from ..._core.parsing import (
     _preserve_read_raw,
     _required_read_rows,
     _response_fields,
+    _response_mapping,
     _row,
     _validate_strict_read_envelope,
     required_str,
@@ -20,7 +21,6 @@ from ..._core.parsing import (
     wire_models,
 )
 from ...errors import KorailProtocolError
-from ..reservations.parsers import _response_mapping
 from .models import (
     DeliveredTicketRetrievalResponse,
     DeliveryRecipientResponse,

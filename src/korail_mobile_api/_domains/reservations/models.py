@@ -78,17 +78,6 @@ class CartItem:
     #: 응답의 ``h_filler`` 값을 그대로 담습니다. 의미를 확인하지 못했습니다.
     filler: str | None = wire("h_filler")
 
-    @property
-    def usage_window(
-        self,
-    ) -> tuple[str | None, str | None, str | None]:
-        """이용 시작일·시작 시각·종료 시각을 한 번에 반환합니다."""
-        return (
-            self.usage_start_date,
-            self.usage_start_time,
-            self.usage_close_time,
-        )
-
 
 @dataclass(frozen=True)
 class CartListResponse(BaseKorailResponse):

@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from korail_mobile_api._core.parsing import (
-    _nullable_scalar_fields,
     _optional_read_rows,
     _optional_scalar_string,
     _preserve_read_raw,
@@ -31,6 +30,11 @@ from korail_mobile_api.errors import KorailProtocolError
 
 if TYPE_CHECKING:
     from korail_mobile_api.client import KorailClient
+
+
+def _nullable_scalar_fields(data: Mapping[str, object], field_map: Mapping[str, str]) -> dict[str, Any]:
+    """기록 전용: wire() 이전의 속성→전송 키 표 읽기입니다. 값 타입이 Any 인 것은 모델 생성자에 **로 풀어 넣기 때문입니다."""
+    return {attribute: _optional_scalar_string(data, wire_name) for attribute, wire_name in field_map.items()}
 
 
 @dataclass(frozen=True)

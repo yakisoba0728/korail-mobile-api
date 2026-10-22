@@ -25,7 +25,7 @@ from ..._core.parsing import (
     wire_models,
 )
 from ...errors import KorailProtocolError
-from ..airport_bus.parsers import _optional_add_srv_item
+from ..airport_bus.parsers import parse_maas_service_detail
 from .models import (
     CustomerTripInfo,
     CustomerTripInfoResponse,
@@ -174,9 +174,8 @@ def parse_ticket_list_response(raw: Mapping[str, object]) -> TicketListResponse:
                     trains=trains,
                 )
             )
-        additional_service = _optional_add_srv_item(
-            reservation, "addSrvInfo", "ticket list addSrvInfo", "ticket list addSrvInfo detailInfo"
-        )
+        add_srv = _optional_mapping(reservation, "addSrvInfo")
+        additional_service = None if add_srv is None else parse_maas_service_detail(add_srv)
         reservations.append(
             wire_model(
                 TicketListReservation,

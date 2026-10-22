@@ -10,7 +10,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, TypeAlias, get_args
 
-from ..._core.validation import _ascii_digits, _calendar_date, _int_text, _optional_text, _required_text
+from ..._core.validation import (
+    _ascii_digits,
+    _calendar_date,
+    _int_text,
+    _optional_text,
+    _required_text,
+    _txt_index,
+)
 from ..._core.wire import _is_ascii_digits
 from ...config import KorailConfig
 from ...errors import KorailInvalidInputError
@@ -283,10 +290,3 @@ def build_ticket_receipt_form(
     if txt_index is not None:
         form["txtIndex"] = _txt_index(txt_index)
     return form
-
-
-def _txt_index(value: object) -> str:
-    """None 생략은 호출부가 정하고, 공백뿐인 값은 조용히 빼지 않고 거절합니다."""
-    if not isinstance(value, str) or not value.strip():
-        raise KorailInvalidInputError("txt_index must be a non-empty string or None")
-    return value

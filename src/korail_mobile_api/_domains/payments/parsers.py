@@ -13,6 +13,8 @@ from ..._core.parsing import (
     _optional_mapping,
     _preserve_read_raw,
     _response_fields,
+    _response_mapping,
+    _row,
     _rows,
     _strict_scalar_string,
     _validate_strict_read_envelope,
@@ -20,7 +22,6 @@ from ..._core.parsing import (
     wire_models,
 )
 from ...errors import KorailProtocolError
-from ..reservations.parsers import _response_mapping, _row
 from .models import (
     DiscountCardOnTicket,
     DiscountCardSection,

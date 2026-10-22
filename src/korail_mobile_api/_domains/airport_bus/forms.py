@@ -11,8 +11,8 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass, fields
 
-from ..._core.validation import _ascii_digits
-from ..._core.wire import _device_version, _device_version_key, _is_ascii_digits
+from ..._core.validation import _DATE_RE, _DIGITS_RE, _TIME_RE, _ascii_digits
+from ..._core.wire import _device_version, _device_version_key, _in_reservation_order, _is_ascii_digits
 from ...config import KorailConfig
 from ...constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
@@ -20,17 +20,7 @@ from ...constants import (
     KorailReservationJobType,
 )
 from ...errors import KorailInvalidInputError
-from ..reservations.forms import (
-    _DATE_RE,
-    _DIGITS_RE,
-    _TIME_RE,
-    KorailPassengerCounts,
-    _add_passenger_rows,
-    _in_reservation_order,
-    _seat_no_key,
-    _sequence_no,
-    _srcar_no_key,
-)
+from ..reservations.forms import KorailPassengerCounts, _add_passenger_rows, _passenger_counts
 from .models import (
     LIMOUSINE_CAR_NO,
     LIMOUSINE_ROOM_CLASS_CODE,
@@ -199,10 +189,7 @@ def build_limousine_reservation_form(
     """열차 예약 DTO 를 쓰되 구성순서·변경 플래그는 보내지 않습니다. 보호된 기본값은 실서버에서 받아들여진 값입니다."""
     if not isinstance(schedule, LimousineSchedule):
         raise KorailInvalidInputError("KORAIL airport bus reservation requires a LimousineSchedule")
-    if passengers is None:
-        passengers = KorailPassengerCounts()
-    elif not isinstance(passengers, KorailPassengerCounts):
-        raise KorailInvalidInputError("KORAIL reservation requires an exact KorailPassengerCounts")
+    passengers = _passenger_counts(passengers)
     if passengers.total - passengers.adult - passengers.child:
         raise KorailInvalidInputError("KORAIL airport bus passengers can only be adults and children")
     if isinstance(seat_nos, str | bytes) or not isinstance(seat_nos, Sequence):
@@ -244,14 +231,15 @@ def build_limousine_reservation_form(
             "txtPsrmClCd1": LIMOUSINE_ROOM_CLASS_CODE,
             "txtJrnyCnt": KORAIL_DIRECT_ITINERARY_CODE,
             "txtJrnyTpCd1": KORAIL_DIRECT_JOURNEY_TYPE_CODE,
-            "txtJrnySqno1": _sequence_no(KORAIL_DIRECT_ITINERARY_CODE),
+            # 열차 예약과 같은 관측값 001 입니다. 앱은 전달받은 값을 그대로 씁니다.
+            "txtJrnySqno1": "001",
             **journey,
             "txtSrcarCnt": str(len(seats)),
         }
     )
     for index, seat in enumerate(seats, start=1):
-        form[_srcar_no_key(1, index)] = LIMOUSINE_CAR_NO
-        form[_seat_no_key(1, index)] = seat
+        form[f"txtSrcarNo{index}"] = LIMOUSINE_CAR_NO
+        form[f"txtSeatNo{index}"] = seat
     return _in_reservation_order(form)
 
 

@@ -14,6 +14,7 @@ from ..._core.parsing import (
     _optional_scalar_string,
     _preserve_read_raw,
     _response_fields,
+    _response_mapping,
     _rows,
     _validate_envelope,
     _validate_strict_read_envelope,
@@ -21,7 +22,6 @@ from ..._core.parsing import (
     wire_models,
 )
 from ...errors import KorailProtocolError
-from ..reservations.parsers import _response_mapping
 from .models import (
     CommuterInfoResponse,
     CommuterKindMenuResponse,

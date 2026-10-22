@@ -111,7 +111,7 @@ def parse_maas_menu_list_response(raw: Mapping[str, object]) -> MaasMenuListResp
     return wire_model(MaasMenuListResponse, raw, "MaaS menu", items=items, **_response_fields(raw))
 
 
-def _parse_add_srv_item(item: Mapping[str, object]) -> MaasServiceDetail:
+def parse_maas_service_detail(item: Mapping[str, object]) -> MaasServiceDetail:
     """MaaS 상세와 승차권의 부가서비스를 같은 모델로 읽습니다. 앱이 전송 키를 감춰 키는 속성명에 따른 추정입니다."""
     info_raw = _optional_mapping(item, "detailInfo")
     detail_info = None
@@ -126,19 +126,8 @@ def _parse_add_srv_item(item: Mapping[str, object]) -> MaasServiceDetail:
     return wire_model(MaasServiceDetail, item, "MaaS service detail", detail_info=detail_info, raw=item)
 
 
-def _optional_add_srv_item(
-    data: Mapping[str, object],
-    key: str,
-    item_context: str,
-    info_context: str,
-) -> MaasServiceDetail | None:
-    """객체가 아니면 ``None``. 두 context 인자는 쓰지 않습니다(승차권 파서 호출부 호환)."""
-    item = _optional_mapping(data, key)
-    return None if item is None else _parse_add_srv_item(item)
-
-
 @_preserve_read_raw
 def parse_maas_service_detail_list_response(raw: Mapping[str, object]) -> MaasServiceDetailListResponse:
     _validate_strict_read_envelope(raw)
-    details = tuple(_parse_add_srv_item(item) for item in _rows(raw, "addSrvList"))
+    details = tuple(parse_maas_service_detail(item) for item in _rows(raw, "addSrvList"))
     return MaasServiceDetailListResponse(details=details, **_response_fields(raw))

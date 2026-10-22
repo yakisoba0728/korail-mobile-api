@@ -84,7 +84,7 @@ def parse_station_data_response(raw: Mapping[str, object]) -> StationDataRespons
     rows = container.get("stn")
     if not isinstance(rows, list):
         raise KorailProtocolError("KORAIL station data missing stns.stn list")
-    stations = (_row(row, "station data") for row in rows)
+    stations = (_row(row, "station data stns.stn item") for row in rows)
     return StationDataResponse(
         stations=wire_models(KorailStation, stations, "station", copy_raw=True),
         **_response_fields(raw),
