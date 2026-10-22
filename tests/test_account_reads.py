@@ -629,7 +629,8 @@ CASES = [
             ]
         ),
         (("tickets.0.pnr_no", "TEST-PNR"), ("tickets.0.journeys.0.seats.0.car_no", "0002")),
-        "NetworkApi.java:235-236; OgTicketInquiryIn.java:53; ChangeOrtkInfo.java:52",
+        "NetworkApi.java:235-236; OgTicketInquiryIn.java:53; ChangeOrtkInfo.java:52; OgTicketInquiryOut.java:27; "
+        "OrgTk.java:28-52 (keys are attribute-name guesses); JrnyInfo.java:29-63; SeatInfo.java:25-51",
     ),
     case(
         "get_self_seat_change_info",
@@ -644,7 +645,8 @@ CASES = [
             ("stations.0.departure_station_name", "TEST-STATION"),
             ("reasons.0.query_code", "TEST-REASON"),
         ),
-        "NetworkApi.java:807-808; SeatAvailabilityIn.java:55",
+        "NetworkApi.java:807-808; SeatAvailabilityIn.java:55; SeatAvailabilityOut.java:28-42; ChgStnInfo.java:21-35; "
+        "ChgRsnInfo.java:21-24 (serializer names protected, ChgRsnInfo$$serializer.java:34-36: keys are guesses)",
     ),
     case(
         "get_recent_delivery_history",
@@ -755,7 +757,7 @@ CASES = [
             ("reservations.0.tickets.0.return_sale_date", "0102"),
             ("reservations.0.tickets.0.trains.0.train_no", "00999"),
         ),
-        "NetworkApi.java:511-512; MyTicketListIn.java:62",
+        "NetworkApi.java:511-512; MyTicketListIn.java:62; MyTicketListOut.java:82 (pnr_list)",
     ),
     case(
         "get_delay_certificate",
@@ -769,7 +771,8 @@ CASES = [
         },
         success(dlayList=[{**dict.fromkeys(DELAY_KEYS, "TEST"), "trnDlayTm": "15", "runDt": DATE}]),
         (("delays.0.delay_minutes", "15"), ("delays.0.run_date", DATE)),
-        "NetworkApi.java:347-349; DelayCertificateIn.java:52; DelayCertificate.java:57",
+        "NetworkApi.java:347-349; DelayCertificateIn.java:52; DelayCertificate.java:57; the detail's "
+        "h_orgtk_wct_no/h_orgtk_ret_sale_dt/h_orgtk_sale_sqno/h_orgtk_ret_pwd (DelayCertificateViewModel.java:94)",
     ),
     case(
         "get_delay_return_receipt",
@@ -778,7 +781,8 @@ CASES = [
         {"saleWctNo": "TEST-WINDOW", "saleDd": "0102", "saleSqno": "TEST-SEQUENCE", "tkRetPwd": "TEST-RETURN"},
         success(retDt=DATE, dlayFarePymtMtdNm="TEST-METHOD", dlayFareRetAmt="1200"),
         (("return_amount", "1200"), ("payment_method_name", "TEST-METHOD")),
-        "NetworkApi.java:355-357; DelayReturnReceiptIn.java:52; DelayReturnReceiptOut.java:53-69",
+        "NetworkApi.java:355-357; DelayReturnReceiptIn.java:52; DelayReturnReceiptOut.java:53-69; same values as "
+        "the delay certificate (DelayReturnReceiptViewModel.java:88; TicketReceiptRouteKt.java:309-313)",
     ),
     case(
         "get_self_checkin_info",
@@ -1601,6 +1605,33 @@ def test_optional_delay_run_date_uses_optional_scalar_policy(value: object) -> N
     assert parsed.delays[0].run_date == expected
     assert parsed.delays[0].raw is row
     assert parsed.raw is raw
+
+
+def test_ticket_list_parser_reads_the_response_mapping() -> None:
+    """Like the other read parsers it takes the raw mapping (it used to take a BaseKorailResponse, so a mapping
+    raised AttributeError). Rows keep their identity; a FAIL envelope is still an app error.
+    TicketListTrainInfo.java:72 declares h_srcar_no a String; live rows sent JSON integers."""
+    from korail_mobile_api._domains.tickets.parsers import parse_ticket_list_response
+
+    train = {"h_trn_no": 999, "h_srcar_no": 3}
+    ticket = {"h_pnr_no": "TEST-PNR", "jrn_info": [train, "not-a-row"]}
+    reservation = {"ticket_list": [ticket], "isFinished": True, "seatAssignCount": "2"}
+    raw = {"strResult": "SUCC", "h_msg_cd": 0, "pnr_list": [reservation], "h_total_cnt": 1}
+    parsed = parse_ticket_list_response(raw)
+    assert (parsed.raw, parsed.h_msg_cd, parsed.total_count) == (raw, "0", "1") and parsed.raw is raw
+    row = parsed.reservations[0]
+    assert (row.raw, row.is_finished, row.seat_assign_count, row.additional_service) == (
+        reservation,
+        True,
+        2,
+        None,
+    )
+    assert row.raw is reservation and row.tickets[0].raw is ticket
+    assert row.tickets[0].train_info == (train,) and row.tickets[0].trains[0].raw is train
+    assert (row.tickets[0].trains[0].train_no, row.tickets[0].trains[0].car_no) == ("999", "3")
+    with pytest.raises(api.KorailApiError) as error:
+        parse_ticket_list_response({"strResult": "FAIL", "h_msg_cd": "SYNTHETIC-FAIL"})
+    assert error.value.raw == {"strResult": "FAIL", "h_msg_cd": "SYNTHETIC-FAIL"}
 
 
 @pytest.mark.parametrize(

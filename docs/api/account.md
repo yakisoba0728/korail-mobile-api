@@ -54,7 +54,7 @@ KorailClient.get_ticket_list(
 승차권에는 영수증·원표·지연확인증 조회에 쓰는 반환 식별자가 함께 들어 있습니다. 넘기는 방법은 [승차권 식별자 이어 쓰기](#ticket-identifiers)를 참고하세요.
 
 `mode`가 `"1"`이면 현재 승차권을, `"2"`이면 구매 이력을 돌려줍니다. 앱 내부 값이 공개돼 있지 않아 이 대응은 실서버 응답을 보고 정했습니다.
-라이브러리는 `mode`, 날짜, 페이지 번호를 고치지 않고 그대로 보내며, 빈 문자열인 날짜는 보내지 않습니다.
+라이브러리는 `mode`, 날짜, 페이지 번호를 고치지 않고 그대로 보내며, 빈 문자열인 날짜는 보내지 않습니다. 날짜는 빈 문자열이나 ASCII 숫자 8자리(`YYYYMMDD`) 문자열만 받으며 `date` 객체는 요청 전에 거절합니다.
 2026-09-28 7.0.8 실서버에서 승차일 범위 없이 구매 이력(`mode="2"`)을 요청하자 `WRT100101`(3개월 단위 조회 안내)을 받았습니다. 이 요청에는 날짜 필드가 없었습니다. 2026-07-01~2026-09-28 범위를 함께 보내자 이력이 조회됐습니다.
 구매 이력은 3개월 이내의 `boarding_date_from`·`boarding_date_to`를 함께 넘기세요. 정확한 기간 경계는 확인하지 못했습니다. 이 코드를 이력 없음으로 해석하지 마세요.
 [`KorailConfig`][korail_mobile_api.KorailConfig]의 `advertising_id`를 설정했으면 그 값도 함께 보냅니다.
@@ -67,8 +67,8 @@ KorailClient.get_ticket_list(
 |---|---|---|---|
 | `page_no` | `int` | `1` | 페이지 번호입니다. |
 | `mode` | `Literal['1', '2']` | `'1'` | 목록 종류입니다. `"1"`은 현재 승차권, `"2"`는 구매 이력입니다. 라이브러리는 다른 값도 막지 않고 그대로 보냅니다. |
-| `boarding_date_from` | `str` | `''` | 조회할 승차일 범위의 시작일(`YYYYMMDD`)입니다. 빈 문자열이면 보내지 않습니다. |
-| `boarding_date_to` | `str` | `''` | 조회할 승차일 범위의 종료일(`YYYYMMDD`)입니다. 빈 문자열이면 보내지 않습니다. |
+| `boarding_date_from` | `str` | `''` | 조회할 승차일 범위의 시작일(`YYYYMMDD`, ASCII 숫자 8자리)입니다. 빈 문자열이면 보내지 않습니다. |
+| `boarding_date_to` | `str` | `''` | 조회할 승차일 범위의 종료일(`YYYYMMDD`, ASCII 숫자 8자리)입니다. 빈 문자열이면 보내지 않습니다. |
 
 **반환값**
 
@@ -79,7 +79,7 @@ KorailClient.get_ticket_list(
 | 예외 | 발생 조건 |
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `page_no`가 `int`가 아닐 때(`bool` 포함), `mode`가 문자열이 아니거나 빈 문자열일 때 |
+| [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError] | `page_no`가 `int`가 아닐 때(`bool` 포함), `mode`가 문자열이 아니거나 빈 문자열일 때, `boarding_date_from`·`boarding_date_to`가 빈 문자열도 ASCII 숫자 8자리 문자열도 아닐 때(`date` 객체 포함) |
 
 **정보**
 
@@ -137,7 +137,7 @@ KorailClient.get_ticket_receipt(
 | `window_no` | `str` | 필수 | 판매 창구번호입니다. 승차권의 `sale_window_no`를 넣습니다. |
 | `sale_sequence` | `str` | 필수 | 일련번호입니다. 승차권의 `sale_sequence`를 넣습니다. |
 | `return_password` | `str` | 필수 | 반환 비밀번호입니다. 승차권의 `return_password`를 넣습니다. |
-| `txt_index` | `str \| None` | `None` | 요청의 `txtIndex`로 보내는 값입니다. `None`이거나 공백뿐인 문자열이면 보내지 않습니다. |
+| `txt_index` | `str \| None` | `None` | 요청의 `txtIndex`로 보내는 값입니다. `None`이면 보내지 않습니다. |
 
 **반환값**
 
@@ -148,7 +148,8 @@ KorailClient.get_ticket_receipt(
 | 예외 | 발생 조건 |
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `sale_date`가 ASCII 숫자 4자리가 아닐 때, `window_no`·`sale_sequence`·`return_password`가 비었을 때, `txt_index`가 문자열도 `None`도 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `sale_date`가 ASCII 숫자 4자리가 아닐 때, `window_no`·`sale_sequence`·`return_password`가 비었을 때 |
+| [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError] | `txt_index`가 문자열도 `None`도 아니거나 빈 문자열·공백뿐인 문자열일 때 |
 
 **정보**
 

@@ -1701,19 +1701,16 @@ class KorailClient:
 
         관측상 mode=1은 현재표, 2는 이력이며 날짜·쪽번호는 보정하지 않습니다(MyTicketListIn.java:62; 호출 리터럴은 보호됨)."""
         self._require_session("ticket list requires")
-        return self._run_read(
-            lambda: parse_ticket_list_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
-                    build_ticket_list_form(
-                        self.config,
-                        page_no,
-                        mode=mode,
-                        boarding_date_from=boarding_date_from,
-                        boarding_date_to=boarding_date_to,
-                    ),
-                )
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+            build_ticket_list_form(
+                self.config,
+                page_no,
+                mode=mode,
+                boarding_date_from=boarding_date_from,
+                boarding_date_to=boarding_date_to,
+            ),
+            parser=parse_ticket_list_response,
         )
 
     def reserve(
