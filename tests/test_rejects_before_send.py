@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +59,7 @@ SEATED_HOLD = replace(
     ),
 )
 LOGGED_OUT: dict[str, Any] = {"error": api.KorailAuthError, "logged_in": False}
+INVALID: dict[str, Any] = {"error": api.KorailInvalidInputError}
 
 
 @dataclass(frozen=True)
@@ -361,8 +363,27 @@ ROWS = [
         lambda c: _search(c, connection_train_group_code=""),
         "connection_train_group",
     ),
-    Row("ticket-list-page-text", lambda c: c.get_ticket_list("1"), "page_no must be an integer"),
-    Row("ticket-list-mode-blank", lambda c: c.get_ticket_list(mode=""), "ticket list mode"),
+    Row("ticket-list-page-text", lambda c: c.get_ticket_list("1"), "page_no must be an integer", **INVALID),
+    Row("ticket-list-mode-blank", lambda c: c.get_ticket_list(mode=""), "ticket list mode", **INVALID),
+    # Boarding dates are "" (omitted) or YYYYMMDD; a date object used to go out as 2026-07-01.
+    Row(
+        "ticket-list-date-object",
+        lambda c: c.get_ticket_list(mode="2", boarding_date_from=date(2026, 7, 1), boarding_date_to="20260928"),
+        "boarding_date_from must be empty or exactly 8 ASCII digits",
+        **INVALID,
+    ),
+    Row(
+        "ticket-list-date-dashed",
+        lambda c: c.get_ticket_list(mode="2", boarding_date_from="20260701", boarding_date_to="2026-09-28"),
+        "boarding_date_to must be empty or exactly 8 ASCII digits",
+        **INVALID,
+    ),
+    Row(
+        "ticket-list-date-none",
+        lambda c: c.get_ticket_list(boarding_date_to=None),
+        "boarding_date_to",
+        **INVALID,
+    ),
     Row("maas-stations-blank", lambda c: c.get_maas_station_data(" "), "additional_service_code must be"),
     Row("delay-discount-date-length", lambda c: c.get_delay_discount_tickets("2099010"), "exactly 8 ASCII"),
     Row(
@@ -375,6 +396,14 @@ ROWS = [
         "receipt-index-type",
         lambda c: c.get_ticket_receipt(**{**F8["get_ticket_receipt"], "txt_index": 1}),
         "txt_index must be",
+        **INVALID,
+    ),
+    # A blank txtIndex used to be dropped silently; refund detail already rejected it.
+    Row(
+        "receipt-index-blank",
+        lambda c: c.get_ticket_receipt(**{**F8["get_ticket_receipt"], "txt_index": " "}),
+        "txt_index must be a non-empty string or None",
+        **INVALID,
     ),
     Row("recipient-ticket-type", lambda c: c.get_delivery_recipient({}), "OriginalTicketReference"),
     Row("pbp-specifications-empty", lambda c: c.get_pbp_acceptance_specifications(()), "at least one"),
@@ -383,6 +412,7 @@ ROWS = [
         "original-count-text",
         lambda c: c.get_original_ticket_inquiry((TICKET,), ticket_count="1"),
         "ticket_count",
+        **INVALID,
     ),
     Row(
         "commuter-inquiry-type",

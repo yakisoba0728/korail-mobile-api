@@ -8,28 +8,30 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, TypeAlias
+from typing import Literal, TypeAlias, get_args
 
 from ..._core.validation import _ascii_digits, _calendar_date, _int_text, _optional_text, _required_text
+from ..._core.wire import _is_ascii_digits
 from ...config import KorailConfig
-from ...errors import KorailProtocolError
-
-TICKET_LIST_MODE_ACTIVE = "1"
+from ...errors import KorailInvalidInputError
 
 
 def build_ticket_list_form(
     config: KorailConfig,
     page_no: int,
     *,
-    mode: str = TICKET_LIST_MODE_ACTIVE,
-    boarding_date_from: str = "",
-    boarding_date_to: str = "",
+    mode: str,
+    boarding_date_from: str,
+    boarding_date_to: str,
 ) -> dict[str, str]:
     """목록 종류·날짜·쪽번호를 보정하지 않으며 mode 의미는 관측값입니다(MyTicketListIn.java:62; 호출 리터럴 보호됨)."""
     if not isinstance(mode, str) or not mode:
-        raise KorailProtocolError("ticket list mode must be a non-empty string")
+        raise KorailInvalidInputError("ticket list mode must be a non-empty string")
     if type(page_no) is not int:
-        raise KorailProtocolError("page_no must be an integer")
+        raise KorailInvalidInputError("page_no must be an integer")
+    for name, value in (("boarding_date_from", boarding_date_from), ("boarding_date_to", boarding_date_to)):
+        if not (value == "" or _is_ascii_digits(value, frozenset({8}))):
+            raise KorailInvalidInputError(f"{name} must be empty or exactly 8 ASCII digits")
     # 키 순서는 MyTicketListIn 합성 생성자(MyTicketListIn.java:62)의 선언 순서입니다.
     return {
         "txtIndex": mode,
@@ -47,23 +49,6 @@ KorailMileageLedger = Literal["1", "2"]
 #: 마일리지 증감 구분입니다. ``"0"``은 전체, ``"1"``은 적립, ``"2"``는 사용입니다.
 KorailMileageMovement = Literal["0", "1", "2"]
 
-#: 두 값 모두 라이브로는 동작하지만 7.0.6 출처가 없는 **미출처** 상수입니다.
-KORAIL_MILEAGE_LEDGER_KTX: KorailMileageLedger = "1"
-KORAIL_MILEAGE_LEDGER_RAIL_POINT: KorailMileageLedger = "2"
-
-KORAIL_MILEAGE_MOVEMENT_ALL: KorailMileageMovement = "0"
-KORAIL_MILEAGE_MOVEMENT_EARNED: KorailMileageMovement = "1"
-KORAIL_MILEAGE_MOVEMENT_SPENT: KorailMileageMovement = "2"
-
-_KORAIL_MILEAGE_LEDGERS = frozenset({KORAIL_MILEAGE_LEDGER_KTX, KORAIL_MILEAGE_LEDGER_RAIL_POINT})
-_KORAIL_MILEAGE_MOVEMENTS = frozenset(
-    {
-        KORAIL_MILEAGE_MOVEMENT_ALL,
-        KORAIL_MILEAGE_MOVEMENT_EARNED,
-        KORAIL_MILEAGE_MOVEMENT_SPENT,
-    }
-)
-
 
 @dataclass(frozen=True)
 class MileageHistoryRequest:
@@ -76,27 +61,22 @@ class MileageHistoryRequest:
 
     start_date: str
     end_date: str
-    ledger: KorailMileageLedger = KORAIL_MILEAGE_LEDGER_KTX
-    movement: KorailMileageMovement = KORAIL_MILEAGE_MOVEMENT_ALL
+    ledger: KorailMileageLedger = "1"
+    movement: KorailMileageMovement = "0"
     page_no: int = 1
 
 
 def build_mileage_history_form(
     request: MileageHistoryRequest,
 ) -> dict[str, str]:
-    if request.ledger not in _KORAIL_MILEAGE_LEDGERS:
-        raise KorailProtocolError(
-            "ledger must be KORAIL_MILEAGE_LEDGER_KTX or KORAIL_MILEAGE_LEDGER_RAIL_POINT"
-        )
-    if request.movement not in _KORAIL_MILEAGE_MOVEMENTS:
-        raise KorailProtocolError(
-            "movement must be one of KORAIL_MILEAGE_MOVEMENT_ALL, "
-            "KORAIL_MILEAGE_MOVEMENT_EARNED, KORAIL_MILEAGE_MOVEMENT_SPENT"
-        )
+    if request.ledger not in get_args(KorailMileageLedger):
+        raise KorailInvalidInputError("ledger must be '1' (KTX mileage) or '2' (rail point)")
+    if request.movement not in get_args(KorailMileageMovement):
+        raise KorailInvalidInputError("movement must be '0' (all), '1' (earned) or '2' (spent)")
     start_date = _ascii_digits(request.start_date, "start_date", lengths=frozenset({8}))
     end_date = _ascii_digits(request.end_date, "end_date", lengths=frozenset({8}))
     if start_date > end_date:
-        raise KorailProtocolError("start_date must not be after end_date")
+        raise KorailInvalidInputError("start_date must not be after end_date")
     return {
         "pontTpVal": request.ledger,
         "qryDvVal": request.movement,
@@ -137,7 +117,7 @@ def _exact_original_ticket_reference(
     reference: OriginalTicketReference,
 ) -> OriginalTicketReference:
     if not isinstance(reference, OriginalTicketReference):
-        raise KorailProtocolError("ticket must be an OriginalTicketReference")
+        raise KorailInvalidInputError("ticket must be an OriginalTicketReference")
     return reference
 
 
@@ -145,9 +125,9 @@ def _ticket_reference_tuple(
     tickets: Sequence[OriginalTicketReference],
 ) -> tuple[OriginalTicketReference, ...]:
     if isinstance(tickets, (str, bytes)) or not isinstance(tickets, Sequence):
-        raise KorailProtocolError("tickets must be a sequence of OriginalTicketReference")
+        raise KorailInvalidInputError("tickets must be a sequence of OriginalTicketReference")
     if not tickets:
-        raise KorailProtocolError("tickets must contain at least one reference")
+        raise KorailInvalidInputError("tickets must contain at least one reference")
     for ticket in tickets:
         _exact_original_ticket_reference(ticket)
     return tuple(tickets)
@@ -163,7 +143,7 @@ def build_original_ticket_inquiry_form(
     if ticket_count is None:
         count = len(references)
     elif type(ticket_count) is not int:
-        raise KorailProtocolError("ticket_count must be an integer")
+        raise KorailInvalidInputError("ticket_count must be an integer")
     else:
         count = ticket_count
     # 앱 호출별 값이 달라 길이 일치를 강제하지는 않습니다.
@@ -231,10 +211,10 @@ def build_delay_certificate_form(ticket: OriginalTicketReference) -> dict[str, s
     쓰십시오."""
     reference = _exact_original_ticket_reference(ticket)
     return {
-        "ogtkSaleWctNo": _required_text(reference.sale_window_no, "sale_window_no"),
-        "ogtkSaleDd": _required_text(reference.sale_date, "sale_date"),
-        "ogtkSaleSqno": _required_text(reference.sale_sequence, "sale_sequence"),
-        "ogtkRetPwd": _required_text(reference.return_password, "return_password"),
+        "ogtkSaleWctNo": reference.sale_window_no,
+        "ogtkSaleDd": reference.sale_date,
+        "ogtkSaleSqno": reference.sale_sequence,
+        "ogtkRetPwd": reference.return_password,
     }
 
 
@@ -243,10 +223,10 @@ def build_delay_return_receipt_form(ticket: OriginalTicketReference) -> dict[str
     DelayReturnReceiptIn.java:52)."""
     reference = _exact_original_ticket_reference(ticket)
     return {
-        "saleWctNo": _required_text(reference.sale_window_no, "sale_window_no"),
-        "saleDd": _required_text(reference.sale_date, "sale_date"),
-        "saleSqno": _required_text(reference.sale_sequence, "sale_sequence"),
-        "tkRetPwd": _required_text(reference.return_password, "return_password"),
+        "saleWctNo": reference.sale_window_no,
+        "saleDd": reference.sale_date,
+        "saleSqno": reference.sale_sequence,
+        "tkRetPwd": reference.return_password,
     }
 
 
@@ -317,8 +297,12 @@ def build_ticket_receipt_form(
         ),
     }
     if txt_index is not None:
-        if not isinstance(txt_index, str):
-            raise KorailProtocolError("txt_index must be a string or None")
-        if txt_index.strip():
-            form["txtIndex"] = txt_index
+        form["txtIndex"] = _txt_index(txt_index)
     return form
+
+
+def _txt_index(value: object) -> str:
+    """None 생략은 호출부가 정하고, 공백뿐인 값은 조용히 빼지 않고 거절합니다."""
+    if not isinstance(value, str) or not value.strip():
+        raise KorailInvalidInputError("txt_index must be a non-empty string or None")
+    return value
