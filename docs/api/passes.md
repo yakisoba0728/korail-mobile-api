@@ -125,7 +125,7 @@ KorailClient.get_pass_schedule(request: PassScheduleRequest) -> PassScheduleResp
 `departure_station_name`과 `arrival_station_name`에는 역 코드가 아니라 역 이름을 넣습니다.
 `transfer_type_code`와 `weekend_use_flag`의 뜻과 허용 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 날짜는 `YYYYMMDD`, 시각은 `HHMMSS` 형식으로 넣습니다. 라이브러리는 이 요청 값의 형식을 검사하지 않습니다. 빈 문자열인 필드는 요청에서 빠집니다.
-`None`이나 문자열이 아닌 필드는 `PassScheduleRequest`를 만들 때 [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError]로 거절합니다. 2.6.2 이전에는 `txtSelPage=`처럼 빈 값으로 보냈습니다.
+`None`이나 문자열이 아닌 필드는 `PassScheduleRequest`를 만들 때 [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError]로 거절합니다.
 
 서버가 결과 코드 `WRG000000`(조회 결과 없음)으로 실패를 알리면 예외를 발생시키지 않고, 열차가 없는 응답(`str_result`는 `"FAIL"`)을 반환합니다. 이 응답이 정기권 보유 여부를 뜻하는 것은 아닙니다.
 
@@ -458,7 +458,7 @@ KorailClient.extend_discount_card(ticket: OriginalTicketReference) -> BaseKorail
 
 **반환값**
 
-[`BaseKorailResponse`][korail_mobile_api.BaseKorailResponse] — 결과 봉투(`str_result`, `h_msg_cd`, `h_msg_txt`)와 원본만 담습니다.
+[`BaseKorailResponse`][korail_mobile_api.BaseKorailResponse] — 결과 봉투(`str_result`, `h_msg_cd`, `h_msg_txt`)와 원문만 담습니다.
 
 **예외**
 
@@ -583,7 +583,7 @@ KorailClient.list_product_reservations(
 ) -> ProductReservationListResponse
 ```
 
-각 행([`ProductReservation`][korail_mobile_api.ProductReservation])의 예약 번호(`virtual_reservation_no`)와 예약 순번(`reservation_sequence`)은 [`get_product_detail`](#get_product_detail)의 입력입니다.
+각 행([`ProductReservation`][korail_mobile_api.ProductReservation])의 예약번호(`virtual_reservation_no`)와 예약 순번(`reservation_sequence`)은 [`get_product_detail`](#get_product_detail)의 입력입니다.
 
 `reservation_status_code`와 `payment_status_code`는 조회 조건으로 함께 보냅니다. `None`(기본값)이면 보내지 않습니다. 앱이 이 두 필드에 보내는 기본값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 서버 응답에 목록 블록이 없으면 빈 `items`를 반환합니다.
@@ -645,7 +645,7 @@ KorailClient.get_product_detail(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `reservation_no` | `str` | 필수 | 여행상품 예약 번호입니다. |
+| `reservation_no` | `str` | 필수 | 여행상품 예약번호입니다. |
 | `reservation_sequence` | `str` \| `None` | `None` | 예약 순번입니다. |
 
 **반환값**

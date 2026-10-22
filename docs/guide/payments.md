@@ -41,8 +41,6 @@ print(hold.pnr_no, hold.received_amount, hold.payment_deadline_date, hold.paymen
 
 ## 기존 예약 가져오기 {#existing-reservation}
 
-2.3.0부터 제공하는 기능입니다.
-
 앱이나 다른 패키지에서 같은 계정으로 예약한 표는 로그인한 `client`에서
 [`get_reservation_hold`](../api/reservations.md#get_reservation_hold)로 가져올 수 있습니다.
 위 준비 예제의 열차 조회·`reserve` 호출 대신 아래 코드를 사용하세요.
@@ -79,7 +77,7 @@ PNR이 다르거나 창구번호·여정·좌석이 누락되거나, 금액이 �
 
 기존 예약을 실서버에서 가져오고, 실제 창구번호·정산액이 로컬 결제 폼에 보존되는 것까지 확인했습니다.
 카드 결제 요청은 보내지 않았고, N카드 예약 복원도 별도 검증하지 않았습니다.
-관측 결과와 한계는 [실서버 확인 현황](../status.md)에 있습니다.
+관측 결과와 한계는 [2.3.0 추가 기능 기록](../records.md#230-추가-기능-2026-09-29)에 있습니다.
 
 ## 할인 재계산 {#recalculation}
 
@@ -90,7 +88,7 @@ PNR이 다르거나 창구번호·여정·좌석이 누락되거나, 금액이 �
 - `for_hold(hold, requested_discount_codes)`는 성공한 홀드의 첫 여정 좌석마다 한 행을 만들고, 좌석의 승객 유형·객실·현재 할인 코드·증빙 번호를 복사합니다.
 - `requested_discount_codes`는 좌석마다 새로 요청할 할인 코드를 좌석 순서대로 담은 목록입니다. 빈 문자열도 그 좌석의 자리를 지키도록 그대로 보냅니다.
 - 코드 개수가 첫 여정 좌석 수와 다르면 `KorailProtocolError`가 발생하며, 메시지에 좌석 수가 들어 있습니다.
-- 2.6.2부터 `payable`이 `False`인 홀드(예약대기)는 `KorailProtocolError`로 거절합니다. 예약대기 홀드는 카드로 결제하지 않습니다.
+- `payable`이 `False`인 홀드(예약대기)는 요청 전에 거절합니다. 예약대기 홀드는 카드로 결제하지 않습니다.
 
 재계산 결과는 새 [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse]입니다. 결제는 원래 홀드가 아니라 이 반환값으로 합니다.
 
@@ -126,7 +124,7 @@ hold = recalculated  # 결제는 재계산된 홀드로 합니다
 | `installment` | `"0"` | 할부 개월 수입니다. 숫자 1~2자리이며 `"0"`은 일시불입니다. |
 | `card_type` | `"J"` | `"J"`(개인) 또는 `"S"`(법인)입니다. |
 
-형식은 `CardPayment`를 만들 때 검사하고, 유효기간 경과는 `pay_with_card`가 요청을 보내기 전에 검사합니다. 2.5.0부터 `repr(card)`와 `str(card)`가 모든 입력 필드를 숨겨 `CardPayment()`로 표시합니다. 직접 속성이나 `dataclasses.asdict(card)`에는 실제 값이 남고, 결제 폼도 실제 값을 사용합니다.
+형식은 `CardPayment`를 만들 때 검사하고, 유효기간 경과는 `pay_with_card`가 요청을 보내기 전에 검사합니다. `repr(card)`와 `str(card)`가 모든 입력 필드를 숨겨 `CardPayment()`로 표시합니다. 직접 속성이나 `dataclasses.asdict(card)`에는 실제 값이 남고, 결제 폼도 실제 값을 사용합니다.
 어느 쪽이든 형식이 틀리면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생하고 요청은 나가지 않습니다.
 유효기간이 한국 시간 기준 이번 달이면 허용하고, 그보다 이전이면 만료로 보고 거절합니다.
 검사는 형식과 유효기간만 확인하며, 카드를 실제로 쓸 수 있는지는 확인하지 않습니다.
@@ -232,7 +230,7 @@ print("사용 가능 마일리지", commission.usable_mileage)
 [`refund`](../api/payments.md#refund)에 `PaidTicket`과 수수료 조회 응답을 넘깁니다. 수수료 조회 응답은 `commission=` 키워드 인자로 넘깁니다.
 `commission`은 필수입니다. [`RefundCommissionResponse`][korail_mobile_api.RefundCommissionResponse]가 아닌 값은 `None`을 포함해 요청 전에 거절합니다.
 성공 응답(`str_result`가 `"SUCC"`)이 아닌 수수료 조회 응답도 요청 전에 거절합니다.
-2.6.0부터 환불은 **fail-closed 정책**입니다. 실제 `get_refund_fee` 반환 시 비공개로 연결된 조회 문맥과
+환불은 **fail-closed 정책**입니다. 실제 `get_refund_fee` 반환 시 비공개로 연결된 조회 문맥과
 환불할 `PaidTicket`의 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호가 모두 일치해야 합니다.
 `RefundCommissionResponse`를 직접 생성하거나 원문에서 직접 파싱한 값, 다른 표의 수수료 응답,
 원표 반환일이 없는 수동 생성 `PaidTicket`은 `KorailProtocolError`로 거절합니다.

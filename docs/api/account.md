@@ -21,7 +21,7 @@
 `OriginalTicketReference`는 네 값이 비어 있지 않은지만 검사하고 판매일의 자릿수는 검사하지 않습니다.
 [`get_ticket_receipt`](#get_ticket_receipt)를 뺀 메서드는 판매일 필드를 잘못 골라도 요청 전에 거절하지 않고 그대로 보내므로, 위 표에 맞는 필드를 넣으세요.
 `TicketListTicket`의 필드는 응답에 없으면 `None`이며, `None`이나 빈 문자열을 넣으면 `OriginalTicketReference`를 만들 때 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
-3.0부터 `OriginalTicketReference.from_ticket(ticket)`은 `return_sale_date`(`MMDD`)를 판매일로 넣어 만듭니다. `YYYYMMDD`를 받는 두 메서드에는 아래처럼 직접 만드세요.
+`OriginalTicketReference.from_ticket(ticket)`은 `return_sale_date`(`MMDD`)를 판매일로 넣어 만듭니다. `YYYYMMDD`를 받는 두 메서드에는 아래처럼 직접 만드세요.
 
 ```python
 from korail_mobile_api import OriginalTicketReference
@@ -397,7 +397,7 @@ KorailClient.list_deposit_banks() -> DepositBankListResponse
 
 직접 `@Field` 경로로 `Device`, `Version`, `Key`, `AppVersion` 순서의 네 필드를 싣습니다.
 7.0.10 정적 검토에 따른 순서 정정이며, 서버의 순서 민감성·실서버 영향은 미확인입니다.
-과거 7.0.8 관측의 순서·결과는 [실서버 기록](../status.md)에 그대로 보존합니다.
+과거 7.0.8 관측의 순서·결과는 [날짜별 실서버 기록](../records.md#708-요청-변경-실서버-재검증-2026-09-28)에 그대로 보존합니다.
 [`KorailConfig`][korail_mobile_api.KorailConfig]의 `lang`을 설정해도 `lang`은 보내지 않으며, `AppVersion`을 제외한 기존 세 필드는 값이 빈 문자열이어도 빼지 않고 보냅니다.
 
 **매개변수**

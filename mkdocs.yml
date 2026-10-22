@@ -141,7 +141,9 @@ nav:
   - 동작 원리:
       - 요청 흐름: concepts/how-it-works.md
       - 용어: concepts/glossary.md
+  - 검증 기록:
       - 실서버 확인 현황: status.md
+      - 날짜별 실서버 기록: records.md
       - 7.0.10 정적 검토: verification-7010.md
       - 2.5.0 출시 전 검증: verification-250.md
       - 7.0.8 재검증: verification-708.md

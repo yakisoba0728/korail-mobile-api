@@ -102,8 +102,8 @@ KorailClient.recalculate_price(
 PNR과 승객별 할인 행을 보내고, 서버가 다시 계산한 홀드를 반환합니다. 결제는 이 반환값으로 합니다.
 요청은 보통 [`PriceRecalculationRequest`][korail_mobile_api.PriceRecalculationRequest]의 `for_hold()`로 만듭니다.
 `for_hold()`는 홀드의 첫 여정 좌석마다 한 행을 만들고, 좌석의 승객 유형·객실·현재 할인 코드·증빙 번호를 복사합니다.
-요청할 할인 코드는 좌석 수와 같은 개수로 넘겨야 합니다. 2.6.2부터 `for_hold()`는 `payable=False`인 예약대기 홀드를 `KorailProtocolError`로 거절합니다.
-7.0.8에서는 실제 미결제 홀드로 요청했지만 할인 코드 `000`은 `WZZ000001`, 변경 없는 요청은 `ERR930202`로 거절됐습니다. 이 버전의 정상 재계산은 아직 확인하지 못했습니다.
+요청할 할인 코드는 좌석 수와 같은 개수로 넘겨야 합니다. `for_hold()`는 `payable=False`인 예약대기 홀드를 요청 전에 [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError]로 거절합니다.
+7.0.8에서는 실제 홀드로 요청했지만 할인 코드 `000`은 `WZZ000001`, 변경 없는 요청은 `ERR930202`로 거절됐습니다. 이 버전의 정상 재계산은 아직 확인하지 못했습니다.
 
 요청은 하나만 보냅니다. 앱처럼 재계산 뒤 같은 PNR을 장바구니에 담으려면 재계산이 성공한 뒤 [`add_to_cart`](reservations.md#add_to_cart)를 따로 호출하세요.
 3.0에서 `add_to_cart=` 인자와 그 결과를 담던 `cart_addition`·`cart_addition_error`(2.6.2에서 추가)를 제거했습니다.
@@ -295,7 +295,7 @@ KorailClient.refund(
 PNR 전체가 아니라 `ticket`이 가리키는 승차권 한 장만 환불하며, 수수료가 빠질 수 있습니다.
 한 PNR에 승차권이 여러 장이면 장마다 상세 조회, 수수료 조회, 환불을 따로 합니다.
 `commission`은 필수 키워드 인자이며 [`get_refund_fee`](#get_refund_fee)의 성공 응답이어야 합니다. `None`을 포함해 [`RefundCommissionResponse`][korail_mobile_api.RefundCommissionResponse]가 아닌 값이나 실패 응답을 넘기면 요청 전에 거절합니다.
-2.6.0부터 환불은 **fail-closed**입니다. 실제 조회 반환값의 비공개 문맥과 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호가 모두 일치해야 합니다.
+환불은 **fail-closed**입니다. 실제 조회 반환값의 비공개 문맥과 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호가 모두 일치해야 합니다.
 직접 생성·직접 파싱한 수수료 응답, 다른 표의 응답, 원표 반환일이 없는 입력은 요청 전에 거절합니다.
 라이브러리는 수수료를 대신 조회하지 않고, 요청을 다시 보내지도 않습니다.
 

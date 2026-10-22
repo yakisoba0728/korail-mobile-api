@@ -1,7 +1,6 @@
 # 예약
 
 결제 전 예약(홀드)을 만들고, 확인하고, 취소하는 메서드입니다.
-청소년 예약 사전 거절은 2.5.0부터 적용합니다.
 예약 메서드는 서버에 실제 홀드를 만들고 [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse]를 반환합니다.
 라이브러리는 홀드를 자동으로 결제하거나 취소하지 않으므로, 결제 기한 안에 [`pay_with_card`](payments.md#pay_with_card)로 결제하거나 [`cancel_unpaid_hold`](#cancel_unpaid_hold)로 취소해야 합니다.
 
@@ -64,7 +63,7 @@ KorailClient.reserve(
 
 **반환값**
 
-[`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse] — 만들어진 홀드입니다. 예약 번호 `pnr_no`, 결제할 금액 `received_amount`, 결제 기한 `payment_deadline_date`·`payment_deadline_time`, 여정 목록 `journeys`가 들어 있습니다.
+[`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse] — 만들어진 홀드입니다. 예약번호 `pnr_no`, 결제할 금액 `received_amount`, 결제 기한 `payment_deadline_date`·`payment_deadline_time`, 여정 목록 `journeys`가 들어 있습니다.
 
 **예외**
 
@@ -343,7 +342,7 @@ KorailClient.cancel_unpaid_hold(
 `hold`의 `str_result`가 `SUCC`이고, `pnr_no`와 `journey_count`(1 이상의 숫자 문자열)가 있어야 합니다.
 요청에는 이 값과 첫 여정의 순번·변경 번호를 싣습니다. 첫 여정에 값이 없으면 각각 `"0001"`과 `"000"`을 보냅니다.
 
-홀드 대신 [`HoldReference`][korail_mobile_api.HoldReference]를 넘길 수도 있습니다(3.0부터). `hold.reference`나 응답 원문의 `HoldReference.from_raw(raw)`로 만들며, 같은 값이면 홀드를 넘길 때와 같은 요청을 보냅니다.
+홀드 대신 [`HoldReference`][korail_mobile_api.HoldReference]를 넘길 수도 있습니다. `hold.reference`나 응답 원문의 `HoldReference.from_raw(raw)`로 만들며, 같은 값이면 홀드를 넘길 때와 같은 요청을 보냅니다.
 `HoldReference`는 `str_result`를 검사하지 않고 `pnr_no`(빈 문자열 불가)와 `journey_count`만 같은 규칙으로 검사합니다.
 
 `check_first`가 `True`(기본값)이면 앱과 같이 취소 가능 여부를 먼저 확인한 뒤 취소 요청을 보냅니다. 확인 요청이 실패하면 예외가 발생하고 취소 요청은 보내지 않습니다.
@@ -492,7 +491,6 @@ for journey in detail.journeys:
 
 기존 예약번호로 상세를 조회하고, 카드 결제에 넘길 홀드를 반환합니다.
 같은 계정으로 앱이나 다른 도구에서 만든 예약을 불러올 때 사용합니다.
-2.3.0에서 추가했습니다.
 
 ```python
 KorailClient.get_reservation_hold(pnr_no: str) -> ReservationHoldResponse
@@ -622,7 +620,7 @@ KorailClient.list_cart_items(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `pnr_no` | `str` | `''` | 요청에 함께 보낼 예약 번호입니다. |
+| `pnr_no` | `str` | `''` | 요청에 함께 보낼 예약번호입니다. |
 | `additional_service_request_no` | `str` | `''` | 요청에 함께 보낼 부가서비스 신청 번호입니다. |
 
 **반환값**
