@@ -13,11 +13,13 @@ from ..._core.parsing import wire
 from ..common.models import BaseKorailResponse
 from ..trains.models import SeatWindow
 
+# evidence: app 7.0.8 AirportBusSeatMapViewModel.java:101
 #: 공항버스 좌석 조회와 예약에 쓰는 호차 번호입니다. 앱 상수 ``DEFINE_SRCARNO``의 보호된 값입니다.
-AIRPORT_BUS_CAR_NO = "0001"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:101
+AIRPORT_BUS_CAR_NO = "0001"
 # 앱 공항버스 화면이 보내는 보호된 값이며 2026-09-24 실서버 예약에서 받아들여졌습니다.
-AIRPORT_BUS_ROOM_CLASS_CODE = "1"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:752-788
-AIRPORT_BUS_SEAT_ATTRIBUTE_CODE = "015"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:752-788
+# evidence: app 7.0.8 AirportBusSeatMapViewModel.java:752-788
+AIRPORT_BUS_ROOM_CLASS_CODE = "1"
+AIRPORT_BUS_SEAT_ATTRIBUTE_CODE = "015"
 
 
 @dataclass(frozen=True, kw_only=True)

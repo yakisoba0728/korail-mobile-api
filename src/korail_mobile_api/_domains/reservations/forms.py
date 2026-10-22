@@ -609,7 +609,7 @@ def _build_journey_reservation_form(
     )
     _add_passenger_rows(form, passengers)
     # 미지정 좌석속성의 앱 기본값은 보호돼 있어 관측값 000 을 보냅니다.
-    # evidence: app TicketReservationIn.java:96-100
+    # evidence: app 7.0.6 TicketReservationIn.java:96-100
     form.update(
         {
             "txtSeatAttCd1": "000",
@@ -774,7 +774,7 @@ def _journey_fields(train: TrainSummary | TrainScheduleItem) -> dict[str, str]:
 
 def _standing_only(row: TrainSummary | TrainScheduleItem) -> bool:
     """일반실 매진(13)이면서 입석 가용(11)인 행입니다. 13/11 은 관측값입니다."""
-    # evidence: app TrainReservationCode.java:21,24 (코드 평문은 보호돼 미확인)
+    # evidence: app 7.0.6 TrainReservationCode.java:21,24 (코드 평문은 보호돼 미확인)
     return row.general_reservation_code == "13" and row.standing_reservation_code == "11"
 
 

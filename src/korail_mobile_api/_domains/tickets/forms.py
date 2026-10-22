@@ -87,7 +87,8 @@ def build_mileage_history_form(
         "qryDvVal": request.movement,
         "qryStDt": start_date,
         "qryClsDt": end_date,
-        "pgPrCnt": "20",  # evidence: app 7.0.6 MileageHistoryViewModelKt.java:11 (값은 보호돼 관측값을 씁니다)
+        # evidence: app 7.0.6 MileageHistoryViewModelKt.java:11 (값은 보호돼 관측값을 씁니다)
+        "pgPrCnt": "20",
         "nowPgNo": _int_text(request.page_no, "page_no"),
     }
 
@@ -265,7 +266,8 @@ def build_multi_child_discount_target_form(
 
 
 def build_korail_point_summary_form() -> dict[str, str]:
-    return {"point_dv_cd": "0"}  # evidence: app 7.0.6 NetworkApi.java:515
+    # evidence: app 7.0.6 NetworkApi.java:515
+    return {"point_dv_cd": "0"}
 
 
 def build_customer_trip_info_form(customer_no: str) -> dict[str, str]:

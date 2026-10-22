@@ -134,7 +134,7 @@ def build_seat_inventory_form(
         "arvStnRunOrdr": train.arrival_run_order or "",
         "totPsgCnt": str(passenger_count),
         "gdNo": train.goods_no or "",
-        # evidence: app TrainSeatMapViewModel.smali:4116,4232-4238 (기본값 false 를 유지합니다)
+        # evidence: app 7.0.6 TrainSeatMapViewModel.smali:4116,4232-4238 (기본값 false 를 유지합니다)
         "isArrow": "false",
     }
 
@@ -208,7 +208,7 @@ def build_train_search_form(
         "txtSeatAttCd_2": "000",
         "txtSeatAttCd_3": "000",
         "txtSeatAttCd_4": query.seat_attribute_code,
-        # evidence: app TrainScheduleViewModel.java:3137,3147 (두 칸은 같은 조건이며 Y/N 평문은 보호돼 미확인)
+        # evidence: app 7.0.6 TrainScheduleViewModel.java:3137,3147 (두 칸은 같은 조건이며 Y/N 평문은 보호돼 미확인)
         "ebizCrossCheck": "Y" if query.include_srt else "N",
         "srtCheckYn": "Y" if query.include_srt else "N",
         "rtYn": "N",
@@ -486,7 +486,7 @@ class PriceFareQuoteRequest:
     생성할 때 ``KorailInvalidInputError``가 발생합니다. 앱이 보내는 메뉴 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다."""
 
     legs: tuple[PriceFareLeg, ...]
-    # evidence: app TrainOpInfoViewModel.java:794 (메뉴 평문은 보호돼 미확인)
+    # evidence: app 7.0.6 TrainOpInfoViewModel.java:794 (메뉴 평문은 보호돼 미확인)
     menu_id: str = "11"
 
     def __post_init__(self) -> None:

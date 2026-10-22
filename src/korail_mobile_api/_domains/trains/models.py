@@ -165,7 +165,7 @@ class TrainSearchQuery:
     departure_date: str
     departure_time: str = "000000"
     passengers: int = 1
-    # evidence: app TrainGroup.java:25,29,335 (평문은 보호돼 관측값을 씁니다)
+    # evidence: app 7.0.6 TrainGroup.java:25,29,335 (평문은 보호돼 관측값을 씁니다)
     train_group_code: str = "109"
     include_srt: bool = False
     child_passengers: int = 0

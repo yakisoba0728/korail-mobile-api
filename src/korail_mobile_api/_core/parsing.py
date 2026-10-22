@@ -234,14 +234,14 @@ def _optional_integer(data: Mapping[str, object], key: str) -> int | None:
         return None
 
 
+# evidence: app 7.0.6 StreamingJsonDecoder.java:395-403, kotlinx/serialization/json/internal/JsonReader.java:575-640
 def _required_integer(
     data: Mapping[str, object],
     key: str,
     context: str,
 ) -> int:
-    """필수 정수: JSON int 또는 ASCII 숫자 문자열(앞의 ``-`` 하나 허용)을 받습니다. null/bool/float·지수 표기는 거절합니다. 앱의 따옴표 숫자 처리는
-    StreamingJsonDecoder.java:395-403 → kotlinx/serialization/json/internal/JsonReader.java:575-640 에 있고,
-    첫 글자의 ``-`` 만 부호로 받습니다."""
+    """필수 정수: JSON int 또는 ASCII 숫자 문자열(앞의 ``-`` 하나 허용)을 받습니다. null/bool/float·지수 표기는 거절합니다.
+    앱도 따옴표 숫자는 첫 글자의 ``-`` 만 부호로 받습니다."""
     value = data.get(key)
     if type(value) is int:
         return value
@@ -256,7 +256,7 @@ def _required_integer(
 
 
 def _inventory_ratio(data: Mapping[str, object], key: str) -> float | None:
-    """창측 비율(String 선언, TResidualSeatsResearchOutWindow.java:51-56)을 읽습니다. 누락과 앱 기본값 "" 은 None 입니다."""
+    """창측 비율(앱 String 필드)을 읽습니다. 누락과 앱 기본값 "" 은 None 입니다."""
     value = data.get(key, "")
     if value == "":
         return None
@@ -305,7 +305,7 @@ def _validate_envelope(
     code = envelope["h_msg_cd"]
     message = envelope["h_msg_txt"]
     result = envelope["strResult"]
-    # 앱은 strResult 실패일 때만 로그인 필요로 봅니다(CommonOut.java:426-438).
+    # 앱은 strResult 실패일 때만 로그인 필요로 봅니다.
     if result == "FAIL" and code == SESSION_EXPIRED_CODE:
         raise KorailSessionExpiredError(code, message, raw=raw)
     failed = result == "FAIL"
@@ -333,7 +333,7 @@ def _validate_strict_read_envelope(
 
 
 def _required_read_rows(data: Mapping[str, object], key: str, context: str) -> list[Mapping[str, object]]:
-    """누락·null·비객체 행은 거절합니다(ReceiptInfos.java:49, DeliveredTicketOut.java:50 의 필수 마스크)."""
+    """누락·null·비객체 행은 거절합니다. 앱이 필수로 표시한 목록에 씁니다."""
     value = data.get(key)
     if _is_list(value) and _all_mappings(value):
         return value

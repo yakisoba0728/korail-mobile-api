@@ -26,9 +26,9 @@ def _is_sequence(value: object) -> TypeGuard[Sequence[object]]:
     return isinstance(value, Sequence) and not isinstance(value, (str, bytes))
 
 
+# evidence: app 7.0.6 CouponIn.java:29-30, ProductListIn.java:30-35, AmtSpecIn.java:30-36
 def _int_text(value: int, name: str) -> str:
-    """앱 DTO 는 String 이고 범위 검사가 없어 값의 판정은 서버에 맡깁니다 (CouponIn.java:29-30, ProductListIn.java:30-35,
-    AmtSpecIn.java:30-36)."""
+    """앱 DTO 는 String 이고 범위 검사가 없어 값의 판정은 서버에 맡깁니다."""
     if type(value) is not int:
         raise KorailInvalidInputError(f"{name} must be an integer")
     return str(value)

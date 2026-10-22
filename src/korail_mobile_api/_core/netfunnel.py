@@ -47,8 +47,9 @@ class KorailNetFunnelAction(StrEnum):
     관문별 값을 바꾸세요."""
 
     # 앱의 액션 상수 일곱 개는 보호 문자열이라 기본값은 길이와 호출부 문맥으로 고른 미확인 값입니다.
-    # evidence: app 7.0.6 NetworkConstants.java:88-94; 호출부 TrainScheduleViewModel.java:5213-5234,
-    # PayViewModel.java:6724, MyReservationViewModel.java:2528, KorailTalkApplication.java:382-386
+    # evidence: app 7.0.6 NetworkConstants.java:88-94
+    # evidence: app 7.0.6 호출부 TrainScheduleViewModel.java:5213-5234, PayViewModel.java:6724
+    # evidence: app 7.0.6 호출부 MyReservationViewModel.java:2528, KorailTalkApplication.java:382-386
 
     INQUIRY = "act_8"
     PEAK_SEASON_INQUIRY = "act_8_2"

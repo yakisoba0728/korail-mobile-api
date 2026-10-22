@@ -151,7 +151,7 @@ class CardPayment:
     card_password: str = field(repr=False)
     card_expire: str = field(repr=False)
     birthday: str = field(repr=False)
-    # evidence: app InstallmentViewModel.java:55,94-96 (INS_0; its value is protected, so "0" vs "00" is unconfirmed)
+    # evidence: app 7.0.6 InstallmentViewModel.java:55,94-96 (INS_0; its value is protected, so "0" vs "00" is unconfirmed)
     #: 할부 개월 수입니다. 숫자 1~2자리이며 기본값 ``"0"``은 일시불입니다.
     installment: str = field(default="0", repr=False)
     #: 카드 종류입니다. ``"J"``(기본값)는 개인 카드, ``"S"``는 법인 카드입니다. 다른 값이면 ``KorailInvalidInputError``가
@@ -417,7 +417,7 @@ def build_refund_ticket_detail_form(
         "h_orgtk_wct_no": reference.sale_window_no,
         "h_orgtk_sale_sqno": reference.sale_sequence,
         "h_orgtk_ret_pwd": reference.return_password,
-        # evidence: app MyTicketBaseViewModel.java:696 (chosen by a boolean; the literals are protected)
+        # evidence: app 7.0.6 MyTicketBaseViewModel.java:696 (chosen by a boolean; the literals are protected)
         "h_purchase_history": "Y" if from_purchase_history else "N",
     }
     if txt_index is not None:
@@ -483,7 +483,7 @@ def build_card_payment_form(
             "hidRsvChgNo": _echo_or(
                 hold.journeys[0].reservation_change_no if hold.journeys else None, _ABSENT_RESERVATION_CHANGE_NO
             ),
-            # evidence: app PaymentMethodHelper.java:110-130 (grid count, method 1/02 and input way @ are protected, unresolved)
+            # evidence: app 7.0.6 PaymentMethodHelper.java:110-130 (grid count, method 1/02 and input way @ are protected, unresolved)
             "hidInrecmnsGridcnt": "1",
             "hidStlMnsSqno1": "1",
             "hidStlMnsCd1": "02",
@@ -495,7 +495,7 @@ def build_card_payment_form(
             "hidIsmtMnthNum1": card.installment,
             "hidAthnDvCd1": card.card_type,
             "hidAthnVal1": card.birthday,
-            # evidence: app PayViewModel.java:6600-6604 (member branch; the constant is protected, so "Y" is unconfirmed)
+            # evidence: app 7.0.6 PayViewModel.java:6600-6604 (member branch; the constant is protected, so "Y" is unconfirmed)
             "hiduserYn": "Y",
         }
     )
@@ -697,7 +697,7 @@ def build_price_recalculation_form(
 
     form: dict[str, str | list[str]] = dict(_device_version_key(config))
     form["hidPnrNo"] = pnr_no
-    # evidence: app ReservationJobId.java:20,42-45 (the job id is protected; the value follows live records)
+    # evidence: app 7.0.6 ReservationJobId.java:20,42-45 (the job id is protected; the value follows live records)
     form["txtJobId"] = KorailReservationJobType.IMMEDIATE.value
     non_member_no = request.non_member_no
     if non_member_no is not None:
@@ -705,7 +705,7 @@ def build_price_recalculation_form(
             raise KorailInvalidInputError(
                 "KORAIL price recalculation non_member_no must be a non-empty string when present"
             )
-        # evidence: app PayViewModel.java:6167-6168 (the key and "N" are protected and unconfirmed)
+        # evidence: app 7.0.6 PayViewModel.java:6167-6168 (the key and "N" are protected and unconfirmed)
         form["hiduserYn"] = "N"
         form["hidCustNo"] = non_member_no
     form["txtPsgGridcnt"] = str(len(rows))
