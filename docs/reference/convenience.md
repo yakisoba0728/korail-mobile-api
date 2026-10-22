@@ -5,36 +5,36 @@
 
 ## Korail
 
-::: korail_mobile_api.facade.Korail
+::: korail_mobile_api.Korail
 
 ## StationResource
 
-::: korail_mobile_api.facade.StationResource
+::: korail_mobile_api.StationResource
 
 ## TrainResource
 
-::: korail_mobile_api.facade.TrainResource
+::: korail_mobile_api.TrainResource
 
 ## ReservationResource
 
-::: korail_mobile_api.facade.ReservationResource
+::: korail_mobile_api.ReservationResource
 
 ## TicketResource
 
-::: korail_mobile_api.facade.TicketResource
+::: korail_mobile_api.TicketResource
 
 ## MembershipResource
 
-::: korail_mobile_api.facade.MembershipResource
+::: korail_mobile_api.MembershipResource
 
 ## AirportBusResource
 
-::: korail_mobile_api.facade.AirportBusResource
+::: korail_mobile_api.AirportBusResource
 
 ## KorailDeviceProfile
 
-::: korail_mobile_api.device.KorailDeviceProfile
+::: korail_mobile_api.KorailDeviceProfile
 
 ## build_config_from_profile
 
-::: korail_mobile_api.device.build_config_from_profile
+::: korail_mobile_api.build_config_from_profile

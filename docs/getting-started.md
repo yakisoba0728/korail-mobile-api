@@ -51,7 +51,7 @@ SOCKS 프록시를 쓰려면 `pip install "korail-mobile-api[socks]"`로 설치�
 
 ## 클라이언트 만들기
 
-모든 기능은 [`KorailClient`][korail_mobile_api.client.KorailClient]의 메서드로 제공됩니다.
+모든 기능은 [`KorailClient`][korail_mobile_api.KorailClient]의 메서드로 제공됩니다.
 자주 쓰는 역·열차·예약·승차권 작업은 선택형 [`Korail` 간편 API](guide/convenience.md)로도 호출할 수 있습니다.
 설정 없이 만들면 코레일+ 앱 7.0.8에서 확인한 `AppVersion`과 API `Version` 기본값을 사용합니다. 2.6.2부터 기본 토큰은 SDK 2.0.1 `2!` 진단입니다. [설정과 검증 범위](guide/configuration.md#dynapath)를 참고하세요.
 위 현재 상태처럼 이 기본값의 요청이 거절될 수 있습니다.
@@ -74,11 +74,11 @@ finally:
     client.close()
 ```
 
-설정을 바꾸려면 [`KorailConfig`][korail_mobile_api.config.KorailConfig]를 넘깁니다. 자세한 내용은 [설정](guide/configuration.md)을 참고하세요.
+설정을 바꾸려면 [`KorailConfig`][korail_mobile_api.KorailConfig]를 넘깁니다. 자세한 내용은 [설정](guide/configuration.md)을 참고하세요.
 
 ## 열차 조회
 
-열차 조회에는 로그인이 필요하지 않습니다. 조회 조건은 [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery]로 만듭니다.
+열차 조회에는 로그인이 필요하지 않습니다. 조회 조건은 [`TrainSearchQuery`][korail_mobile_api.TrainSearchQuery]로 만듭니다.
 
 ```python
 from datetime import datetime, timedelta, timezone
@@ -110,11 +110,11 @@ finally:
 | `departure_time` | `HHMMSS` | 이 시각 이후에 출발하는 열차를 조회합니다. 기본값은 `"000000"`입니다. |
 | `passengers` | 정수 | 어른 인원입니다. 어린이·경로 등은 `child_passengers`, `senior_passengers` 같은 필드로 따로 넣습니다. |
 
-결과는 [`TrainSearchResult`][korail_mobile_api.models.TrainSearchResult]입니다.
-`trains`에 열차가 [`TrainSummary`][korail_mobile_api.models.TrainSummary] 목록으로 들어 있습니다.
+결과는 [`TrainSearchResult`][korail_mobile_api.TrainSearchResult]입니다.
+`trains`에 열차가 [`TrainSummary`][korail_mobile_api.TrainSummary] 목록으로 들어 있습니다.
 조건에 맞는 열차가 없으면 예외 없이 `trains`가 비어 있을 수 있으므로 비었는지 확인하세요.
-서버가 결과 없음으로 실패를 알리면 [`KorailNoResultsError`][korail_mobile_api.errors.KorailNoResultsError]가 발생합니다.
-직통 열차가 없다는 결과 코드(`WRD000061`)에는 그 하위 클래스인 [`KorailNoDirectTrainError`][korail_mobile_api.errors.KorailNoDirectTrainError]가 발생합니다.
+서버가 결과 없음으로 실패를 알리면 [`KorailNoResultsError`][korail_mobile_api.KorailNoResultsError]가 발생합니다.
+직통 열차가 없다는 결과 코드(`WRD000061`)에는 그 하위 클래스인 [`KorailNoDirectTrainError`][korail_mobile_api.KorailNoDirectTrainError]가 발생합니다.
 이때 환승 조회로 이어 가려면 [`search_trains_with_transfer_fallback`](api/trains.md#search_trains_with_transfer_fallback)을 사용하세요.
 
 ### 다음 페이지
@@ -166,14 +166,14 @@ finally:
         client.close()
 ```
 
-로그인 ID는 회원번호, 전화번호(하이픈 없이), 이메일 중 하나입니다. 하이픈이 들어간 전화번호처럼 숫자만도 이메일도 아닌 값은 요청을 보내기 전에 거절하며, 이때 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
+로그인 ID는 회원번호, 전화번호(하이픈 없이), 이메일 중 하나입니다. 하이픈이 들어간 전화번호처럼 숫자만도 이메일도 아닌 값은 요청을 보내기 전에 거절하며, 이때 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
 
-로그인에 실패하면 [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError]가 발생합니다.
+로그인에 실패하면 [`KorailAuthError`][korail_mobile_api.KorailAuthError]가 발생합니다.
 예외의 `code`에 서버가 돌려준 결과 코드가 들어 있습니다. 비밀번호를 여러 번 틀리면 계정이 잠길 수 있으니 반복해서 재시도하지 마세요.
-서비스 이용 불가 응답이나 앱 업데이트 요구 응답(`SUPDATE`, 2.6.2부터 `-8204` 포함)에는 `KorailAuthError` 대신 [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError]나 [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError]가 발생합니다.
+서비스 이용 불가 응답이나 앱 업데이트 요구 응답(`SUPDATE`, 2.6.2부터 `-8204` 포함)에는 `KorailAuthError` 대신 [`KorailServiceUnavailableError`][korail_mobile_api.KorailServiceUnavailableError]나 [`KorailAppUpdateRequiredError`][korail_mobile_api.KorailAppUpdateRequiredError]가 발생합니다.
 이런 응답은 로그인 요청을 보내기 전에 서비스 상태를 확인하는 단계에서 올 수도 있습니다.
 
-휴면 계정 해제나 비밀번호 변경처럼 웹 화면에서 처리해야 하는 경우에는 [`KorailAuthContinuationRequired`][korail_mobile_api.errors.KorailAuthContinuationRequired]가 발생합니다.
+휴면 계정 해제나 비밀번호 변경처럼 웹 화면에서 처리해야 하는 경우에는 [`KorailAuthContinuationRequired`][korail_mobile_api.KorailAuthContinuationRequired]가 발생합니다.
 이 예외의 `redirect_url`에 서버가 알려 준 주소가 들어 있습니다. 라이브러리는 이 단계를 자동으로 진행하지 않습니다.
 `KorailAuthContinuationRequired`는 `KorailAuthError`의 하위 클래스이므로, 따로 처리하려면 `KorailAuthError`보다 먼저 잡으세요.
 
@@ -193,7 +193,7 @@ finally:
 
 ## 세션 만료
 
-로그인 후 시간이 지나 서버 세션이 끝나면, 다음 요청에서 [`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError]가 발생합니다.
+로그인 후 시간이 지나 서버 세션이 끝나면, 다음 요청에서 [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError]가 발생합니다.
 이때 라이브러리는 로컬 세션을 비우므로 다시 `login()`을 호출하면 됩니다.
 
 ## 다음 단계

@@ -1,13 +1,13 @@
 # 설정
 
-이 가이드는 [`KorailConfig`][korail_mobile_api.config.KorailConfig]로 클라이언트의 동작을 바꾸는 방법을 설명합니다.
+이 가이드는 [`KorailConfig`][korail_mobile_api.KorailConfig]로 클라이언트의 동작을 바꾸는 방법을 설명합니다.
 설정 필드 전체, DynaPath 토큰, 대기열(NetFunnel), 언어 필드, 프록시, 환경변수로 설정을 만드는 방법을 차례로 다룹니다.
 설정을 넘기지 않으면 코레일+ 앱 7.0.8에서 확인한 기본 요청값(`AppVersion=7.0.8`, API `Version=250601003`)을 씁니다.
 2026-10-23 현재 기본값 요청이 서버에서 `-8204`로 거절된다는 보고가 있으니 먼저 [요청 버전](#request-version)을 확인하세요.
 
 ## 설정 적용
 
-`KorailConfig`는 바꿀 수 없는(frozen) dataclass입니다. 바꿀 필드만 키워드 인자로 넘겨 만들고, [`KorailClient`][korail_mobile_api.client.KorailClient]의 첫 번째 인자로 넘깁니다.
+`KorailConfig`는 바꿀 수 없는(frozen) dataclass입니다. 바꿀 필드만 키워드 인자로 넘겨 만들고, [`KorailClient`][korail_mobile_api.KorailClient]의 첫 번째 인자로 넘깁니다.
 설정은 클라이언트를 만들 때 적용됩니다. 설정을 바꾸려면 새 설정으로 새 클라이언트를 만드세요.
 
 ```python
@@ -43,7 +43,7 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 | `key` | `str` | `"korail1234567890"` | 공통 필드 `Key`의 값입니다. |
 | `timeout` | `float` | `60.0` | API 요청의 제한 시간(초)입니다. 0보다 큰 유한한 수여야 하며, `None`이면 httpx 제한 시간 없이 보냅니다. |
 | `user_agent` | `str` | `"korailtalk"` | API 요청의 `User-Agent` 헤더입니다. |
-| `dynapath` | [`DynapathConfig`][korail_mobile_api.dynapath.DynapathConfig] | SDK 2.0.1 `2!` 진단 | DynaPath 토큰 설정입니다. [DynaPath](#dynapath)를 참고하세요. |
+| `dynapath` | [`DynapathConfig`][korail_mobile_api.DynapathConfig] | SDK 2.0.1 `2!` 진단 | DynaPath 토큰 설정입니다. [DynaPath](#dynapath)를 참고하세요. |
 | `device_width` | `int` | `1440` | 공통 코드 조회(로그인 포함)의 `deviceWidth` 값입니다. |
 | `device_height` | `int` | `3120` | 공통 코드 조회(로그인 포함)의 `deviceHeight` 값입니다. |
 | `android_sdk_int` | `int` | `37` | 공통 코드 조회(로그인 포함)의 `OSVersion` 값입니다. |
@@ -86,12 +86,12 @@ finally:
 ```
 
 [`build_config_from_env`](#from-env)를 쓴다면 `KORAIL_APP_VERSION`·`KORAIL_API_VERSION` 환경변수로 같은 값을 넣을 수 있습니다(2.6.2부터).
-서버가 `-8204`로 응답하면 2.6.2부터 [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError]가 발생하며 서버 메시지는 그대로 남습니다.
+서버가 `-8204`로 응답하면 2.6.2부터 [`KorailAppUpdateRequiredError`][korail_mobile_api.KorailAppUpdateRequiredError]가 발생하며 서버 메시지는 그대로 남습니다.
 [정적 검토 범위와 미확정 항목](../verification-7010.md)도 참고하세요.
 
 ### 기기값 프로파일
 
-실제 기기값을 코드에서 관리한다면 [`KorailDeviceProfile`][korail_mobile_api.device.KorailDeviceProfile]과 [`build_config_from_profile`][korail_mobile_api.device.build_config_from_profile]을 사용할 수 있습니다. 이 함수는 DynaPath 식별자·모델·OS, 대기열의 Dalvik `User-Agent`, SDK·화면 크기를 같은 프로파일에서 설정합니다. API `User-Agent`는 관측된 `korailtalk`로 둡니다. 기존 설정의 나머지 값은 `base=`로 유지할 수 있지만, 사용자 정의 DynaPath 토큰 공급자나 DynaPath 비활성화 설정은 덮어쓰지 않고 거절합니다. [간편 API 예제](convenience.md#한-기기의-값-사용하기)를 참고하세요.
+실제 기기값을 코드에서 관리한다면 [`KorailDeviceProfile`][korail_mobile_api.KorailDeviceProfile]과 [`build_config_from_profile`][korail_mobile_api.build_config_from_profile]을 사용할 수 있습니다. 이 함수는 DynaPath 식별자·모델·OS, 대기열의 Dalvik `User-Agent`, SDK·화면 크기를 같은 프로파일에서 설정합니다. API `User-Agent`는 관측된 `korailtalk`로 둡니다. 기존 설정의 나머지 값은 `base=`로 유지할 수 있지만, 사용자 정의 DynaPath 토큰 공급자나 DynaPath 비활성화 설정은 덮어쓰지 않고 거절합니다. [간편 API 예제](convenience.md#한-기기의-값-사용하기)를 참고하세요.
 
 ## DynaPath {#dynapath}
 
@@ -104,7 +104,7 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 
 기본 토큰에 기기값을 합성하지 않습니다. [확인 근거와 실서버 관측 범위](../verification-7010.md#diagnostic-20261023)를 참고하세요.
 
-토큰을 붙이는 경로는 [`DynapathConfig`][korail_mobile_api.dynapath.DynapathConfig]의 `allowlist_paths`이며, 기본값은 다음 여섯 경로입니다.
+토큰을 붙이는 경로는 [`DynapathConfig`][korail_mobile_api.DynapathConfig]의 `allowlist_paths`이며, 기본값은 다음 여섯 경로입니다.
 앱이 토큰을 붙이는 경로 목록과 같은지는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 2.6.2부터 응답의 DynaPath 차단 판정도 내장 목록이 아니라 설정의 `allowlist_paths`(직접 지정한 목록 포함)를 따릅니다.
 
@@ -129,8 +129,8 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 | `DynapathConfig` 필드 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
 | `enabled` | `bool` | `False` | 토큰을 붙일지 여부입니다. `KorailConfig`에 직접 넘길 때는 `True`로 만듭니다. |
-| `token_settings` | [`DynapathTokenSettings`][korail_mobile_api.dynapath.DynapathTokenSettings] \| `None` | `None` | 라이브러리가 토큰을 만들 때 쓰는 기기값입니다. |
-| `token_provider` | [`DynapathTokenProvider`][korail_mobile_api.dynapath.DynapathTokenProvider] \| `None` | `None` | 토큰을 직접 만들어 주는 함수입니다. |
+| `token_settings` | [`DynapathTokenSettings`][korail_mobile_api.DynapathTokenSettings] \| `None` | `None` | 라이브러리가 토큰을 만들 때 쓰는 기기값입니다. |
+| `token_provider` | [`DynapathTokenProvider`][korail_mobile_api.DynapathTokenProvider] \| `None` | `None` | 토큰을 직접 만들어 주는 함수입니다. |
 | `timestamp_ms_provider` | `Callable[[], int]` \| `None` | `None` | `token_settings`로 토큰을 만들 때 쓰는 시각(밀리초) 공급 함수입니다. `None`이면 현재 시각입니다. |
 | `random_text_provider` | `Callable[[], str]` \| `None` | `None` | `token_settings`로 토큰을 만들 때 쓰는 무작위 문자열 공급 함수입니다. `None`이면 무작위로 만듭니다. |
 | `header_name` | `str` | `"x-dynapath-m-token"` | 토큰 헤더 이름입니다. |
@@ -138,7 +138,7 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 | `device_name` | `str` | `"SM-S948N"` | `token_provider`에 넘기는 기기 이름입니다. |
 | `os_version` | `str` | `"17"` | `token_provider`에 넘기는 안드로이드 버전입니다. |
 
-명시적으로 v1을 사용할 때의 [`DynapathTokenSettings`][korail_mobile_api.dynapath.DynapathTokenSettings]는 다섯 값을 반드시 받습니다. 비어 있거나 공백뿐이면 `ValueError`가 발생하며, `app_start_ts`는 정수로 읽을 수 있어야 합니다.
+명시적으로 v1을 사용할 때의 [`DynapathTokenSettings`][korail_mobile_api.DynapathTokenSettings]는 다섯 값을 반드시 받습니다. 비어 있거나 공백뿐이면 `ValueError`가 발생하며, `app_start_ts`는 정수로 읽을 수 있어야 합니다.
 나머지 필드에는 라이브러리 기본값이 있으며, 바꾸면 앱과 다른 토큰이 됩니다.
 
 | 필드 | 뜻 |
@@ -149,8 +149,8 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 | `os_version` | 안드로이드 버전입니다. 예: `"17"` |
 | `device_model` | 기기 모델명입니다. 예: `"SM-S948N"` |
 
-`token_provider`는 토큰을 붙이는 경로의 요청마다 [`DynapathRequestContext`][korail_mobile_api.dynapath.DynapathRequestContext](`method`, `path`, `url`, `device`, `version`, `key`, `user_agent`, `device_name`, `os_version`)를 받아 토큰 문자열을 돌려주는 함수입니다.
-`None`을 돌려주면 헤더를 붙이지 않습니다. 함수가 예외를 발생시키면 요청을 보내지 않고 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
+`token_provider`는 토큰을 붙이는 경로의 요청마다 [`DynapathRequestContext`][korail_mobile_api.DynapathRequestContext](`method`, `path`, `url`, `device`, `version`, `key`, `user_agent`, `device_name`, `os_version`)를 받아 토큰 문자열을 돌려주는 함수입니다.
+`None`을 돌려주면 헤더를 붙이지 않습니다. 함수가 예외를 발생시키면 요청을 보내지 않고 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
 2.6.2부터 문자열이 아니거나 ASCII가 아닌 값을 돌려줘도 요청을 보내지 않고 `KorailProtocolError`를 발생시킵니다.
 
 ### 끄기
@@ -175,7 +175,7 @@ config = dataclasses.replace(build_config_from_env(), disable_dynapath=True, dyn
 ```
 
 !!! warning "DynaPath를 끄면 로그인할 수 없습니다"
-    DynaPath를 끄면 [`login`](../api/session.md#login)은 서비스 상태 확인과 공통 코드 조회까지 보낸 뒤, 로그인 요청을 보내기 전에 [`KorailDynaPathRequiredError`][korail_mobile_api.errors.KorailDynaPathRequiredError]를 발생시킵니다.
+    DynaPath를 끄면 [`login`](../api/session.md#login)은 서비스 상태 확인과 공통 코드 조회까지 보낸 뒤, 로그인 요청을 보내기 전에 [`KorailDynaPathRequiredError`][korail_mobile_api.KorailDynaPathRequiredError]를 발생시킵니다.
     따라서 로그인이 필요한 메서드는 모두 쓸 수 없습니다. 라이브러리가 요청 전에 거절하는 경로는 로그인뿐이지만, 열차 조회처럼 토큰을 붙이던 다른 경로도 서버에서 거절될 수 있습니다.
 
 ## 대기열(NetFunnel) {#netfunnel}
@@ -188,11 +188,11 @@ config = dataclasses.replace(build_config_from_env(), disable_dynapath=True, dyn
 | `inquiry` | [`search_trains`](../api/trains.md#search_trains), [`search_transfer_trains`](../api/trains.md#search_transfer_trains), [`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback), [`get_seat_assignment_schedule`](../api/trains.md#get_seat_assignment_schedule) | 경고 로그를 남기고 대기열 없이 요청을 보냅니다. |
 | `peak_season_inquiry` | 위 네 메서드에 `peak_season=True`를 넘겼을 때 | 같음 |
 | `product_inquiry` | 열차 조회 세 메서드에 `use_special_schedule=True`를 넘겼을 때(`peak_season`보다 우선) | 같음 |
-| `reserve` | [`reserve`](../api/reservations.md#reserve), [`reserve_transfer`](../api/reservations.md#reserve_transfer), [`reserve_with_discount_card`](../api/passes.md#reserve_with_discount_card) | 요청을 보내지 않고 [`KorailNetFunnelError`][korail_mobile_api.errors.KorailNetFunnelError]를 발생시킵니다. |
+| `reserve` | [`reserve`](../api/reservations.md#reserve), [`reserve_transfer`](../api/reservations.md#reserve_transfer), [`reserve_with_discount_card`](../api/passes.md#reserve_with_discount_card) | 요청을 보내지 않고 [`KorailNetFunnelError`][korail_mobile_api.KorailNetFunnelError]를 발생시킵니다. |
 | `pay` | [`pay_with_card`](../api/payments.md#pay_with_card) | 같음 |
 | `reservation_view` | [`get_reservation_history`](../api/reservations.md#get_reservation_history) | 같음 |
 
-- 대기열 서버가 요청을 차단하면(`301`, `302`) 모든 관문에서 [`KorailQueueRejectedError`][korail_mobile_api.errors.KorailQueueRejectedError]가 발생합니다.
+- 대기열 서버가 요청을 차단하면(`301`, `302`) 모든 관문에서 [`KorailQueueRejectedError`][korail_mobile_api.KorailQueueRejectedError]가 발생합니다.
 - 대기열 서버가 기다리라고(`201`, `202`) 답하면서 입장 키를 주지 않으면 모든 관문에서 요청을 보내지 않고 `KorailNetFunnelError`를 발생시킵니다.
 - `reserve`, `pay`, `reservation_view` 관문은 대기열 서버가 최종적으로 통과(`200`)로 답하지 않으면 요청을 보내지 않고 `KorailNetFunnelError`를 발생시킵니다.
 - 대기열 요청이 실패하면 관문을 통과하는 동안 한 번만 다시 보냅니다. 다시 보내기 전에는 실패한 요청의 제한 시간(`netfunnel_timeout`)이 다 찰 때까지 기다립니다.
@@ -272,7 +272,7 @@ finally:
 - SOCKS에 필요한 패키지 없이 `socks5`·`socks5h`를 쓰면 클라이언트를 만들 때 `ImportError`가 발생합니다.
 - `https` 프록시는 httpx 0.25.0 이상, `socks5h`는 httpx 0.28.0 이상이 필요합니다. 그보다 낮은 httpx에서는 클라이언트를 만들 때 `ValueError`가 발생합니다.
 - HTTPS 요청은 프록시를 거쳐도 KORAIL 서버와 직접 암호화됩니다. 프록시는 요청 내용을 볼 수 없지만 어느 서버에 언제 접속하는지는 볼 수 있으니, 직접 관리하는 신뢰할 수 있는 프록시만 쓰세요.
-- 프록시에 연결하지 못하면 API 요청은 [`KorailTransportError`][korail_mobile_api.errors.KorailTransportError]로 끝나고, 대기열 요청은 [관문별 규칙](#netfunnel)을 따릅니다.
+- 프록시에 연결하지 못하면 API 요청은 [`KorailTransportError`][korail_mobile_api.KorailTransportError]로 끝나고, 대기열 요청은 [관문별 규칙](#netfunnel)을 따릅니다.
 
 `proxy=None`(기본값)이면 httpx 기본 동작대로 `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` 같은 환경변수를 따릅니다. 이 환경변수는 같은 프로세스의 다른 httpx 요청에도 적용됩니다.
 `proxy`를 지정하면 이 환경변수들은 무시합니다. `KorailClient`의 `transport`로 전송 계층을 직접 넘기면 환경변수 프록시를 쓰지 않으며, `proxy`와 함께 넘기면 `ValueError`가 발생합니다.
@@ -284,7 +284,7 @@ finally:
 
 ## 환경변수 설정 {#from-env}
 
-[`build_config_from_env`][korail_mobile_api.live.build_config_from_env]는 환경변수에서 실제 기기의 값을 읽어 `KorailConfig`를 만듭니다.
+[`build_config_from_env`][korail_mobile_api.build_config_from_env]는 환경변수에서 실제 기기의 값을 읽어 `KorailConfig`를 만듭니다.
 제공한 기기값을 진단 토큰의 `os`·`dm`·`iid`와 대기열 `User-Agent`에 연결합니다.
 v1 전용 `KORAIL_DYNAPATH_AS_VALUE`는 더 이상 읽지 않습니다. 계정 ID, 비밀번호, 카드 정보 같은 자격 증명은 읽거나 저장하지 않습니다.
 

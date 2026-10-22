@@ -41,25 +41,25 @@ KorailClient.pay_with_card(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `hold` | [`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse] | 필수 | 결제할 홀드입니다. 성공한 홀드여야 하며 `pnr_no`, `window_no`, 숫자로 된 `received_amount`가 있어야 합니다. |
-| `card` | [`CardPayment`][korail_mobile_api.mutation_models.CardPayment] | 필수 | 결제할 카드 정보입니다. |
+| `hold` | [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse] | 필수 | 결제할 홀드입니다. 성공한 홀드여야 하며 `pnr_no`, `window_no`, 숫자로 된 `received_amount`가 있어야 합니다. |
+| `card` | [`CardPayment`][korail_mobile_api.CardPayment] | 필수 | 결제할 카드 정보입니다. |
 
 **반환값**
 
-[`ReservationPaymentResponse`][korail_mobile_api.mutation_models.ReservationPaymentResponse] — 결제 결과입니다.
-발권된 승차권은 `tickets`([`ReservationPaymentTicket`][korail_mobile_api.mutation_models.ReservationPaymentTicket]), 정산 내역은 `settlements`([`ReservationPaymentSettlement`][korail_mobile_api.mutation_models.ReservationPaymentSettlement])에 들어 있습니다.
+[`ReservationPaymentResponse`][korail_mobile_api.ReservationPaymentResponse] — 결제 결과입니다.
+발권된 승차권은 `tickets`([`ReservationPaymentTicket`][korail_mobile_api.ReservationPaymentTicket]), 정산 내역은 `settlements`([`ReservationPaymentSettlement`][korail_mobile_api.ReservationPaymentSettlement])에 들어 있습니다.
 결제 응답에는 PNR이 없으므로 PNR은 `hold.pnr_no`를 씁니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `card`가 [`CardPayment`][korail_mobile_api.mutation_models.CardPayment]가 아닐 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 예약대기 홀드(`hold.payable`이 `False`)일 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 홀드의 `str_result`가 `"SUCC"`가 아니거나, `pnr_no`·`window_no`가 비었거나, `received_amount`가 숫자가 아닐 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `received_amount`가 0일 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 카드 번호가 숫자 13~16자리가 아닐 때, 할부 개월 수가 숫자 1~2자리가 아닐 때, 유효기간이 `YYMM` 숫자 4자리가 아니거나 월이 01~12를 벗어나거나 이미 지났을 때, 비밀번호가 숫자 2자리가 아닐 때, `birthday`가 숫자 6자리(`card_type="J"`) 또는 10자리(`card_type="S"`)가 아닐 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `card`가 [`CardPayment`][korail_mobile_api.CardPayment]가 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 예약대기 홀드(`hold.payable`이 `False`)일 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 홀드의 `str_result`가 `"SUCC"`가 아니거나, `pnr_no`·`window_no`가 비었거나, `received_amount`가 숫자가 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `received_amount`가 0일 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 카드 번호가 숫자 13~16자리가 아닐 때, 할부 개월 수가 숫자 1~2자리가 아닐 때, 유효기간이 `YYMM` 숫자 4자리가 아니거나 월이 01~12를 벗어나거나 이미 지났을 때, 비밀번호가 숫자 2자리가 아닐 때, `birthday`가 숫자 6자리(`card_type="J"`) 또는 10자리(`card_type="S"`)가 아닐 때 |
 
 **정보**
 
@@ -102,7 +102,7 @@ KorailClient.recalculate_price(
 ```
 
 PNR과 승객별 할인 행을 보내고, 서버가 다시 계산한 홀드를 반환합니다. 결제는 이 반환값으로 합니다.
-요청은 보통 [`PriceRecalculationRequest`][korail_mobile_api.mutation_models.PriceRecalculationRequest]의 `for_hold()`로 만듭니다.
+요청은 보통 [`PriceRecalculationRequest`][korail_mobile_api.PriceRecalculationRequest]의 `for_hold()`로 만듭니다.
 `for_hold()`는 홀드의 첫 여정 좌석마다 한 행을 만들고, 좌석의 승객 유형·객실·현재 할인 코드·증빙 번호를 복사합니다.
 요청할 할인 코드는 좌석 수와 같은 개수로 넘겨야 합니다. 2.6.2부터 `for_hold()`는 `payable=False`인 예약대기 홀드를 `KorailProtocolError`로 거절합니다.
 7.0.8에서는 실제 미결제 홀드로 요청했지만 할인 코드 `000`은 `WZZ000001`, 변경 없는 요청은 `ERR930202`로 거절됐습니다. 이 버전의 정상 재계산은 아직 확인하지 못했습니다.
@@ -117,24 +117,24 @@ PNR과 승객별 할인 행을 보내고, 서버가 다시 계산한 홀드를 �
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`PriceRecalculationRequest`][korail_mobile_api.mutation_models.PriceRecalculationRequest] | 필수 | 재계산할 PNR과 승객별 할인 행([`PriceRecalculationRow`][korail_mobile_api.mutation_models.PriceRecalculationRow])입니다. 행은 1~9개입니다. |
+| `request` | [`PriceRecalculationRequest`][korail_mobile_api.PriceRecalculationRequest] | 필수 | 재계산할 PNR과 승객별 할인 행([`PriceRecalculationRow`][korail_mobile_api.PriceRecalculationRow])입니다. 행은 1~9개입니다. |
 | `add_to_cart` | `bool` | `False` | `True`이면 재계산이 성공한 뒤 같은 PNR을 장바구니에 추가합니다. |
 
 **반환값**
 
-[`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse] — 재계산된 홀드입니다. 바뀐 결제 금액은 `received_amount`에 들어 있습니다.
-`add_to_cart=True`이면 `cart_addition`에 장바구니 추가 결과([`CartAddResponse`][korail_mobile_api.mutation_models.CartAddResponse])가 들어 있고, 아니면 `None`입니다.
+[`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse] — 재계산된 홀드입니다. 바뀐 결제 금액은 `received_amount`에 들어 있습니다.
+`add_to_cart=True`이면 `cart_addition`에 장바구니 추가 결과([`CartAddResponse`][korail_mobile_api.CartAddResponse])가 들어 있고, 아니면 `None`입니다.
 2.6.2부터 장바구니 단계가 라이브러리 예외로 끝나면 `cart_addition`은 `None`이고 `cart_addition_error`에 그 예외가 들어 있습니다. 그 밖에는 `cart_addition_error`가 `None`입니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `add_to_cart`가 `bool`이 아닐 때. 로그인 여부보다 먼저 검사합니다. |
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `request`가 [`PriceRecalculationRequest`][korail_mobile_api.mutation_models.PriceRecalculationRequest]가 아니거나, `pnr_no`가 비었거나, 행이 없거나 9개를 넘을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 행이 [`PriceRecalculationRow`][korail_mobile_api.mutation_models.PriceRecalculationRow]가 아니거나, 행의 필드가 문자열이 아니거나, `passenger_type_code`·`room_class_code`·`discount_kind_code`가 비었을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `non_member_no`, `cabin_class_code`, `seat_attribute_code_2`, `seat_attribute_code_4`, `seat_attribute_code_5`가 `None`이 아니면서 비어 있거나 문자열이 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `add_to_cart`가 `bool`이 아닐 때. 로그인 여부보다 먼저 검사합니다. |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `request`가 [`PriceRecalculationRequest`][korail_mobile_api.PriceRecalculationRequest]가 아니거나, `pnr_no`가 비었거나, 행이 없거나 9개를 넘을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 행이 [`PriceRecalculationRow`][korail_mobile_api.PriceRecalculationRow]가 아니거나, 행의 필드가 문자열이 아니거나, `passenger_type_code`·`room_class_code`·`discount_kind_code`가 비었을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `non_member_no`, `cabin_class_code`, `seat_attribute_code_2`, `seat_attribute_code_4`, `seat_attribute_code_5`가 `None`이 아니면서 비어 있거나 문자열이 아닐 때 |
 
 **정보**
 
@@ -170,7 +170,7 @@ KorailClient.get_refund_ticket_detail(
 ) -> RefundTicketDetailResponse
 ```
 
-환불하기 전에 승차권 내용을 확인하고, 환불 입력인 [`PaidTicket`][korail_mobile_api.mutation_models.PaidTicket]을 만드는 데 씁니다.
+환불하기 전에 승차권 내용을 확인하고, 환불 입력인 [`PaidTicket`][korail_mobile_api.PaidTicket]을 만드는 데 씁니다.
 반환값을 `PaidTicket.from_refund_detail()`에 넘기면 [`refund`](#refund)에 필요한 식별자를 앱과 같은 방식으로 채웁니다.
 
 `ticket`은 [`get_ticket_list`](account.md#get_ticket_list)의 승차권에서 만듭니다. `sale_date`에는 승차권의 `return_sale_date`를 넣습니다.
@@ -180,24 +180,24 @@ KorailClient.get_refund_ticket_detail(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `ticket` | [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference] | 필수 | 승차권의 반환 식별자입니다. 네 필드 모두 비어 있지 않아야 합니다. |
+| `ticket` | [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference] | 필수 | 승차권의 반환 식별자입니다. 네 필드 모두 비어 있지 않아야 합니다. |
 | `from_purchase_history` | `bool` | `False` | 구매 이력에서 조회하는 승차권이면 `True`입니다. `True`이면 `"Y"`, `False`이면 `"N"`을 보냅니다. 앱이 이 필드에 쓰는 값은 공개돼 있지 않아 확인하지 못했습니다. |
 | `txt_index` | `str \| None` | `None` | `txtIndex` 필드로 보낼 값입니다. `None`이면 보내지 않습니다. |
 
 **반환값**
 
-[`RefundTicketDetailResponse`][korail_mobile_api.read_models.RefundTicketDetailResponse] — 승차권 상세입니다.
+[`RefundTicketDetailResponse`][korail_mobile_api.RefundTicketDetailResponse] — 승차권 상세입니다.
 `pnr_no`, 현재 `sale_date`, `original_window_no`, `original_sale_date`, `original_sale_sequence`, `original_return_password`가 환불 입력·조회 대상 연결에 쓰입니다.
 `PaidTicket.from_refund_detail()`은 `original_sale_date`를 `return_sale_date`에, 동반자 이름·생년월일을
 `companion_name`·`companion_certificate_no`에 복사하고 현재 `sale_date`는 별도로 유지합니다.
-여정은 `journeys`([`RefundTicketJourney`][korail_mobile_api.read_models.RefundTicketJourney]), 좌석은 각 여정의 `seats`([`RefundTicketSeat`][korail_mobile_api.read_models.RefundTicketSeat])에 들어 있습니다.
+여정은 `journeys`([`RefundTicketJourney`][korail_mobile_api.RefundTicketJourney]), 좌석은 각 여정의 `seats`([`RefundTicketSeat`][korail_mobile_api.RefundTicketSeat])에 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `ticket`이 [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference]가 아니거나, `from_purchase_history`가 `bool`이 아니거나, `txt_index`가 문자열이 아니거나 비어 있을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`이 [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]가 아니거나, `from_purchase_history`가 `bool`이 아니거나, `txt_index`가 문자열이 아니거나 비어 있을 때 |
 
 **정보**
 
@@ -240,19 +240,19 @@ KorailClient.get_refund_commission(
 기존 시그니처는 유지하며 조회 시그니처에 별도 필수 인자는 추가하지 않습니다.
 
 응답의 `proceed_possible_flag`는 라이브러리가 검사하지 않습니다. 앱이 비교하는 값이 공개돼 있지 않아 확인하지 못했습니다.
-이미 환불한 승차권(결과 코드 `WRT200399`)이나 승차일이 지난 승차권(`WRT200022`)은 서버가 실패로 응답하므로 [`KorailAppError`][korail_mobile_api.errors.KorailAppError]가 발생합니다.
+이미 환불한 승차권(결과 코드 `WRT200399`)이나 승차일이 지난 승차권(`WRT200022`)은 서버가 실패로 응답하므로 [`KorailAppError`][korail_mobile_api.KorailAppError]가 발생합니다.
 7.0.8에서는 과거 승차권의 `WRT200022`까지만 확인했습니다. 실제 환불액·수수료의 정상 응답은 7.0.6 시기 기록입니다.
 
 **매개변수**
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `ticket` | [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference] | 필수 | 수수료를 조회할 승차권의 반환 식별자입니다. |
-| `companion` | [`RefundCompanion`][korail_mobile_api.read_payloads.RefundCompanion] | `RefundCompanion()` | 동반자 이름(`name`)과 생년월일(`certificate_no`)입니다. 기본값은 두 값이 모두 빈 문자열이며, 빈 값은 요청에 싣지 않습니다. |
+| `ticket` | [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference] | 필수 | 수수료를 조회할 승차권의 반환 식별자입니다. |
+| `companion` | [`RefundCompanion`][korail_mobile_api.RefundCompanion] | `RefundCompanion()` | 동반자 이름(`name`)과 생년월일(`certificate_no`)입니다. 기본값은 두 값이 모두 빈 문자열이며, 빈 값은 요청에 싣지 않습니다. |
 
 **반환값**
 
-[`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse] — 예상 환불액(`refund_amount`), 수수료(`refund_fee`), 사용 가능 마일리지(`usable_mileage`)를 담습니다.
+[`RefundCommissionResponse`][korail_mobile_api.RefundCommissionResponse] — 예상 환불액(`refund_amount`), 수수료(`refund_fee`), 사용 가능 마일리지(`usable_mileage`)를 담습니다.
 `ticket_return_times_division_code`는 [`refund`](#refund)가 요청에 되돌려 싣는 값입니다.
 반환 시 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호를 비공개 조회 문맥으로 연결합니다.
 이 문맥은 `repr`에서 숨기며 파일에 저장하지 않습니다. 직접 생성·직접 파싱한 응답에는 이 연결이 없으므로
@@ -262,8 +262,8 @@ KorailClient.get_refund_commission(
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `ticket`이 [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference]가 아니거나 `companion`이 [`RefundCompanion`][korail_mobile_api.read_payloads.RefundCompanion]이 아닐 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`이 [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]가 아니거나 `companion`이 [`RefundCompanion`][korail_mobile_api.RefundCompanion]이 아닐 때 |
 
 **정보**
 
@@ -301,7 +301,7 @@ KorailClient.refund(
 
 PNR 전체가 아니라 `ticket`이 가리키는 승차권 한 장만 환불하며, 수수료가 빠질 수 있습니다.
 한 PNR에 승차권이 여러 장이면 장마다 상세 조회, 수수료 조회, 환불을 따로 합니다.
-`commission`은 필수 키워드 인자이며 [`get_refund_commission`](#get_refund_commission)의 성공 응답이어야 합니다. `None`을 포함해 [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse]가 아닌 값이나 실패 응답을 넘기면 요청 전에 거절합니다.
+`commission`은 필수 키워드 인자이며 [`get_refund_commission`](#get_refund_commission)의 성공 응답이어야 합니다. `None`을 포함해 [`RefundCommissionResponse`][korail_mobile_api.RefundCommissionResponse]가 아닌 값이나 실패 응답을 넘기면 요청 전에 거절합니다.
 2.6.0부터 환불은 **fail-closed**입니다. 실제 조회 반환값의 비공개 문맥과 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호가 모두 일치해야 합니다.
 직접 생성·직접 파싱한 수수료 응답, 다른 표의 응답, 원표 반환일이 없는 입력은 요청 전에 거절합니다.
 라이브러리는 수수료를 대신 조회하지 않고, 요청을 다시 보내지도 않습니다.
@@ -320,16 +320,16 @@ PNR 전체가 아니라 `ticket`이 가리키는 승차권 한 장만 환불하�
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `ticket` | [`PaidTicket`][korail_mobile_api.mutation_models.PaidTicket] | 필수 | 환불할 승차권 한 장입니다. `pnr_no`, 현재 `sale_date`, `sale_window_no`, 원표 `return_sale_date`, `sale_sequence`, `return_password`가 비어 있지 않아야 하며 동반자 정보도 수수료 조회와 같아야 합니다. |
+| `ticket` | [`PaidTicket`][korail_mobile_api.PaidTicket] | 필수 | 환불할 승차권 한 장입니다. `pnr_no`, 현재 `sale_date`, `sale_window_no`, 원표 `return_sale_date`, `sale_sequence`, `return_password`가 비어 있지 않아야 하며 동반자 정보도 수수료 조회와 같아야 합니다. |
 | `settle_mileage` | `bool` | `False` | 수수료를 마일리지로 정산할지 여부입니다. |
 | `pbp_acceptance_target_flag` | `str \| None` | `None` | 대리수령 대상 플래그입니다. `None`이면 `ticket.pbp_acceptance_target_flag`를 씁니다. 승차권 상세 응답에는 이 값이 보통 없으므로 `from_refund_detail()`로 만든 `ticket`에서는 `None`일 수 있으며, 그러면 이 필드를 보내지 않습니다. 앱처럼 보내려면 [`get_ticket_list`](account.md#get_ticket_list) 승차권의 `pbp_acceptance_target_flag`를 넘기세요. |
-| `commission` | [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse] | 필수 | 같은 원표·동반자로 실제 [`get_refund_commission`](#get_refund_commission)이 반환한 성공 응답입니다. |
+| `commission` | [`RefundCommissionResponse`][korail_mobile_api.RefundCommissionResponse] | 필수 | 같은 원표·동반자로 실제 [`get_refund_commission`](#get_refund_commission)이 반환한 성공 응답입니다. |
 | `latitude` | `str \| None` | `None` | 위도입니다. `None`이면 보내지 않습니다. |
 | `longitude` | `str \| None` | `None` | 경도입니다. `None`이면 보내지 않습니다. |
 
 **반환값**
 
-[`RefundTicketResponse`][korail_mobile_api.mutation_models.RefundTicketResponse] — 환불 결과입니다.
+[`RefundTicketResponse`][korail_mobile_api.RefundTicketResponse] — 환불 결과입니다.
 `settlement_method_codes`에 정산수단 코드가, `settlement_list_is_null`에 서버가 정산 목록을 `null`로 보냈는지가 들어 있습니다.
 서버가 실패로 응답하면 반환하지 않고 예외가 발생합니다.
 
@@ -337,13 +337,13 @@ PNR 전체가 아니라 `ticket`이 가리키는 승차권 한 장만 환불하�
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `commission`이 [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse]가 아닐 때. `None`도 거절합니다. |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `ticket`의 `pnr_no`, `sale_date`, `sale_window_no`, `sale_sequence`, `return_password` 중 비었거나 문자열이 아닌 값이 있을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `settle_mileage`가 `bool`이 아니거나, 대리수령 대상 플래그가 문자열도 `None`도 아닐 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `commission.str_result`가 `"SUCC"`가 아닐 때. 예외의 `raw`에 `commission.raw`가 들어 있습니다. |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 수수료 응답의 비공개 조회 문맥이 없거나 원표·동반자 정보가 다르거나 `ticket.return_sale_date`가 없을 때. 직접 생성·직접 파싱한 수수료 응답도 거절합니다. |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `settle_mileage=True`인데 사용 가능 마일리지가 수수료보다 적을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `commission`이 [`RefundCommissionResponse`][korail_mobile_api.RefundCommissionResponse]가 아닐 때. `None`도 거절합니다. |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`의 `pnr_no`, `sale_date`, `sale_window_no`, `sale_sequence`, `return_password` 중 비었거나 문자열이 아닌 값이 있을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `settle_mileage`가 `bool`이 아니거나, 대리수령 대상 플래그가 문자열도 `None`도 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `commission.str_result`가 `"SUCC"`가 아닐 때. 예외의 `raw`에 `commission.raw`가 들어 있습니다. |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 수수료 응답의 비공개 조회 문맥이 없거나 원표·동반자 정보가 다르거나 `ticket.return_sale_date`가 없을 때. 직접 생성·직접 파싱한 수수료 응답도 거절합니다. |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `settle_mileage=True`인데 사용 가능 마일리지가 수수료보다 적을 때 |
 
 **정보**
 
@@ -390,18 +390,18 @@ KorailClient.verify_station_ticket_refund(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`StationRefundVerificationRequest`][korail_mobile_api.mutation_models.StationRefundVerificationRequest] | 필수 | 고객 이름(`customer_name`)과 반환번호 네 칸(`return_no_1`~`return_no_4`)입니다. 모든 필드는 만들 때 비어 있지 않은지 검사합니다. |
+| `request` | [`StationRefundVerificationRequest`][korail_mobile_api.StationRefundVerificationRequest] | 필수 | 고객 이름(`customer_name`)과 반환번호 네 칸(`return_no_1`~`return_no_4`)입니다. 모든 필드는 만들 때 비어 있지 않은지 검사합니다. |
 
 **반환값**
 
-[`StationRefundVerificationResponse`][korail_mobile_api.mutation_models.StationRefundVerificationResponse] — 받은 금액(`received_amount`), 수수료(`refund_fee`), 환불액(`refund_amount`), 안내 문구(`popup_message`, `result_message`)를 담습니다.
-원표 목록은 `original_tickets`([`StationRefundOriginalTicket`][korail_mobile_api.mutation_models.StationRefundOriginalTicket])에 있고, 서버가 목록을 `null`로 보냈으면 `original_ticket_list_is_null`이 `True`입니다.
+[`StationRefundVerificationResponse`][korail_mobile_api.StationRefundVerificationResponse] — 받은 금액(`received_amount`), 수수료(`refund_fee`), 환불액(`refund_amount`), 안내 문구(`popup_message`, `result_message`)를 담습니다.
+원표 목록은 `original_tickets`([`StationRefundOriginalTicket`][korail_mobile_api.StationRefundOriginalTicket])에 있고, 서버가 목록을 `null`로 보냈으면 `original_ticket_list_is_null`이 `True`입니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
 
 **정보**
 
@@ -440,7 +440,7 @@ KorailClient.execute_station_ticket_refund(
 `request`는 `StationRefundExecutionRequest.from_verification()`으로 만듭니다. 실서버에서 확인하지 못한 메서드입니다.
 
 `from_verification()`은 확인 응답의 첫 원표와 확인된 환불액·수수료를 옮겨 담고, 연락처와 이름을 추가로 받습니다.
-확인 응답이 성공이 아니거나 원표가 없을 때, 옮겨 담을 값이나 연락처·이름 중 빈 값이 있을 때 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
+확인 응답이 성공이 아니거나 원표가 없을 때, 옮겨 담을 값이나 연락처·이름 중 빈 값이 있을 때 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
 
 환불과 접수 상태가 실제로 바뀔 수 있으므로 반환값의 결과와 반환 구분 코드를 확인하세요. 서버가 실패로 응답하면 예외가 발생합니다.
 
@@ -448,18 +448,18 @@ KorailClient.execute_station_ticket_refund(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`StationRefundExecutionRequest`][korail_mobile_api.mutation_models.StationRefundExecutionRequest] | 필수 | 환불 실행 입력입니다. 12개 필드 모두 만들 때 비어 있지 않은지 검사합니다. |
+| `request` | [`StationRefundExecutionRequest`][korail_mobile_api.StationRefundExecutionRequest] | 필수 | 환불 실행 입력입니다. 12개 필드 모두 만들 때 비어 있지 않은지 검사합니다. |
 
 **반환값**
 
-[`StationRefundExecutionResponse`][korail_mobile_api.mutation_models.StationRefundExecutionResponse] — 환불 요청 결과입니다. 반환 구분 코드는 `refund_division_code`에 들어 있습니다.
+[`StationRefundExecutionResponse`][korail_mobile_api.StationRefundExecutionResponse] — 환불 요청 결과입니다. 반환 구분 코드는 `refund_division_code`에 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `request`가 [`StationRefundExecutionRequest`][korail_mobile_api.mutation_models.StationRefundExecutionRequest]가 아닐 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `request`가 [`StationRefundExecutionRequest`][korail_mobile_api.StationRefundExecutionRequest]가 아닐 때 |
 
 **정보**
 

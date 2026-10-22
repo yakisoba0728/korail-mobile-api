@@ -37,7 +37,7 @@ KorailClient.login(
 
 성공 여부는 결과 코드(`IRZ000001` 또는 `S200`)와 세션 쿠키(`JSESSIONID`)로 판정합니다.
 성공하면 세션을 클라이언트에 보관하고 반환합니다. 실패하면 세션을 보관하지 않으며, 웹 단계가 필요한 경우를 빼면 쿠키도 비웁니다.
-휴면 계정 해제나 비밀번호 변경처럼 웹 화면에서 처리해야 하는 경우에는 [`KorailAuthContinuationRequired`][korail_mobile_api.errors.KorailAuthContinuationRequired]가 발생하며, 라이브러리는 그 웹 단계를 진행하지 않습니다.
+휴면 계정 해제나 비밀번호 변경처럼 웹 화면에서 처리해야 하는 경우에는 [`KorailAuthContinuationRequired`][korail_mobile_api.KorailAuthContinuationRequired]가 발생하며, 라이브러리는 그 웹 단계를 진행하지 않습니다.
 
 **매개변수**
 
@@ -45,28 +45,28 @@ KorailClient.login(
 |---|---|---|---|
 | `member_no` | `str` | 필수 | 로그인 ID입니다. 회원번호, 하이픈 없는 전화번호, 이메일 중 하나입니다. |
 | `password` | `str` | 필수 | 비밀번호입니다. 암호화해서 보냅니다. |
-| `input_flag` | [`KorailLoginInputFlag`][korail_mobile_api.constants.KorailLoginInputFlag] \| `None` | `None` | 로그인 ID의 종류입니다. `"2"`는 회원번호, `"4"`는 전화번호, `"5"`는 이메일입니다. `None`이면 `member_no`의 형식으로 정합니다. 값을 지정하면 ID 형식 검사를 하지 않습니다. |
+| `input_flag` | [`KorailLoginInputFlag`][korail_mobile_api.KorailLoginInputFlag] \| `None` | `None` | 로그인 ID의 종류입니다. `"2"`는 회원번호, `"4"`는 전화번호, `"5"`는 이메일입니다. `None`이면 `member_no`의 형식으로 정합니다. 값을 지정하면 ID 형식 검사를 하지 않습니다. |
 | `check_valid_pw` | `Literal['Y', 'N']` | `"Y"` | 로그인 요청의 `checkValidPw` 필드로 보내는 값입니다. |
 | `cust_id` | `str` \| `None` | `""` | 로그인 요청의 `custId` 필드입니다. 빈 문자열이나 `None`이면 보내지 않습니다. |
 | `etr_path` | `str` \| `None` | `""` | 로그인 요청의 `etrPath` 필드입니다. 빈 문자열이나 `None`이면 보내지 않습니다. |
 
 **반환값**
 
-[`KorailSession`][korail_mobile_api.models.KorailSession] — 로그인한 세션입니다. `jsessionid`(세션 쿠키 값), `member_no`(로그인에 쓴 ID), `member_card_no`, `customer_no`, `raw`(로그인 응답 원본)가 들어 있습니다. `member_card_no`와 `customer_no`는 응답에 없으면 `None`입니다.
+[`KorailSession`][korail_mobile_api.KorailSession] — 로그인한 세션입니다. `jsessionid`(세션 쿠키 값), `member_no`(로그인에 쓴 ID), `member_card_no`, `customer_no`, `raw`(로그인 응답 원본)가 들어 있습니다. `member_card_no`와 `customer_no`는 응답에 없으면 `None`입니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `input_flag`가 `None`이고 `member_no`가 숫자만으로 된 값도 이메일도 아닐 때(요청 전). `password`가 문자열이 아닐 때(2.6.2부터 요청 전에 검사, 이전에는 두 요청을 보낸 뒤 거절). 서버에서 받은 암호화 정보에 쓸 수 있는 AES 키가 없을 때(로그인 요청을 보내지 않음). |
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인 응답의 결과 코드가 성공 코드가 아닐 때. `code`에 결과 코드, `raw`에 응답 원본이 들어 있습니다. 성공 코드인데 `JSESSIONID` 쿠키가 없을 때도 발생합니다. |
-| [`KorailAuthContinuationRequired`][korail_mobile_api.errors.KorailAuthContinuationRequired] | 결과 코드가 `WRC000116` 또는 `WRC000420`일 때. `redirect_url`에 서버가 알려 준 주소가 들어 있습니다. |
-| [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError] | 로그인 응답의 결과 코드가 `S000`~`S003` 또는 `SEMGTK`일 때 |
-| [`KorailRateLimitError`][korail_mobile_api.errors.KorailRateLimitError] | 요청 횟수 초과·반복 호출 차단(`BT019`, `BT023`) |
-| [`KorailAccountLockedError`][korail_mobile_api.errors.KorailAccountLockedError] | 로그인 응답이 비밀번호 오류 허용 횟수 초과(`WRC000390`)를 알렸을 때 |
-| [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError] | 로그인 응답의 결과 코드가 `SUPDATE`일 때. 2.6.2부터 로그인 전 단계를 포함해 서버가 `-8204`로 응답했을 때도 발생합니다([오류 처리](../guide/errors.md#app-update)). |
-| [`KorailAppError`][korail_mobile_api.errors.KorailAppError]와 하위 예외 | 로그인 전의 서비스 상태 확인이나 공통 코드 조회가 실패로 응답했을 때. 로그인 요청은 보내지 않습니다. |
-| [`KorailDynaPathRequiredError`][korail_mobile_api.errors.KorailDynaPathRequiredError] | `KorailConfig(disable_dynapath=True)`로 만든 클라이언트에서 호출했을 때. 서비스 상태 확인과 공통 코드 조회까지 보낸 뒤, 로그인 요청을 보내기 전에 발생합니다. |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `input_flag`가 `None`이고 `member_no`가 숫자만으로 된 값도 이메일도 아닐 때(요청 전). `password`가 문자열이 아닐 때(2.6.2부터 요청 전에 검사, 이전에는 두 요청을 보낸 뒤 거절). 서버에서 받은 암호화 정보에 쓸 수 있는 AES 키가 없을 때(로그인 요청을 보내지 않음). |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인 응답의 결과 코드가 성공 코드가 아닐 때. `code`에 결과 코드, `raw`에 응답 원본이 들어 있습니다. 성공 코드인데 `JSESSIONID` 쿠키가 없을 때도 발생합니다. |
+| [`KorailAuthContinuationRequired`][korail_mobile_api.KorailAuthContinuationRequired] | 결과 코드가 `WRC000116` 또는 `WRC000420`일 때. `redirect_url`에 서버가 알려 준 주소가 들어 있습니다. |
+| [`KorailServiceUnavailableError`][korail_mobile_api.KorailServiceUnavailableError] | 로그인 응답의 결과 코드가 `S000`~`S003` 또는 `SEMGTK`일 때 |
+| [`KorailRateLimitError`][korail_mobile_api.KorailRateLimitError] | 요청 횟수 초과·반복 호출 차단(`BT019`, `BT023`) |
+| [`KorailAccountLockedError`][korail_mobile_api.KorailAccountLockedError] | 로그인 응답이 비밀번호 오류 허용 횟수 초과(`WRC000390`)를 알렸을 때 |
+| [`KorailAppUpdateRequiredError`][korail_mobile_api.KorailAppUpdateRequiredError] | 로그인 응답의 결과 코드가 `SUPDATE`일 때. 2.6.2부터 로그인 전 단계를 포함해 서버가 `-8204`로 응답했을 때도 발생합니다([오류 처리](../guide/errors.md#app-update)). |
+| [`KorailAppError`][korail_mobile_api.KorailAppError]와 하위 예외 | 로그인 전의 서비스 상태 확인이나 공통 코드 조회가 실패로 응답했을 때. 로그인 요청은 보내지 않습니다. |
+| [`KorailDynaPathRequiredError`][korail_mobile_api.KorailDynaPathRequiredError] | `KorailConfig(disable_dynapath=True)`로 만든 클라이언트에서 호출했을 때. 서비스 상태 확인과 공통 코드 조회까지 보낸 뒤, 로그인 요청을 보내기 전에 발생합니다. |
 
 **정보**
 
@@ -101,7 +101,7 @@ KorailClient.logout() -> None
 로그인하지 않은 상태에서 호출하면 요청을 보내지 않고 로컬 상태만 비웁니다.
 
 서버가 실패(`FAIL`)로 응답해도 예외를 발생시키지 않습니다.
-다만 결과 코드가 `P058`이면 [`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError]가, 네트워크 오류나 읽을 수 없는 응답이면 해당 예외가 발생합니다. 이때도 로컬 세션은 이미 비워져 있습니다.
+다만 결과 코드가 `P058`이면 [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError]가, 네트워크 오류나 읽을 수 없는 응답이면 해당 예외가 발생합니다. 이때도 로컬 세션은 이미 비워져 있습니다.
 서버 쪽 세션이 실제로 끝났는지는 보장하지 않습니다. 연결 풀은 닫지 않으므로 [`close`](#close)를 따로 호출하세요.
 
 **매개변수**
@@ -143,10 +143,10 @@ KorailClient.clear_session() -> None
 ```
 
 요청을 보내지 않습니다. 서버 쪽 세션은 끝내지 않습니다.
-웹 단계가 남은 로그인 시도([`KorailAuthContinuationRequired`][korail_mobile_api.errors.KorailAuthContinuationRequired]) 상태도 함께 비웁니다.
-이후 로그인이 필요한 메서드는 다시 [`login`](#login)을 호출할 때까지 [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError]를 발생시킵니다.
+웹 단계가 남은 로그인 시도([`KorailAuthContinuationRequired`][korail_mobile_api.KorailAuthContinuationRequired]) 상태도 함께 비웁니다.
+이후 로그인이 필요한 메서드는 다시 [`login`](#login)을 호출할 때까지 [`KorailAuthError`][korail_mobile_api.KorailAuthError]를 발생시킵니다.
 
-세션 만료([`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError])가 발생하면 라이브러리가 이 메서드를 호출해 로컬 세션을 비웁니다.
+세션 만료([`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError])가 발생하면 라이브러리가 이 메서드를 호출해 로컬 세션을 비웁니다.
 
 **매개변수**
 
@@ -189,8 +189,8 @@ KorailClient.close() -> None
 요청을 보내지 않으며, 로그인 세션과 쿠키는 그대로 둡니다. 서버 세션을 끝내려면 먼저 [`logout`](#logout)을 호출하세요.
 대기열을 끈 설정(`netfunnel_enabled=False`)에서는 HTTP 연결 풀만 닫습니다.
 
-닫은 클라이언트로 요청을 보내는 메서드를 호출하면 요청을 보내지 않고 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
-닫은 클라이언트를 다시 여는 메서드는 없으므로 새 [`KorailClient`][korail_mobile_api.client.KorailClient]를 만드세요.
+닫은 클라이언트로 요청을 보내는 메서드를 호출하면 요청을 보내지 않고 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
+닫은 클라이언트를 다시 여는 메서드는 없으므로 새 [`KorailClient`][korail_mobile_api.KorailClient]를 만드세요.
 `with` 문은 지원하지 않으므로 `try`/`finally`로 닫습니다.
 
 **매개변수**
@@ -235,7 +235,7 @@ KorailClient.get_service_status(
 
 서비스 상태 캐시 파일을 요청하고 응답 봉투로 판정합니다.
 서버가 성공으로 응답하면 응답 모델을 반환하고, 실패로 응답하면 결과 코드에 맞는 예외를 발생시킵니다.
-실패 응답의 결과 코드가 `S000`~`S003` 또는 `SEMGTK`이면 [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError], `SUPDATE`이면 [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError]가 발생합니다.
+실패 응답의 결과 코드가 `S000`~`S003` 또는 `SEMGTK`이면 [`KorailServiceUnavailableError`][korail_mobile_api.KorailServiceUnavailableError], `SUPDATE`이면 [`KorailAppUpdateRequiredError`][korail_mobile_api.KorailAppUpdateRequiredError]가 발생합니다.
 2.6.2부터 서버가 `-8204`로 응답해도 `KorailAppUpdateRequiredError`가 발생합니다.
 요청에는 `timeStamp` 하나만 싣고 공통 필드(`Device`, `Version`, `Key`)는 싣지 않습니다.
 [`login`](#login)도 로그인 전에 같은 요청을 보냅니다.
@@ -248,7 +248,7 @@ KorailClient.get_service_status(
 
 **반환값**
 
-[`ServiceStatusResponse`][korail_mobile_api.read_models.ServiceStatusResponse] — 봉투 필드(`str_result`, `h_msg_cd`, `h_msg_txt`)만 담습니다. 그 밖의 값은 `raw`에 있습니다.
+[`ServiceStatusResponse`][korail_mobile_api.ServiceStatusResponse] — 봉투 필드(`str_result`, `h_msg_cd`, `h_msg_txt`)만 담습니다. 그 밖의 값은 `raw`에 있습니다.
 
 **예외**
 
@@ -292,7 +292,7 @@ KorailClient.get_app_data(timestamp_ms: int | None = None) -> AppDataResponse
 
 **반환값**
 
-[`AppDataResponse`][korail_mobile_api.models.AppDataResponse] — `disability_certification_msg`, `railplus_cardinfo`, `version`, `notice`를 담습니다. `version`은 [`AppVersionInfo`][korail_mobile_api.models.AppVersionInfo](`message`, `new_version`, `store_url`), `notice`는 [`NoticeResponse`][korail_mobile_api.models.NoticeResponse]입니다.
+[`AppDataResponse`][korail_mobile_api.AppDataResponse] — `disability_certification_msg`, `railplus_cardinfo`, `version`, `notice`를 담습니다. `version`은 [`AppVersionInfo`][korail_mobile_api.AppVersionInfo](`message`, `new_version`, `store_url`), `notice`는 [`NoticeResponse`][korail_mobile_api.NoticeResponse]입니다.
 
 **예외**
 
@@ -334,7 +334,7 @@ KorailClient.get_notice(timestamp_ms: int | None = None) -> NoticeResponse
 
 **반환값**
 
-[`NoticeResponse`][korail_mobile_api.models.NoticeResponse] — `board_id`, `post_sequence`, `post_title`, `post_content`를 담습니다. 값이 없으면 `None`입니다.
+[`NoticeResponse`][korail_mobile_api.NoticeResponse] — `board_id`, `post_sequence`, `post_title`, `post_content`를 담습니다. 값이 없으면 `None`입니다.
 
 **예외**
 
@@ -376,7 +376,7 @@ KorailClient.get_common_code(code: str | Sequence[str] = '') -> BaseKorailRespon
 
 **반환값**
 
-[`BaseKorailResponse`][korail_mobile_api.models.BaseKorailResponse] — 봉투 필드와 `raw`만 담습니다. 코드별 값은 `raw[코드 이름]`으로 읽습니다.
+[`BaseKorailResponse`][korail_mobile_api.BaseKorailResponse] — 봉투 필드와 `raw`만 담습니다. 코드별 값은 `raw[코드 이름]`으로 읽습니다.
 
 **예외**
 
@@ -415,13 +415,13 @@ KorailClient.get_uuid() -> UuidResponse
 
 **반환값**
 
-[`UuidResponse`][korail_mobile_api.models.UuidResponse] — `verification_code`에 검증값이 문자열로 들어 있습니다.
+[`UuidResponse`][korail_mobile_api.UuidResponse] — `verification_code`에 검증값이 문자열로 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 응답에 `mutMrkVrfCd`가 없거나, 빈 값이거나, 문자열·정수가 아닐 때. `raw`에 응답 원본이 들어 있습니다. |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 응답에 `mutMrkVrfCd`가 없거나, 빈 값이거나, 문자열·정수가 아닐 때. `raw`에 응답 원본이 들어 있습니다. |
 
 **정보**
 
@@ -454,13 +454,13 @@ KorailClient.get_station_info() -> StationInfoResponse
 
 **반환값**
 
-[`StationInfoResponse`][korail_mobile_api.models.StationInfoResponse] — `count`(역 수, 문자열)와 `map_version`(역 데이터 판본)을 담습니다.
+[`StationInfoResponse`][korail_mobile_api.StationInfoResponse] — `count`(역 수, 문자열)와 `map_version`(역 데이터 판본)을 담습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 응답에 `count`나 `map_version`이 없거나, `null`이거나, 문자열·정수가 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 응답에 `count`나 `map_version`이 없거나, `null`이거나, 문자열·정수가 아닐 때 |
 
 **정보**
 
@@ -496,13 +496,13 @@ KorailClient.get_station_data() -> StationDataResponse
 
 **반환값**
 
-[`StationDataResponse`][korail_mobile_api.models.StationDataResponse] — `stations`에 역이 [`KorailStation`][korail_mobile_api.models.KorailStation] 튜플로 들어 있습니다. 각 역에는 `code`, `name`, `longitude`, `latitude`, `group`, `major`, `popup_type`, `popup_message`, `popup_link_title`, `popup_link_url`, `area`, `stop`, `raw`가 있습니다.
+[`StationDataResponse`][korail_mobile_api.StationDataResponse] — `stations`에 역이 [`KorailStation`][korail_mobile_api.KorailStation] 튜플로 들어 있습니다. 각 역에는 `code`, `name`, `longitude`, `latitude`, `group`, `major`, `popup_type`, `popup_message`, `popup_link_title`, `popup_link_url`, `area`, `stop`, `raw`가 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 응답에 `stns.stn` 목록이 없을 때, 목록에 객체가 아닌 행이 있을 때, 역 코드나 이름이 `null`이거나 문자열·정수가 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 응답에 `stns.stn` 목록이 없을 때, 목록에 객체가 아닌 행이 있을 때, 역 코드나 이름이 `null`이거나 문자열·정수가 아닐 때 |
 
 **정보**
 
@@ -538,7 +538,7 @@ KorailClient.get_train_calendar() -> TrainCalendarResponse
 
 **반환값**
 
-[`TrainCalendarResponse`][korail_mobile_api.models.TrainCalendarResponse] — `days`에 날짜가 [`TrainCalendarDay`][korail_mobile_api.models.TrainCalendarDay] 튜플로 들어 있습니다. 각 날짜에는 `run_date`, `business_day_stage_code`, `day_division_code`, `holiday_division_code`, `sale_day_division_code`와 `a_train_operation_flag`부터 `x_train_operation_flag`까지의 운행 플래그 일곱 개가 있으며, 없는 값은 `None`입니다.
+[`TrainCalendarResponse`][korail_mobile_api.TrainCalendarResponse] — `days`에 날짜가 [`TrainCalendarDay`][korail_mobile_api.TrainCalendarDay] 튜플로 들어 있습니다. 각 날짜에는 `run_date`, `business_day_stage_code`, `day_division_code`, `holiday_division_code`, `sale_day_division_code`와 `a_train_operation_flag`부터 `x_train_operation_flag`까지의 운행 플래그 일곱 개가 있으며, 없는 값은 `None`입니다.
 
 **예외**
 
@@ -581,13 +581,13 @@ KorailClient.get_crew_request_list(
 
 **반환값**
 
-[`CrewRequestListResponse`][korail_mobile_api.read_models.CrewRequestListResponse] — `items`에 사유가 [`CrewRequestOption`][korail_mobile_api.read_models.CrewRequestOption] 튜플로 들어 있습니다. 각 사유에는 `message_code`, `content`, `raw`가 있습니다.
+[`CrewRequestListResponse`][korail_mobile_api.CrewRequestListResponse] — `items`에 사유가 [`CrewRequestOption`][korail_mobile_api.CrewRequestOption] 튜플로 들어 있습니다. 각 사유에는 `message_code`, `content`, `raw`가 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 응답의 `strResult`가 `SUCC`도 `FAIL`도 아닐 때. `FAIL`이면 공통 예외인 [`KorailAppError`][korail_mobile_api.errors.KorailAppError]가 발생합니다. |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 응답의 `strResult`가 `SUCC`도 `FAIL`도 아닐 때. `FAIL`이면 공통 예외인 [`KorailAppError`][korail_mobile_api.KorailAppError]가 발생합니다. |
 
 **정보**
 

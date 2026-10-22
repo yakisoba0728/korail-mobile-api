@@ -7,7 +7,7 @@
 
 **승차권 식별자 이어 쓰기**{#ticket-identifiers}
 
-[`get_ticket_list`](#get_ticket_list)가 돌려주는 승차권([`TicketListTicket`][korail_mobile_api.read_models.TicketListTicket])에는 반환 식별자가 들어 있습니다.
+[`get_ticket_list`](#get_ticket_list)가 돌려주는 승차권([`TicketListTicket`][korail_mobile_api.TicketListTicket])에는 반환 식별자가 들어 있습니다.
 판매 창구번호(`sale_window_no`), 일련번호(`sale_sequence`), 반환 비밀번호(`return_password`)는 그대로 옮깁니다.
 판매일은 두 필드가 있고, 메서드마다 받는 형식이 다릅니다.
 
@@ -16,11 +16,11 @@
 | `return_sale_date` | `MMDD` (4자리) | [`get_ticket_receipt`](#get_ticket_receipt), [`get_original_ticket_inquiry`](#get_original_ticket_inquiry), [`get_delay_certificate`](#get_delay_certificate), [`get_delay_return_receipt`](#get_delay_return_receipt), [`get_refund_commission`](payments.md#get_refund_commission), [`get_refund_ticket_detail`](payments.md#get_refund_ticket_detail) |
 | `sale_date` | `YYYYMMDD` (8자리) | [`get_delivery_recipient`](delivery-checkin.md#get_delivery_recipient), [`get_pbp_acceptance_specifications`](delivery-checkin.md#get_pbp_acceptance_specifications) |
 
-[`get_ticket_receipt`](#get_ticket_receipt)는 네 값을 키워드 인자로 따로 받고, 나머지 메서드는 [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference]에 담아 받습니다.
-[`get_commuter_info`](passes.md#get_commuter_info)는 [`CommuterTicketInquiryRequest`][korail_mobile_api.read_payloads.CommuterTicketInquiryRequest]의 `original_ticket`에 담아 받습니다. 이 단계에 `sale_date`와 `return_sale_date` 중 어느 값을 넣어야 하는지는 확인하지 못했습니다. 라이브러리는 넣은 값을 그대로 보냅니다.
+[`get_ticket_receipt`](#get_ticket_receipt)는 네 값을 키워드 인자로 따로 받고, 나머지 메서드는 [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]에 담아 받습니다.
+[`get_commuter_info`](passes.md#get_commuter_info)는 [`CommuterTicketInquiryRequest`][korail_mobile_api.CommuterTicketInquiryRequest]의 `original_ticket`에 담아 받습니다. 이 단계에 `sale_date`와 `return_sale_date` 중 어느 값을 넣어야 하는지는 확인하지 못했습니다. 라이브러리는 넣은 값을 그대로 보냅니다.
 `OriginalTicketReference`는 네 값이 비어 있지 않은지만 검사하고 판매일의 자릿수는 검사하지 않습니다.
 [`get_ticket_receipt`](#get_ticket_receipt)를 뺀 메서드는 판매일 필드를 잘못 골라도 요청 전에 거절하지 않고 그대로 보내므로, 위 표에 맞는 필드를 넣으세요.
-`TicketListTicket`의 필드는 응답에 없으면 `None`이며, `None`이나 빈 문자열을 넣으면 `OriginalTicketReference`를 만들 때 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
+`TicketListTicket`의 필드는 응답에 없으면 `None`이며, `None`이나 빈 문자열을 넣으면 `OriginalTicketReference`를 만들 때 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
 
 ```python
 from korail_mobile_api import OriginalTicketReference
@@ -49,15 +49,15 @@ KorailClient.get_ticket_list(
 ) -> TicketListResponse
 ```
 
-결과는 예약([`TicketListReservation`][korail_mobile_api.read_models.TicketListReservation]) 목록입니다.
-예약마다 승차권([`TicketListTicket`][korail_mobile_api.read_models.TicketListTicket]) 목록이, 승차권마다 열차 구간([`TicketListTrain`][korail_mobile_api.read_models.TicketListTrain]) 목록이 들어 있습니다.
+결과는 예약([`TicketListReservation`][korail_mobile_api.TicketListReservation]) 목록입니다.
+예약마다 승차권([`TicketListTicket`][korail_mobile_api.TicketListTicket]) 목록이, 승차권마다 열차 구간([`TicketListTrain`][korail_mobile_api.TicketListTrain]) 목록이 들어 있습니다.
 승차권에는 영수증·원표·지연확인증 조회에 쓰는 반환 식별자가 함께 들어 있습니다. 넘기는 방법은 [승차권 식별자 이어 쓰기](#ticket-identifiers)를 참고하세요.
 
 `mode`가 `"1"`이면 현재 승차권을, `"2"`이면 구매 이력을 돌려줍니다. 앱 내부 값이 공개돼 있지 않아 이 대응은 실서버 응답을 보고 정했습니다.
 라이브러리는 `mode`, 날짜, 페이지 번호를 고치지 않고 그대로 보내며, 빈 문자열인 날짜는 보내지 않습니다.
 2026-09-28 7.0.8 실서버에서 승차일 범위 없이 구매 이력(`mode="2"`)을 요청하자 `WRT100101`(3개월 단위 조회 안내)을 받았습니다. 이 요청에는 날짜 필드가 없었습니다. 2026-07-01~2026-09-28 범위를 함께 보내자 이력이 조회됐습니다.
 구매 이력은 3개월 이내의 `boarding_date_from`·`boarding_date_to`를 함께 넘기세요. 정확한 기간 경계는 확인하지 못했습니다. 이 코드를 이력 없음으로 해석하지 마세요.
-[`KorailConfig`][korail_mobile_api.config.KorailConfig]의 `advertising_id`를 설정했으면 그 값도 함께 보냅니다.
+[`KorailConfig`][korail_mobile_api.KorailConfig]의 `advertising_id`를 설정했으면 그 값도 함께 보냅니다.
 
 예약 행에서 `tickets`를 뺀 나머지 필드는 응답에 없을 수 있으며, 없으면 `None`입니다.
 
@@ -72,14 +72,14 @@ KorailClient.get_ticket_list(
 
 **반환값**
 
-[`TicketListResponse`][korail_mobile_api.read_models.TicketListResponse] — `reservations`에 예약 목록이, `total_count`에 서버가 알려 준 전체 건수가 들어 있습니다. 승차권이 없으면 `reservations`는 빈 튜플입니다.
+[`TicketListResponse`][korail_mobile_api.TicketListResponse] — `reservations`에 예약 목록이, `total_count`에 서버가 알려 준 전체 건수가 들어 있습니다. 승차권이 없으면 `reservations`는 빈 튜플입니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `page_no`가 `int`가 아닐 때(`bool` 포함), `mode`가 문자열이 아니거나 빈 문자열일 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `page_no`가 `int`가 아닐 때(`bool` 포함), `mode`가 문자열이 아니거나 빈 문자열일 때 |
 
 **정보**
 
@@ -125,7 +125,7 @@ KorailClient.get_ticket_receipt(
 네 식별값은 [`get_ticket_list`](#get_ticket_list)가 돌려준 승차권에서 가져옵니다.
 `sale_date`에는 4자리 `return_sale_date`(`MMDD`)를 넣습니다. 8자리인 `sale_date`(`YYYYMMDD`)를 넣으면 요청을 보내기 전에 거절합니다.
 
-식별값은 키워드 인자로만 받습니다. [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference]와 인자 순서가 달라, 위치 인자로 넘기면 창구번호와 판매일이 뒤바뀔 수 있기 때문입니다.
+식별값은 키워드 인자로만 받습니다. [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]와 인자 순서가 달라, 위치 인자로 넘기면 창구번호와 판매일이 뒤바뀔 수 있기 때문입니다.
 
 금액과 인원 수는 정수(`int`)로 담습니다. 응답 모델은 카드번호·승인번호 같은 값을 가리지 않고 서버가 보낸 그대로 담으므로 로그에 남기지 마세요.
 
@@ -141,14 +141,14 @@ KorailClient.get_ticket_receipt(
 
 **반환값**
 
-[`TicketReceiptResponse`][korail_mobile_api.read_models.TicketReceiptResponse] — `items`에 영수증([`TicketReceipt`][korail_mobile_api.read_models.TicketReceipt]) 목록이 들어 있습니다. 영수증마다 결제수단([`ReceiptPayment`][korail_mobile_api.read_models.ReceiptPayment])과 현금영수증([`ReceiptCashPayment`][korail_mobile_api.read_models.ReceiptCashPayment]) 목록이 있습니다.
+[`TicketReceiptResponse`][korail_mobile_api.TicketReceiptResponse] — `items`에 영수증([`TicketReceipt`][korail_mobile_api.TicketReceipt]) 목록이 들어 있습니다. 영수증마다 결제수단([`ReceiptPayment`][korail_mobile_api.ReceiptPayment])과 현금영수증([`ReceiptCashPayment`][korail_mobile_api.ReceiptCashPayment]) 목록이 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `sale_date`가 ASCII 숫자 4자리가 아닐 때, `window_no`·`sale_sequence`·`return_password`가 비었을 때, `txt_index`가 문자열도 `None`도 아닐 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `sale_date`가 ASCII 숫자 4자리가 아닐 때, `window_no`·`sale_sequence`·`return_password`가 비었을 때, `txt_index`가 문자열도 `None`도 아닐 때 |
 
 **정보**
 
@@ -198,13 +198,13 @@ KorailClient.get_korail_point_summary() -> KorailPointSummaryResponse
 
 **반환값**
 
-[`KorailPointSummaryResponse`][korail_mobile_api.read_models.KorailPointSummaryResponse] — 포인트(`korail_point`), 할인쿠폰 개수(`discount_coupon_count`), 지연할인권 개수(`delay_discount_count`), 복지 할인 등급, 장애 여부와 유형, 휴대전화·이메일 인증 여부 등이 들어 있습니다.
+[`KorailPointSummaryResponse`][korail_mobile_api.KorailPointSummaryResponse] — 포인트(`korail_point`), 할인쿠폰 개수(`discount_coupon_count`), 지연할인권 개수(`delay_discount_count`), 복지 할인 등급, 장애 여부와 유형, 휴대전화·이메일 인증 여부 등이 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
 
 **정보**
 
@@ -229,7 +229,7 @@ KorailClient.get_mileage_history(
 ) -> MileageHistoryResponse
 ```
 
-조회 조건은 [`MileageHistoryRequest`][korail_mobile_api.read_payloads.MileageHistoryRequest]로 만듭니다.
+조회 조건은 [`MileageHistoryRequest`][korail_mobile_api.MileageHistoryRequest]로 만듭니다.
 조건 값은 이 메서드를 호출할 때 검사하며, 검사에 실패하면 요청을 보내지 않습니다.
 한 페이지는 20행으로 요청합니다. 앱이 쓰는 페이지 크기는 공개돼 있지 않아 확인하지 못했습니다.
 
@@ -244,18 +244,18 @@ KorailClient.get_mileage_history(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`MileageHistoryRequest`][korail_mobile_api.read_payloads.MileageHistoryRequest] | 필수 | 조회 기간, 원장, 증감 구분, 페이지 번호입니다. |
+| `request` | [`MileageHistoryRequest`][korail_mobile_api.MileageHistoryRequest] | 필수 | 조회 기간, 원장, 증감 구분, 페이지 번호입니다. |
 
 **반환값**
 
-[`MileageHistoryResponse`][korail_mobile_api.read_models.MileageHistoryResponse] — `entries`에 내역([`MileageHistoryEntry`][korail_mobile_api.read_models.MileageHistoryEntry]) 목록이, `page_count`에 전체 페이지 수가 들어 있습니다. 사용 가능 포인트, 누적 적립·사용 포인트 같은 합계는 응답의 필드를 합치지 않고 각각 담습니다.
+[`MileageHistoryResponse`][korail_mobile_api.MileageHistoryResponse] — `entries`에 내역([`MileageHistoryEntry`][korail_mobile_api.MileageHistoryEntry]) 목록이, `page_count`에 전체 페이지 수가 들어 있습니다. 사용 가능 포인트, 누적 적립·사용 포인트 같은 합계는 응답의 필드를 합치지 않고 각각 담습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `ledger`나 `movement`가 허용된 값이 아닐 때, `start_date`·`end_date`가 ASCII 숫자 8자리가 아닐 때, `start_date`가 `end_date`보다 늦을 때, `page_no`가 `int`가 아닐 때(`bool` 포함) |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ledger`나 `movement`가 허용된 값이 아닐 때, `start_date`·`end_date`가 ASCII 숫자 8자리가 아닐 때, `start_date`가 `end_date`보다 늦을 때, `page_no`가 `int`가 아닐 때(`bool` 포함) |
 
 **정보**
 
@@ -303,14 +303,14 @@ KorailClient.get_discount_coupons(
 
 **반환값**
 
-[`DiscountCouponListResponse`][korail_mobile_api.read_models.DiscountCouponListResponse] — `items`에 쿠폰([`DiscountCoupon`][korail_mobile_api.read_models.DiscountCoupon]) 목록이 들어 있습니다. `current_page`와 `total_pages`는 정수, `total_count`와 `row_count`는 문자열이며 응답에 없으면 `None`입니다.
+[`DiscountCouponListResponse`][korail_mobile_api.DiscountCouponListResponse] — `items`에 쿠폰([`DiscountCoupon`][korail_mobile_api.DiscountCoupon]) 목록이 들어 있습니다. `current_page`와 `total_pages`는 정수, `total_count`와 `row_count`는 문자열이며 응답에 없으면 `None`입니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `page_no`가 `int`가 아니거나(`bool` 포함) `pnr_no`가 문자열이 아닐 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `page_no`가 `int`가 아니거나(`bool` 포함) `pnr_no`가 문자열이 아닐 때 |
 
 **정보**
 
@@ -351,14 +351,14 @@ KorailClient.get_delay_discount_tickets(
 
 **반환값**
 
-[`DelayDiscountTicketListResponse`][korail_mobile_api.read_models.DelayDiscountTicketListResponse] — `items`에 지연할인권([`DelayDiscountTicket`][korail_mobile_api.read_models.DelayDiscountTicket]) 목록과 페이지 정보가 들어 있습니다.
+[`DelayDiscountTicketListResponse`][korail_mobile_api.DelayDiscountTicketListResponse] — `items`에 지연할인권([`DelayDiscountTicket`][korail_mobile_api.DelayDiscountTicket]) 목록과 페이지 정보가 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `departure_date_to`가 ASCII 숫자 8자리가 아닐 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `departure_date_to`가 ASCII 숫자 8자리가 아닐 때 |
 
 **정보**
 
@@ -385,7 +385,7 @@ KorailClient.get_deposit_banks() -> DepositBankListResponse
 직접 `@Field` 경로로 `Device`, `Version`, `Key`, `AppVersion` 순서의 네 필드를 싣습니다.
 7.0.10 정적 검토에 따른 순서 정정이며, 서버의 순서 민감성·실서버 영향은 미확인입니다.
 과거 7.0.8 관측의 순서·결과는 [실서버 기록](../status.md)에 그대로 보존합니다.
-[`KorailConfig`][korail_mobile_api.config.KorailConfig]의 `lang`을 설정해도 `lang`은 보내지 않으며, `AppVersion`을 제외한 기존 세 필드는 값이 빈 문자열이어도 빼지 않고 보냅니다.
+[`KorailConfig`][korail_mobile_api.KorailConfig]의 `lang`을 설정해도 `lang`은 보내지 않으며, `AppVersion`을 제외한 기존 세 필드는 값이 빈 문자열이어도 빼지 않고 보냅니다.
 
 **매개변수**
 
@@ -393,13 +393,13 @@ KorailClient.get_deposit_banks() -> DepositBankListResponse
 
 **반환값**
 
-[`DepositBankListResponse`][korail_mobile_api.read_models.DepositBankListResponse] — `items`에 은행([`DepositBank`][korail_mobile_api.read_models.DepositBank]) 목록이 들어 있습니다. 은행마다 코드(`code`)와 이름(`display_name`)이 있습니다.
+[`DepositBankListResponse`][korail_mobile_api.DepositBankListResponse] — `items`에 은행([`DepositBank`][korail_mobile_api.DepositBank]) 목록이 들어 있습니다. 은행마다 코드(`code`)와 이름(`display_name`)이 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
 
 **정보**
 
@@ -424,7 +424,7 @@ KorailClient.get_customer_trip_info() -> CustomerTripInfoResponse
 ```
 
 편의설정에는 출발역·도착역, 승객 종류별 인원, 열차 종류, 객실 등급, 좌석 속성 같은 값이 들어 있습니다.
-요청에는 로그인 세션([`KorailSession`][korail_mobile_api.models.KorailSession])의 고객번호(`customer_no`)를 싣습니다.
+요청에는 로그인 세션([`KorailSession`][korail_mobile_api.KorailSession])의 고객번호(`customer_no`)를 싣습니다.
 매체 구분과 등록 순번은 라이브러리가 고정값을 보냅니다. 앱이 쓰는 값은 공개돼 있지 않아 확인하지 못했습니다.
 
 **매개변수**
@@ -433,13 +433,13 @@ KorailClient.get_customer_trip_info() -> CustomerTripInfoResponse
 
 **반환값**
 
-[`CustomerTripInfoResponse`][korail_mobile_api.read_models.CustomerTripInfoResponse] — `trips`에 편의설정([`CustomerTripInfo`][korail_mobile_api.read_models.CustomerTripInfo]) 목록이 들어 있습니다. 각 필드는 문자열이며 응답에 없으면 `None`입니다.
+[`CustomerTripInfoResponse`][korail_mobile_api.CustomerTripInfoResponse] — `trips`에 편의설정([`CustomerTripInfo`][korail_mobile_api.CustomerTripInfo]) 목록이 들어 있습니다. 각 필드는 문자열이며 응답에 없으면 `None`입니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았거나 세션에 고객번호(`customer_no`)가 없을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았거나 세션에 고객번호(`customer_no`)가 없을 때 |
 
 **정보**
 
@@ -475,14 +475,14 @@ KorailClient.get_multi_child_discount_targets(
 
 **반환값**
 
-[`MultiChildDiscountTargetResponse`][korail_mobile_api.read_models.MultiChildDiscountTargetResponse] — `targets`에 가족 구성원([`MultiChildDiscountTarget`][korail_mobile_api.read_models.MultiChildDiscountTarget]) 목록이 들어 있습니다. 구성원마다 이름, 생년월일, 승객 유형, 할인 종류 코드 등이 있습니다.
+[`MultiChildDiscountTargetResponse`][korail_mobile_api.MultiChildDiscountTargetResponse] — `targets`에 가족 구성원([`MultiChildDiscountTarget`][korail_mobile_api.MultiChildDiscountTarget]) 목록이 들어 있습니다. 구성원마다 이름, 생년월일, 승객 유형, 할인 종류 코드 등이 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `departure_date`가 ASCII 숫자 8자리가 아니거나 달력에 없는 날짜일 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `departure_date`가 ASCII 숫자 8자리가 아니거나 달력에 없는 날짜일 때 |
 
 **정보**
 
@@ -522,14 +522,14 @@ KorailClient.get_trip_change_dates(departure_date: str) -> TripChangeDateRespons
 
 **반환값**
 
-[`TripChangeDateResponse`][korail_mobile_api.read_models.TripChangeDateResponse] — `trip_change_dates`에 변경 가능한 날짜 문자열이, `last_run_date`에 서버가 알려 준 마지막 운행일이 들어 있습니다.
+[`TripChangeDateResponse`][korail_mobile_api.TripChangeDateResponse] — `trip_change_dates`에 변경 가능한 날짜 문자열이, `last_run_date`에 서버가 알려 준 마지막 운행일이 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `departure_date`가 ASCII 숫자 8자리가 아니거나 달력에 없는 날짜일 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `departure_date`가 ASCII 숫자 8자리가 아니거나 달력에 없는 날짜일 때 |
 
 **정보**
 
@@ -563,30 +563,30 @@ KorailClient.get_original_ticket_inquiry(
 ```
 
 여러 장을 한 번에 조회할 수 있으며, 승차권마다 반환 식별자 네 값에 1부터 번호를 붙여 보냅니다.
-각 [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference]의 `sale_date`에는 승차권의 `return_sale_date`(`MMDD`)를 넣습니다. 자세한 내용은 [승차권 식별자 이어 쓰기](#ticket-identifiers)를 참고하세요.
+각 [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]의 `sale_date`에는 승차권의 `return_sale_date`(`MMDD`)를 넣습니다. 자세한 내용은 [승차권 식별자 이어 쓰기](#ticket-identifiers)를 참고하세요.
 
 `ticket_count`를 생략하면 `tickets`의 길이를 승차권 수로 보냅니다.
 앱은 호출하는 곳에 따라 이 값을 다르게 보내므로, 라이브러리는 `ticket_count`가 `tickets`의 길이와 같은지 검사하지 않습니다.
 
-응답의 [`OriginalTicket`][korail_mobile_api.read_models.OriginalTicket]에서 `original_`로 시작하는 필드는 요청한 승차권의 반환 식별자가 되돌아온 값입니다.
+응답의 [`OriginalTicket`][korail_mobile_api.OriginalTicket]에서 `original_`로 시작하는 필드는 요청한 승차권의 반환 식별자가 되돌아온 값입니다.
 
 **매개변수**
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `tickets` | `Sequence[`[`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference]`]` | 필수 | 조회할 승차권의 반환 식별자 목록입니다. 한 장 이상이어야 합니다. |
+| `tickets` | `Sequence[`[`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]`]` | 필수 | 조회할 승차권의 반환 식별자 목록입니다. 한 장 이상이어야 합니다. |
 | `ticket_count` | `int \| None` | `None` | 요청에 싣는 승차권 수입니다. `None`이면 `tickets`의 길이를 씁니다. |
 
 **반환값**
 
-[`OriginalTicketInquiryResponse`][korail_mobile_api.read_models.OriginalTicketInquiryResponse] — `tickets`에 원표([`OriginalTicket`][korail_mobile_api.read_models.OriginalTicket]) 목록이 들어 있습니다. 원표마다 여정([`OriginalTicketJourney`][korail_mobile_api.read_models.OriginalTicketJourney])이, 여정마다 좌석([`OriginalTicketSeat`][korail_mobile_api.read_models.OriginalTicketSeat])이 있습니다.
+[`OriginalTicketInquiryResponse`][korail_mobile_api.OriginalTicketInquiryResponse] — `tickets`에 원표([`OriginalTicket`][korail_mobile_api.OriginalTicket]) 목록이 들어 있습니다. 원표마다 여정([`OriginalTicketJourney`][korail_mobile_api.OriginalTicketJourney])이, 여정마다 좌석([`OriginalTicketSeat`][korail_mobile_api.OriginalTicketSeat])이 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `tickets`가 시퀀스가 아니거나(문자열 포함) 비었을 때, 항목이 `OriginalTicketReference`가 아닐 때, `ticket_count`가 `int`가 아닐 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `tickets`가 시퀀스가 아니거나(문자열 포함) 비었을 때, 항목이 `OriginalTicketReference`가 아닐 때, `ticket_count`가 `int`가 아닐 때 |
 
 **정보**
 
@@ -619,8 +619,8 @@ KorailClient.get_self_seat_change_info(
 ) -> SelfSeatChangeInfoResponse
 ```
 
-요청에는 승차권 식별자가 들어가지 않고 열차 정보만 들어갑니다. 값은 [`get_ticket_list`](#get_ticket_list)의 열차 구간([`TicketListTrain`][korail_mobile_api.read_models.TicketListTrain])에서 가져올 수 있습니다.
-조회 조건은 [`SelfSeatChangeInfoRequest`][korail_mobile_api.read_payloads.SelfSeatChangeInfoRequest]로 만들며, 값은 객체를 만들 때 검사해 잘못되면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
+요청에는 승차권 식별자가 들어가지 않고 열차 정보만 들어갑니다. 값은 [`get_ticket_list`](#get_ticket_list)의 열차 구간([`TicketListTrain`][korail_mobile_api.TicketListTrain])에서 가져올 수 있습니다.
+조회 조건은 [`SelfSeatChangeInfoRequest`][korail_mobile_api.SelfSeatChangeInfoRequest]로 만들며, 값은 객체를 만들 때 검사해 잘못되면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
 7.0.8에서 조회한 과거 승차권은 운행 시간 밖이라 서버가 `WRT800176`으로 거절했습니다. 운행 중 열차의 정상 응답은 7.0.6 시기 기록입니다.
 
 | 필드 | 기본값 | 설명 |
@@ -634,18 +634,18 @@ KorailClient.get_self_seat_change_info(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`SelfSeatChangeInfoRequest`][korail_mobile_api.read_payloads.SelfSeatChangeInfoRequest] | 필수 | 조회할 열차의 운행일, 열차 번호, 구간, 객실 등급입니다. |
+| `request` | [`SelfSeatChangeInfoRequest`][korail_mobile_api.SelfSeatChangeInfoRequest] | 필수 | 조회할 열차의 운행일, 열차 번호, 구간, 객실 등급입니다. |
 
 **반환값**
 
-[`SelfSeatChangeInfoResponse`][korail_mobile_api.read_models.SelfSeatChangeInfoResponse] — 열차 정보와 함께 `stations`에 변경할 수 있는 승차역([`SelfSeatChangeStation`][korail_mobile_api.read_models.SelfSeatChangeStation])이, `reasons`에 변경 사유([`SelfSeatChangeReason`][korail_mobile_api.read_models.SelfSeatChangeReason])가 들어 있습니다. 승차역마다 일반실·특실 잔여석 수가 있습니다.
+[`SelfSeatChangeInfoResponse`][korail_mobile_api.SelfSeatChangeInfoResponse] — 열차 정보와 함께 `stations`에 변경할 수 있는 승차역([`SelfSeatChangeStation`][korail_mobile_api.SelfSeatChangeStation])이, `reasons`에 변경 사유([`SelfSeatChangeReason`][korail_mobile_api.SelfSeatChangeReason])가 들어 있습니다. 승차역마다 일반실·특실 잔여석 수가 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailSeatUnavailableError`][korail_mobile_api.errors.KorailSeatUnavailableError] | 좌석을 변경할 수 있는 시간이 아닐 때 (결과 코드 `WRT800176`). 운행 시간 밖의 열차가 여기에 해당합니다. |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailSeatUnavailableError`][korail_mobile_api.KorailSeatUnavailableError] | 좌석을 변경할 수 있는 시간이 아닐 때 (결과 코드 `WRT800176`). 운행 시간 밖의 열차가 여기에 해당합니다. |
 
 **정보**
 
@@ -680,7 +680,7 @@ KorailClient.get_delay_certificate(
 ) -> DelayCertificateResponse
 ```
 
-지연된 승차권만 대상입니다. 지연되지 않은 승차권은 서버가 실패(결과 코드 `WRT400456`)로 응답하므로 [`KorailAppError`][korail_mobile_api.errors.KorailAppError]가 발생합니다. `ticket`의 `sale_date`에는 승차권의 `return_sale_date`(`MMDD`)를 넣습니다.
+지연된 승차권만 대상입니다. 지연되지 않은 승차권은 서버가 실패(결과 코드 `WRT400456`)로 응답하므로 [`KorailAppError`][korail_mobile_api.KorailAppError]가 발생합니다. `ticket`의 `sale_date`에는 승차권의 `return_sale_date`(`MMDD`)를 넣습니다.
 지난 승차권은 [`get_ticket_list`](#get_ticket_list)를 `mode="2"`와 3개월 이내의 승차일 범위로 호출해 찾습니다.
 
 앱은 `delay_arrival_flag`가 특정 값인 행만 화면에 보여 줍니다. 그 값은 공개돼 있지 않아 확인하지 못했으므로, 라이브러리는 행을 거르지 않고 모두 돌려줍니다.
@@ -690,18 +690,18 @@ KorailClient.get_delay_certificate(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `ticket` | [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference] | 필수 | 조회할 승차권의 반환 식별자입니다. |
+| `ticket` | [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference] | 필수 | 조회할 승차권의 반환 식별자입니다. |
 
 **반환값**
 
-[`DelayCertificateResponse`][korail_mobile_api.read_models.DelayCertificateResponse] — `delays`에 지연 행([`DelayCertificateRow`][korail_mobile_api.read_models.DelayCertificateRow]) 목록이 들어 있습니다. 행마다 운행일, 열차 번호, 출발역·도착역, 지연 도착 여부, 지연 시간(분)이 있습니다. 응답에 행 목록이 없으면 빈 튜플입니다.
+[`DelayCertificateResponse`][korail_mobile_api.DelayCertificateResponse] — `delays`에 지연 행([`DelayCertificateRow`][korail_mobile_api.DelayCertificateRow]) 목록이 들어 있습니다. 행마다 운행일, 열차 번호, 출발역·도착역, 지연 도착 여부, 지연 시간(분)이 있습니다. 응답에 행 목록이 없으면 빈 튜플입니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `ticket`이 `OriginalTicketReference`가 아닐 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`이 `OriginalTicketReference`가 아닐 때 |
 
 **정보**
 
@@ -750,19 +750,19 @@ KorailClient.get_delay_return_receipt(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `ticket` | [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference] | 필수 | 조회할 승차권의 반환 식별자입니다. |
+| `ticket` | [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference] | 필수 | 조회할 승차권의 반환 식별자입니다. |
 
 **반환값**
 
-[`DelayReturnReceiptResponse`][korail_mobile_api.read_models.DelayReturnReceiptResponse] — 반환일(`return_date`), 지급 방법(`payment_method_name`), 반환 금액(`return_amount`)이 들어 있습니다. 세 필드는 모두 문자열이며 응답에 없으면 `None`입니다. 반환 내역이 없으면 `None` 필드를 담은 응답 대신 [`KorailNoResultsError`][korail_mobile_api.errors.KorailNoResultsError]가 발생합니다.
+[`DelayReturnReceiptResponse`][korail_mobile_api.DelayReturnReceiptResponse] — 반환일(`return_date`), 지급 방법(`payment_method_name`), 반환 금액(`return_amount`)이 들어 있습니다. 세 필드는 모두 문자열이며 응답에 없으면 `None`입니다. 반환 내역이 없으면 `None` 필드를 담은 응답 대신 [`KorailNoResultsError`][korail_mobile_api.KorailNoResultsError]가 발생합니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `ticket`이 `OriginalTicketReference`가 아닐 때 |
-| [`KorailNoResultsError`][korail_mobile_api.errors.KorailNoResultsError] | 조회할 지연료 반환 내역이 없을 때 (결과 코드 `IRZ000005`) |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`이 `OriginalTicketReference`가 아닐 때 |
+| [`KorailNoResultsError`][korail_mobile_api.KorailNoResultsError] | 조회할 지연료 반환 내역이 없을 때 (결과 코드 `IRZ000005`) |
 
 **정보**
 

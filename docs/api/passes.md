@@ -3,7 +3,7 @@
 이 페이지의 메서드는 정기권·패스, N카드, 여행상품의 세 묶음으로 나뉩니다.
 묶음마다 앞 메서드가 돌려준 값을 다음 메서드의 입력으로 씁니다.
 
-**정기권·패스**는 조회만 합니다. [`get_pass_menu`](#get_pass_menu)로 메뉴 항목을 읽고, 항목의 `pass_data`([`PassMenuData`][korail_mobile_api.read_models.PassMenuData])에 든 종류·기간·연령 코드로 사용 가능일([`get_pass_available_dates`](#get_pass_available_dates)), 탈 수 있는 열차([`get_pass_schedule`](#get_pass_schedule)), 예매 조건([`get_commuter_info`](#get_commuter_info))을 조회합니다. 정기권·패스를 구매하는 메서드는 없습니다.
+**정기권·패스**는 조회만 합니다. [`get_pass_menu`](#get_pass_menu)로 메뉴 항목을 읽고, 항목의 `pass_data`([`PassMenuData`][korail_mobile_api.PassMenuData])에 든 종류·기간·연령 코드로 사용 가능일([`get_pass_available_dates`](#get_pass_available_dates)), 탈 수 있는 열차([`get_pass_schedule`](#get_pass_schedule)), 예매 조건([`get_commuter_info`](#get_commuter_info))을 조회합니다. 정기권·패스를 구매하는 메서드는 없습니다.
 
 **N카드**는 사용 내역과 이용 가능 열차 조회, 결제 전 구매, 기간 연장, N카드 예약을 제공합니다. N카드 결제는 지원하지 않습니다. [`register_discount_card`](#register_discount_card)는 결제 전 구매까지만 만들고, 그 구매를 결제하거나 취소하는 메서드는 없습니다. 7.0.8에서 스케줄 조회는 서버 오류 `EAZ000028`까지 확인했고, 보유 N카드가 없어 정상 조회와 다른 N카드 메서드는 확인하지 못했습니다.
 
@@ -18,7 +18,7 @@ KorailClient.get_pass_menu(menu_no: str) -> PassMenuResponse
 ```
 
 `menu_no`로 메뉴 갈래를 고르면 그 갈래에 속한 항목 목록이 옵니다.
-각 항목([`PassMenuItem`][korail_mobile_api.read_models.PassMenuItem])에는 제목·안내 문구와 함께, 정기권 조회에 쓰는 `pass_data`([`PassMenuData`][korail_mobile_api.read_models.PassMenuData])가 들어 있을 수 있습니다.
+각 항목([`PassMenuItem`][korail_mobile_api.PassMenuItem])에는 제목·안내 문구와 함께, 정기권 조회에 쓰는 `pass_data`([`PassMenuData`][korail_mobile_api.PassMenuData])가 들어 있을 수 있습니다.
 `pass_data`는 정기권 종류 코드(`commuter_kind_code`), 연령 선택지(`age_options`), 기간 선택지(`period_options`)를 담으며, 이 페이지의 다른 정기권 메서드가 이 값을 입력으로 씁니다.
 항목에 따라 `pass_data`가 없을 수 있습니다.
 
@@ -30,13 +30,13 @@ KorailClient.get_pass_menu(menu_no: str) -> PassMenuResponse
 
 **반환값**
 
-[`PassMenuResponse`][korail_mobile_api.read_models.PassMenuResponse] — `items`에 메뉴 항목이 [`PassMenuItem`][korail_mobile_api.read_models.PassMenuItem] 목록으로 들어 있습니다.
+[`PassMenuResponse`][korail_mobile_api.PassMenuResponse] — `items`에 메뉴 항목이 [`PassMenuItem`][korail_mobile_api.PassMenuItem] 목록으로 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `menu_no`가 비어 있을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `menu_no`가 비어 있을 때 |
 
 **정보**
 
@@ -82,13 +82,13 @@ KorailClient.get_pass_available_dates(
 
 **반환값**
 
-[`PassAvailabilityResponse`][korail_mobile_api.read_models.PassAvailabilityResponse] — 사용 개시 가능일(`open_dates`), 발권 가능일(`ticket_issue_dates`), 발권처 목록(`offices`), 사용 개시일 행(`pass_info`), 중첩 상태 블록(`main_info`)을 담습니다.
+[`PassAvailabilityResponse`][korail_mobile_api.PassAvailabilityResponse] — 사용 개시 가능일(`open_dates`), 발권 가능일(`ticket_issue_dates`), 발권처 목록(`offices`), 사용 개시일 행(`pass_info`), 중첩 상태 블록(`main_info`)을 담습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `kind_code`, `period_code`, `age_code` 중 하나가 비어 있을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `kind_code`, `period_code`, `age_code` 중 하나가 비어 있을 때 |
 
 **정보**
 
@@ -117,9 +117,9 @@ KorailClient.get_pass_schedule(request: PassScheduleRequest) -> PassScheduleResp
 ```
 
 구매나 예약은 하지 않습니다.
-조회 조건은 [`PassScheduleRequest`][korail_mobile_api.read_payloads.PassScheduleRequest]로 만듭니다. 열두 필드가 모두 필수이며 문자열입니다.
+조회 조건은 [`PassScheduleRequest`][korail_mobile_api.PassScheduleRequest]로 만듭니다. 열두 필드가 모두 필수이며 문자열입니다.
 정기권 코드 세 개(`pass_kind_code`, `pass_period_code`, `pass_age_code`)는 [`get_pass_available_dates`](#get_pass_available_dates)와 같이 `pass_data`에서 가져옵니다.
-`selected_train_code`에는 열차 그룹 코드를 넣습니다. [`search_trains`](trains.md#search_trains)가 [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery]의 `train_group_code`(기본값 `"109"`)를 싣는 요청 필드와 같은 필드입니다.
+`selected_train_code`에는 열차 그룹 코드를 넣습니다. [`search_trains`](trains.md#search_trains)가 [`TrainSearchQuery`][korail_mobile_api.TrainSearchQuery]의 `train_group_code`(기본값 `"109"`)를 싣는 요청 필드와 같은 필드입니다.
 `departure_station_name`과 `arrival_station_name`에는 역 코드가 아니라 역 이름을 넣습니다.
 `transfer_type_code`와 `weekend_use_flag`의 뜻과 허용 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 날짜는 `YYYYMMDD`, 시각은 `HHMMSS` 형식으로 넣습니다. 라이브러리는 이 요청 값의 형식을 검사하지 않습니다. 빈 문자열인 필드는 요청에서 빠집니다.
@@ -133,17 +133,17 @@ KorailClient.get_pass_schedule(request: PassScheduleRequest) -> PassScheduleResp
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`PassScheduleRequest`][korail_mobile_api.read_payloads.PassScheduleRequest] | 필수 | 조회 조건입니다. |
+| `request` | [`PassScheduleRequest`][korail_mobile_api.PassScheduleRequest] | 필수 | 조회 조건입니다. |
 
 **반환값**
 
-[`PassScheduleResponse`][korail_mobile_api.read_models.PassScheduleResponse] — `schedules`의 각 항목([`PassScheduleInfo`][korail_mobile_api.read_models.PassScheduleInfo])에 열차가 [`PassScheduleTrain`][korail_mobile_api.read_models.PassScheduleTrain] 목록으로 들어 있고, `main_info`에 페이지 정보가 있습니다.
+[`PassScheduleResponse`][korail_mobile_api.PassScheduleResponse] — `schedules`의 각 항목([`PassScheduleInfo`][korail_mobile_api.PassScheduleInfo])에 열차가 [`PassScheduleTrain`][korail_mobile_api.PassScheduleTrain] 목록으로 들어 있고, `main_info`에 페이지 정보가 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
 
 **정보**
 
@@ -199,13 +199,13 @@ KorailClient.get_commuter_kind_menu(commuter_kind_code: str) -> CommuterKindMenu
 
 **반환값**
 
-[`CommuterKindMenuResponse`][korail_mobile_api.read_models.CommuterKindMenuResponse] — 안내 문구와 `pass_data`([`PassMenuData`][korail_mobile_api.read_models.PassMenuData])를 담습니다.
+[`CommuterKindMenuResponse`][korail_mobile_api.CommuterKindMenuResponse] — 안내 문구와 `pass_data`([`PassMenuData`][korail_mobile_api.PassMenuData])를 담습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `commuter_kind_code`가 비어 있을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `commuter_kind_code`가 비어 있을 때 |
 
 **정보**
 
@@ -232,26 +232,26 @@ KorailClient.get_commuter_info(request: CommuterInfoRequest) -> CommuterInfoResp
 앱의 정기권 예매 화면이 단계별로 보내는 조회입니다. 넘기는 입력 타입에 따라 단계가 정해집니다.
 7.0.8에서는 현재 계정의 조회가 `ERR000100`으로 거절됐습니다. 아래 단계별 정상 응답 설명은 성공 시의 모델 계약이며, 이번 계정에서 다시 확인한 결과는 아닙니다.
 
-- **초기 단계**: [`CommuterInitialRequest`][korail_mobile_api.read_payloads.CommuterInitialRequest]에 `pass_data`를 넣습니다. 응답의 `passenger_options`에 승객 종류별 연령 코드와 연령·인원 범위가 옵니다.
-- **인원 단계**: [`CommuterPassengerRequest`][korail_mobile_api.read_payloads.CommuterPassengerRequest]는 생성자 대신 `from_response(pass_data, source, passenger_counts)`로 만듭니다. `source`는 초기 단계의 응답이고, `passenger_counts`는 `source.passenger_options`의 행마다 인원을 하나씩 적은 정수 튜플입니다. 요청에는 승객 한 명마다 그 행의 연령 코드를 한 번씩 넣습니다.
-- **원표 단계**: [`CommuterTicketInquiryRequest`][korail_mobile_api.read_payloads.CommuterTicketInquiryRequest]에 원표의 반환 식별자([`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference])를 넣습니다. 판매일에 `sale_date`(`YYYYMMDD`)와 `return_sale_date`(`MMDD`) 중 어느 값을 넣어야 하는지는 확인하지 못했습니다([승차권 식별자 이어 쓰기](account.md#ticket-identifiers) 참고). `inquiry_type`은 `"0"`(기본값) 또는 `"1"`이며, 두 값의 뜻은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
+- **초기 단계**: [`CommuterInitialRequest`][korail_mobile_api.CommuterInitialRequest]에 `pass_data`를 넣습니다. 응답의 `passenger_options`에 승객 종류별 연령 코드와 연령·인원 범위가 옵니다.
+- **인원 단계**: [`CommuterPassengerRequest`][korail_mobile_api.CommuterPassengerRequest]는 생성자 대신 `from_response(pass_data, source, passenger_counts)`로 만듭니다. `source`는 초기 단계의 응답이고, `passenger_counts`는 `source.passenger_options`의 행마다 인원을 하나씩 적은 정수 튜플입니다. 요청에는 승객 한 명마다 그 행의 연령 코드를 한 번씩 넣습니다.
+- **원표 단계**: [`CommuterTicketInquiryRequest`][korail_mobile_api.CommuterTicketInquiryRequest]에 원표의 반환 식별자([`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference])를 넣습니다. 판매일에 `sale_date`(`YYYYMMDD`)와 `return_sale_date`(`MMDD`) 중 어느 값을 넣어야 하는지는 확인하지 못했습니다([승차권 식별자 이어 쓰기](account.md#ticket-identifiers) 참고). `inquiry_type`은 `"0"`(기본값) 또는 `"1"`이며, 두 값의 뜻은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 
 **매개변수**
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`CommuterInfoRequest`][korail_mobile_api.read_payloads.CommuterInfoRequest] | 필수 | 세 입력 타입 중 하나입니다. |
+| `request` | [`CommuterInfoRequest`][korail_mobile_api.CommuterInfoRequest] | 필수 | 세 입력 타입 중 하나입니다. |
 
 **반환값**
 
-[`CommuterInfoResponse`][korail_mobile_api.read_models.CommuterInfoResponse] — 승객 종류별 선택지(`passenger_options`, [`CommuterPassengerOption`][korail_mobile_api.read_models.CommuterPassengerOption] 목록), 예매 가능 인원 범위(`available_passenger_count_from`, `available_passenger_count_to`), 안내·프로모션 문구 등을 담습니다.
+[`CommuterInfoResponse`][korail_mobile_api.CommuterInfoResponse] — 승객 종류별 선택지(`passenger_options`, [`CommuterPassengerOption`][korail_mobile_api.CommuterPassengerOption] 목록), 예매 가능 인원 범위(`available_passenger_count_from`, `available_passenger_count_to`), 안내·프로모션 문구 등을 담습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 입력 객체를 만들 때나 요청을 보내기 전에 검사합니다. `pass_data.commuter_kind_code`가 비어 있을 때, `passenger_counts`의 개수가 `source.passenger_options`의 행 수와 다르거나 음수·정수가 아닌 값이 있을 때, 연령 코드가 빈 행이 있을 때, 인원 합계가 0일 때, `inquiry_type`이 `"0"`·`"1"`이 아니거나 `original_ticket`이 `OriginalTicketReference`가 아닐 때, 세 입력 타입이 아닌 값을 넘겼을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 입력 객체를 만들 때나 요청을 보내기 전에 검사합니다. `pass_data.commuter_kind_code`가 비어 있을 때, `passenger_counts`의 개수가 `source.passenger_options`의 행 수와 다르거나 음수·정수가 아닌 값이 있을 때, 연령 코드가 빈 행이 있을 때, 인원 합계가 0일 때, `inquiry_type`이 `"0"`·`"1"`이 아니거나 `original_ticket`이 `OriginalTicketReference`가 아닐 때, 세 입력 타입이 아닌 값을 넘겼을 때 |
 
 **정보**
 
@@ -280,7 +280,7 @@ KorailClient.get_trip_menu() -> TripMenuResponse
 ```
 
 메뉴 항목마다 제목, 설명, 메뉴 종류(`menu_type`), 링크, 안내 목록(`contents`)이 옵니다.
-안내 목록의 일부 행([`TripMenuContent`][korail_mobile_api.read_models.TripMenuContent])에는 정기권 종류 코드(`commuter_kind_code`)와 `pass_data`가 들어 있습니다. 이 코드는 [`get_commuter_kind_menu`](#get_commuter_kind_menu)의 입력으로 씁니다.
+안내 목록의 일부 행([`TripMenuContent`][korail_mobile_api.TripMenuContent])에는 정기권 종류 코드(`commuter_kind_code`)와 `pass_data`가 들어 있습니다. 이 코드는 [`get_commuter_kind_menu`](#get_commuter_kind_menu)의 입력으로 씁니다.
 
 **매개변수**
 
@@ -288,13 +288,13 @@ KorailClient.get_trip_menu() -> TripMenuResponse
 
 **반환값**
 
-[`TripMenuResponse`][korail_mobile_api.read_models.TripMenuResponse] — `items`에 메뉴 항목이 [`TripMenuItem`][korail_mobile_api.read_models.TripMenuItem] 목록으로, `popup_message`에 팝업 문구가 들어 있습니다.
+[`TripMenuResponse`][korail_mobile_api.TripMenuResponse] — `items`에 메뉴 항목이 [`TripMenuItem`][korail_mobile_api.TripMenuItem] 목록으로, `popup_message`에 팝업 문구가 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
 
 **정보**
 
@@ -327,7 +327,7 @@ N카드 번호 하나를 넘기면 그 카드로 이용한 여행이 한 행씩 
 
 각 행에는 승객 이름, 출발·도착역 이름, 운행일과 판매일·일련번호·판매 창구번호(`sale_date`, `sale_sequence`, `sale_window_no`)가 들어 있습니다. 반환 비밀번호가 없으므로 이 값만으로는 반환 식별자로 쓸 수 없습니다.
 
-서버가 `strResult`를 `FAIL`로 보내면 빈 `items`를 반환하지 않고 [공통 예외](index.md#공통-예외)가 발생합니다. 예를 들어 결과 코드 `ERR000100`(조회 자료 없음)이면 [`KorailNoResultsError`][korail_mobile_api.errors.KorailNoResultsError]가 발생합니다.
+서버가 `strResult`를 `FAIL`로 보내면 빈 `items`를 반환하지 않고 [공통 예외](index.md#공통-예외)가 발생합니다. 예를 들어 결과 코드 `ERR000100`(조회 자료 없음)이면 [`KorailNoResultsError`][korail_mobile_api.KorailNoResultsError]가 발생합니다.
 
 **매개변수**
 
@@ -337,14 +337,14 @@ N카드 번호 하나를 넘기면 그 카드로 이용한 여행이 한 행씩 
 
 **반환값**
 
-[`DiscountCardUsageListResponse`][korail_mobile_api.read_models.DiscountCardUsageListResponse] — `items`에 사용 내역이 [`DiscountCardUsage`][korail_mobile_api.read_models.DiscountCardUsage] 목록으로 들어 있습니다.
+[`DiscountCardUsageListResponse`][korail_mobile_api.DiscountCardUsageListResponse] — `items`에 사용 내역이 [`DiscountCardUsage`][korail_mobile_api.DiscountCardUsage] 목록으로 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `card_no`가 비어 있을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `card_no`가 비어 있을 때 |
 
 **정보**
 
@@ -371,7 +371,7 @@ KorailClient.get_discount_card_schedule(
 ) -> DiscountCardScheduleResponse
 ```
 
-조회 조건은 [`DiscountCardScheduleRequest`][korail_mobile_api.read_payloads.DiscountCardScheduleRequest]로 만듭니다. 7.0.8에서 알려진 상품 코드로 요청하자 서버가 `EAZ000028`을 반환했습니다. 보유 N카드가 없어 정상 열차 목록은 확인하지 못했습니다.
+조회 조건은 [`DiscountCardScheduleRequest`][korail_mobile_api.DiscountCardScheduleRequest]로 만듭니다. 7.0.8에서 알려진 상품 코드로 요청하자 서버가 `EAZ000028`을 반환했습니다. 보유 N카드가 없어 정상 열차 목록은 확인하지 못했습니다.
 
 필수 필드는 N카드 상품 관리번호(`card_kind_management_no`), 출발·도착역 이름, 출발일(`YYYYMMDD`)입니다.
 `for_card()`로 만들면 상품 관리번호에서 카드 종류 코드(`card_kind_code`)를 정합니다. `B2N18120402`·`B2N18120403`만 `"B2N"`, 나머지는 `"MMM"`입니다.
@@ -389,18 +389,18 @@ KorailClient.get_discount_card_schedule(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`DiscountCardScheduleRequest`][korail_mobile_api.read_payloads.DiscountCardScheduleRequest] | 필수 | 조회 조건입니다. |
+| `request` | [`DiscountCardScheduleRequest`][korail_mobile_api.DiscountCardScheduleRequest] | 필수 | 조회 조건입니다. |
 
 **반환값**
 
-[`DiscountCardScheduleResponse`][korail_mobile_api.read_models.DiscountCardScheduleResponse] — `trains`에 열차가 [`DiscountCardScheduleTrain`][korail_mobile_api.read_models.DiscountCardScheduleTrain] 목록으로 들어 있습니다. `following_page_exists`는 채우지 않습니다.
+[`DiscountCardScheduleResponse`][korail_mobile_api.DiscountCardScheduleResponse] — `trains`에 열차가 [`DiscountCardScheduleTrain`][korail_mobile_api.DiscountCardScheduleTrain] 목록으로 들어 있습니다. `following_page_exists`는 채우지 않습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `departure_date`가 숫자 8자리가 아니거나 `departure_time`이 숫자 6자리가 아닐 때, 역 이름·`card_kind_management_no`·`card_kind_code`·`train_group_code`·`direct_transfer_division_code` 중 하나가 비어 있을 때, `usable_trip_count`가 문자열이 아닐 때, `usage_period_days`나 `page_no`를 빈 문자열로 넣었을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `departure_date`가 숫자 8자리가 아니거나 `departure_time`이 숫자 6자리가 아닐 때, 역 이름·`card_kind_management_no`·`card_kind_code`·`train_group_code`·`direct_transfer_division_code` 중 하나가 비어 있을 때, `usable_trip_count`가 문자열이 아닐 때, `usage_period_days`나 `page_no`를 빈 문자열로 넣었을 때 |
 
 **정보**
 
@@ -441,31 +441,31 @@ KorailClient.register_discount_card(
 
 조회가 아니라 실제 구매 요청이며, 서버에 결제 전 N카드 구매가 만들어집니다. 실서버에서 확인하지 못한 메서드입니다.
 
-구매 정보는 [`DiscountCardPurchaseRequest`][korail_mobile_api.mutation_models.DiscountCardPurchaseRequest]로 만듭니다.
+구매 정보는 [`DiscountCardPurchaseRequest`][korail_mobile_api.DiscountCardPurchaseRequest]로 만듭니다.
 `card_kind_management_no`(상품 관리번호), `customer_no`(고객번호), `validity_start_date`(유효기간 시작일), `usable_trip_count`(사용 가능 횟수)는 모두 비어 있으면 안 됩니다. `validity_start_date`와 `usable_trip_count`는 기본값이 빈 문자열이지만, 비워 두면 요청을 보내지 않고 예외를 발생시킵니다.
 `validity_start_date`의 형식은 라이브러리가 검사하지 않으며, 서버가 받는 형식은 확인하지 못했습니다.
-`customer_no`에는 로그인할 때 받은 [`KorailSession`][korail_mobile_api.models.KorailSession]의 `customer_no`를 넣습니다.
-적용 구간(`sections`)은 [`DiscountCardSectionRequest`][korail_mobile_api.mutation_models.DiscountCardSectionRequest]로 1~3개를 넣고, 2인용 N카드는 `additional_users`에 추가 사용자([`DiscountCardAdditionalUser`][korail_mobile_api.mutation_models.DiscountCardAdditionalUser])를 한 명까지 넣습니다.
+`customer_no`에는 로그인할 때 받은 [`KorailSession`][korail_mobile_api.KorailSession]의 `customer_no`를 넣습니다.
+적용 구간(`sections`)은 [`DiscountCardSectionRequest`][korail_mobile_api.DiscountCardSectionRequest]로 1~3개를 넣고, 2인용 N카드는 `additional_users`에 추가 사용자([`DiscountCardAdditionalUser`][korail_mobile_api.DiscountCardAdditionalUser])를 한 명까지 넣습니다.
 적용 구간 하나는 운행일(`run_date`), 열차 번호(`train_no`), 출발역 코드(`departure_station_code`), 도착역 코드(`arrival_station_code`)를 받고, 여정 유형 코드(`journey_type_code`)는 기본값이 `"11"`입니다.
 
-응답의 일괄 결제 대상 번호와 금액은 앱에서 결제 단계로 이어지지만, 라이브러리에는 이 구매를 결제하거나 취소하는 메서드가 없습니다. [`cancel_unpaid_hold`](reservations.md#cancel_unpaid_hold)는 홀드([`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse])만 받으므로 이 구매에 쓸 수 없습니다.
+응답의 일괄 결제 대상 번호와 금액은 앱에서 결제 단계로 이어지지만, 라이브러리에는 이 구매를 결제하거나 취소하는 메서드가 없습니다. [`cancel_unpaid_hold`](reservations.md#cancel_unpaid_hold)는 홀드([`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse])만 받으므로 이 구매에 쓸 수 없습니다.
 
 **매개변수**
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`DiscountCardPurchaseRequest`][korail_mobile_api.mutation_models.DiscountCardPurchaseRequest] | 필수 | 구매할 N카드 상품, 사용자, 적용 구간입니다. |
+| `request` | [`DiscountCardPurchaseRequest`][korail_mobile_api.DiscountCardPurchaseRequest] | 필수 | 구매할 N카드 상품, 사용자, 적용 구간입니다. |
 
 **반환값**
 
-[`DiscountCardPurchaseResponse`][korail_mobile_api.mutation_models.DiscountCardPurchaseResponse] — 결제 전 구매 결과입니다. 결제할 금액(`received_amount`), 유효기간(`validity_start_date`, `validity_end_date`), 사용 가능 횟수(`usable_trip_count`), 일괄 결제 대상 번호(`lump_settlement_target_no`), 서버가 등록한 상품 관리번호(`registered_card_kind_management_no`) 등을 담습니다.
+[`DiscountCardPurchaseResponse`][korail_mobile_api.DiscountCardPurchaseResponse] — 결제 전 구매 결과입니다. 결제할 금액(`received_amount`), 유효기간(`validity_start_date`, `validity_end_date`), 사용 가능 횟수(`usable_trip_count`), 일괄 결제 대상 번호(`lump_settlement_target_no`), 서버가 등록한 상품 관리번호(`registered_card_kind_management_no`) 등을 담습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `request`가 `DiscountCardPurchaseRequest`가 아닐 때, 위 네 필드 중 하나가 비어 있을 때, `sections`가 없거나 3개를 넘을 때, 구간이나 추가 사용자의 값이 비어 있을 때, 추가 사용자가 2명 이상일 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `request`가 `DiscountCardPurchaseRequest`가 아닐 때, 위 네 필드 중 하나가 비어 있을 때, `sections`가 없거나 3개를 넘을 때, 구간이나 추가 사용자의 값이 비어 있을 때, 추가 사용자가 2명 이상일 때 |
 
 **정보**
 
@@ -508,26 +508,26 @@ N카드의 유효기간을 실제로 연장합니다.
 KorailClient.extend_discount_card(ticket: DiscountCardTicket) -> BaseKorailResponse
 ```
 
-연장할 N카드 승차권(원표)의 반환 식별자 네 값(판매 창구번호, 판매일, 일련번호, 반환 비밀번호)을 [`DiscountCardTicket`][korail_mobile_api.mutation_models.DiscountCardTicket]에 넣어 보냅니다. 판매일에 `YYYYMMDD`와 `MMDD` 중 어느 형식을 넣어야 하는지는 확인하지 못했습니다. 두 판매일 필드의 차이는 [승차권 식별자 이어 쓰기](account.md#ticket-identifiers)를 참고하세요. 실서버에서 확인하지 못한 메서드입니다.
+연장할 N카드 승차권(원표)의 반환 식별자 네 값(판매 창구번호, 판매일, 일련번호, 반환 비밀번호)을 [`DiscountCardTicket`][korail_mobile_api.DiscountCardTicket]에 넣어 보냅니다. 판매일에 `YYYYMMDD`와 `MMDD` 중 어느 형식을 넣어야 하는지는 확인하지 못했습니다. 두 판매일 필드의 차이는 [승차권 식별자 이어 쓰기](account.md#ticket-identifiers)를 참고하세요. 실서버에서 확인하지 못한 메서드입니다.
 
-승차권 상세([`get_refund_ticket_detail`](payments.md#get_refund_ticket_detail))의 `discount_card`([`DiscountCardOnTicket`][korail_mobile_api.read_models.DiscountCardOnTicket])에는 기간 연장 가능 여부 플래그(`term_extension_possible_flag`)가 있습니다. 어떤 값이 연장 가능을 뜻하는지는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
+승차권 상세([`get_refund_ticket_detail`](payments.md#get_refund_ticket_detail))의 `discount_card`([`DiscountCardOnTicket`][korail_mobile_api.DiscountCardOnTicket])에는 기간 연장 가능 여부 플래그(`term_extension_possible_flag`)가 있습니다. 어떤 값이 연장 가능을 뜻하는지는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 
 **매개변수**
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `ticket` | [`DiscountCardTicket`][korail_mobile_api.mutation_models.DiscountCardTicket] | 필수 | 연장할 N카드 승차권의 반환 식별자입니다. |
+| `ticket` | [`DiscountCardTicket`][korail_mobile_api.DiscountCardTicket] | 필수 | 연장할 N카드 승차권의 반환 식별자입니다. |
 
 **반환값**
 
-[`BaseKorailResponse`][korail_mobile_api.models.BaseKorailResponse] — 결과 봉투(`str_result`, `h_msg_cd`, `h_msg_txt`)와 원본만 담습니다.
+[`BaseKorailResponse`][korail_mobile_api.BaseKorailResponse] — 결과 봉투(`str_result`, `h_msg_cd`, `h_msg_txt`)와 원본만 담습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `ticket`이 `DiscountCardTicket`이 아니거나 네 값 중 하나가 비어 있을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`이 `DiscountCardTicket`이 아니거나 네 값 중 하나가 비어 있을 때 |
 
 **정보**
 
@@ -570,7 +570,7 @@ KorailClient.reserve_with_discount_card(
 
 [`reserve`](reservations.md#reserve)와 같은 예약 경로에 N카드 번호를 붙여 보냅니다. 승객 한 명, 일반실로 홀드합니다. 실서버에서 확인하지 못한 메서드입니다.
 
-`train`은 열차 조회 결과의 [`TrainSummary`][korail_mobile_api.models.TrainSummary]를 그대로 넘깁니다. 라이브러리는 일반실 예약 코드(`general_reservation_code`)가 `"11"`인 열차만 받습니다.
+`train`은 열차 조회 결과의 [`TrainSummary`][korail_mobile_api.TrainSummary]를 그대로 넘깁니다. 라이브러리는 일반실 예약 코드(`general_reservation_code`)가 `"11"`인 열차만 받습니다.
 요청에는 N카드 할인 코드로 `"153"`, 메뉴 ID로 `"A2"`를 넣습니다.
 할인 코드 `"153"`은 7.0.8의 `ReqDiscount.N_CARD` 복호화로 확인한 값이며,
 발권 응답의 `ResDiscount.N_CARD` 값 `"443"`과 구분합니다.
@@ -582,22 +582,22 @@ KorailClient.reserve_with_discount_card(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `train` | [`TrainSummary`][korail_mobile_api.models.TrainSummary] | 필수 | 예약할 열차입니다. |
+| `train` | [`TrainSummary`][korail_mobile_api.TrainSummary] | 필수 | 예약할 열차입니다. |
 | `card_no` | `str` | 필수 | 사용할 N카드 번호입니다. 키워드 인자로만 넘깁니다. |
 
 **반환값**
 
-[`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse] — 홀드의 PNR(`pnr_no`), 결제 기한, 금액 등을 담습니다.
+[`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse] — 홀드의 PNR(`pnr_no`), 결제 기한, 금액 등을 담습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `train`이 `TrainSummary`가 아닐 때, `general_reservation_code`가 `"11"`이 아닐 때, `card_no`가 비어 있을 때, 열차 번호·운행일·역 코드 같은 필수 값이 없거나 형식이 맞지 않을 때. 응답을 읽지 못했을 때도 발생하며, 이때 홀드는 이미 만들어졌을 수 있습니다. |
-| [`KorailSoldOutError`][korail_mobile_api.errors.KorailSoldOutError] | 서버가 매진으로 응답했을 때 |
-| [`KorailSeatUnavailableError`][korail_mobile_api.errors.KorailSeatUnavailableError] | 서버가 좌석을 이용할 수 없다고 응답했을 때 |
-| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인(`ERR299943`) 등의 이유로 예약을 거절했을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `train`이 `TrainSummary`가 아닐 때, `general_reservation_code`가 `"11"`이 아닐 때, `card_no`가 비어 있을 때, 열차 번호·운행일·역 코드 같은 필수 값이 없거나 형식이 맞지 않을 때. 응답을 읽지 못했을 때도 발생하며, 이때 홀드는 이미 만들어졌을 수 있습니다. |
+| [`KorailSoldOutError`][korail_mobile_api.KorailSoldOutError] | 서버가 매진으로 응답했을 때 |
+| [`KorailSeatUnavailableError`][korail_mobile_api.KorailSeatUnavailableError] | 서버가 좌석을 이용할 수 없다고 응답했을 때 |
+| [`KorailReservationRefusedError`][korail_mobile_api.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인(`ERR299943`) 등의 이유로 예약을 거절했을 때 |
 
 **정보**
 
@@ -643,7 +643,7 @@ KorailClient.get_product_reservations(
 ) -> ProductReservationListResponse
 ```
 
-각 행([`ProductReservation`][korail_mobile_api.read_models.ProductReservation])의 예약 번호(`virtual_reservation_no`)와 예약 순번(`reservation_sequence`)은 [`get_product_detail`](#get_product_detail)의 입력입니다.
+각 행([`ProductReservation`][korail_mobile_api.ProductReservation])의 예약 번호(`virtual_reservation_no`)와 예약 순번(`reservation_sequence`)은 [`get_product_detail`](#get_product_detail)의 입력입니다.
 
 `reservation_status_code`와 `payment_status_code`는 조회 조건으로 함께 보냅니다. `None`(기본값)이면 보내지 않습니다. 앱이 이 두 필드에 보내는 기본값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 서버 응답에 목록 블록이 없으면 빈 `items`를 반환합니다.
@@ -659,14 +659,14 @@ KorailClient.get_product_reservations(
 
 **반환값**
 
-[`ProductReservationListResponse`][korail_mobile_api.read_models.ProductReservationListResponse] — `items`에 예약이 [`ProductReservation`][korail_mobile_api.read_models.ProductReservation] 목록으로, `total_count`에 전체 건수가 들어 있습니다.
+[`ProductReservationListResponse`][korail_mobile_api.ProductReservationListResponse] — `items`에 예약이 [`ProductReservation`][korail_mobile_api.ProductReservation] 목록으로, `total_count`에 전체 건수가 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `page_no`나 `page_size`가 정수가 아닐 때, 상태 코드를 빈 문자열로 넣었을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `page_no`나 `page_size`가 정수가 아닐 때, 상태 코드를 빈 문자열로 넣었을 때 |
 
 **정보**
 
@@ -708,14 +708,14 @@ KorailClient.get_product_detail(
 
 **반환값**
 
-[`ProductDetailResponse`][korail_mobile_api.read_models.ProductDetailResponse] — 상품 이름, 예약 상태, 취소 기한(`cancellation_deadline`), 취소 반환 금액(`cancellation_amount`), 취소 수수료(`cancellation_fee`), 받은 금액(`received_amount`), 총 결제 금액(`total_amount`), 구성 항목 이름(`included_item_names`), 취소에 쓰는 `virtual_reservation_no`와 `goods_sequence`를 담습니다. 서버 응답에 상세 블록이 없으면 이 필드들은 `None`이거나 비어 있습니다.
+[`ProductDetailResponse`][korail_mobile_api.ProductDetailResponse] — 상품 이름, 예약 상태, 취소 기한(`cancellation_deadline`), 취소 반환 금액(`cancellation_amount`), 취소 수수료(`cancellation_fee`), 받은 금액(`received_amount`), 총 결제 금액(`total_amount`), 구성 항목 이름(`included_item_names`), 취소에 쓰는 `virtual_reservation_no`와 `goods_sequence`를 담습니다. 서버 응답에 상세 블록이 없으면 이 필드들은 `None`이거나 비어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `reservation_no`가 비어 있을 때, `reservation_sequence`를 빈 문자열로 넣었을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `reservation_no`가 비어 있을 때, `reservation_sequence`를 빈 문자열로 넣었을 때 |
 
 **정보**
 
@@ -754,18 +754,18 @@ KorailClient.cancel_product_reservation(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `detail` | [`ProductDetailResponse`][korail_mobile_api.read_models.ProductDetailResponse] | 필수 | 취소할 예약의 상세 응답입니다. |
+| `detail` | [`ProductDetailResponse`][korail_mobile_api.ProductDetailResponse] | 필수 | 취소할 예약의 상세 응답입니다. |
 
 **반환값**
 
-[`ProductCancelResponse`][korail_mobile_api.mutation_models.ProductCancelResponse] — 결과 봉투와 `integrated_message_code`를 담습니다.
+[`ProductCancelResponse`][korail_mobile_api.ProductCancelResponse] — 결과 봉투와 `integrated_message_code`를 담습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `detail`이 `ProductDetailResponse`가 아니거나 `virtual_reservation_no`·`goods_sequence`가 비어 있을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `detail`이 `ProductDetailResponse`가 아니거나 `virtual_reservation_no`·`goods_sequence`가 비어 있을 때 |
 
 **정보**
 

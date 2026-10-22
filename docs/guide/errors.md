@@ -9,7 +9,7 @@
 
 ## 예외 계층
 
-요청을 처리하면서 라이브러리가 발생시키는 예외는 모두 [`KorailApiError`][korail_mobile_api.errors.KorailApiError]를 상속합니다. 모든 예외는 패키지 루트에서 가져올 수 있습니다.
+요청을 처리하면서 라이브러리가 발생시키는 예외는 모두 [`KorailApiError`][korail_mobile_api.KorailApiError]를 상속합니다. 모든 예외는 패키지 루트에서 가져올 수 있습니다.
 
 ```text
 Exception
@@ -41,30 +41,30 @@ Exception
 
 | 예외 | 부모 | 발생 조건 |
 |---|---|---|
-| [`KorailApiError`][korail_mobile_api.errors.KorailApiError] | `Exception` | 모든 라이브러리 예외의 기반 클래스입니다. 이 클래스 자체를 발생시키지는 않습니다. |
-| [`KorailTransportError`][korail_mobile_api.errors.KorailTransportError] | `KorailApiError` | 연결 실패나 시간 초과 같은 네트워크 오류가 났을 때, 서버가 2xx가 아닌 HTTP 상태로 응답했을 때(3xx 포함, 리다이렉트는 따라가지 않음) |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `KorailApiError` | 요청 전 입력 검사에 실패했을 때, 응답이 JSON 객체가 아니거나 봉투 필드의 타입이 틀렸을 때, 필수 값이 없어 응답을 읽을 수 없을 때, 닫힌 클라이언트로 요청하려 할 때, DynaPath 토큰 함수가 예외를 발생시키거나 문자열이 아니거나 ASCII가 아닌 값을 돌려줬을 때 |
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | `KorailApiError` | 로그인에 실패했을 때, 로그인이 필요한 메서드를 로그인하지 않고 호출했을 때(요청을 보내지 않음), 고객번호가 필요한 메서드인데 세션에 고객번호가 없을 때 |
-| [`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError] | `KorailAuthError` | 서버가 결과 코드 `P058`로 세션 만료를 알려 왔을 때. 로컬 세션을 비웁니다. |
-| [`KorailAccountLockedError`][korail_mobile_api.errors.KorailAccountLockedError] | `KorailAuthError` | 로그인 응답이 비밀번호 오류 허용 횟수 초과(`WRC000390`)를 알렸을 때. 로그인을 반복하지 말고 계정 상태를 확인하세요. |
-| [`KorailAuthContinuationRequired`][korail_mobile_api.errors.KorailAuthContinuationRequired] | `KorailAuthError` | 로그인 응답이 휴면 계정 해제나 비밀번호 변경 같은 웹 단계를 요구할 때(`WRC000116`, `WRC000420`) |
-| [`KorailDynaPathError`][korail_mobile_api.errors.KorailDynaPathError] | `KorailApiError` | DynaPath 토큰을 붙이는 경로의 응답에서 차단 코드를 감지했을 때. HTTP 상태와 봉투보다 먼저 판정합니다. |
-| [`KorailDynaPathRequiredError`][korail_mobile_api.errors.KorailDynaPathRequiredError] | `KorailApiError` | DynaPath를 끈 설정으로 로그인 요청을 보내려 할 때(요청을 보내지 않음) |
-| [`KorailAppError`][korail_mobile_api.errors.KorailAppError] | `KorailApiError` | 서버가 실패로 응답했을 때. 결과 코드가 [결과 코드와 예외](#result-codes)의 표에 없으면 이 클래스 그대로 발생합니다. |
-| [`KorailNoResultsError`][korail_mobile_api.errors.KorailNoResultsError] | `KorailAppError` | 조회 조건에 맞는 결과가 없을 때 |
-| [`KorailNoDirectTrainError`][korail_mobile_api.errors.KorailNoDirectTrainError] | `KorailNoResultsError` | 직통 열차가 없을 때 |
-| [`KorailSoldOutError`][korail_mobile_api.errors.KorailSoldOutError] | `KorailAppError` | 매진됐거나 남은 좌석이 없을 때 |
-| [`KorailSeatUnavailableError`][korail_mobile_api.errors.KorailSeatUnavailableError] | `KorailAppError` | 지정한 좌석을 이용할 수 없을 때 |
-| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | `KorailAppError` | 중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인 등의 이유로 예약을 거절했을 때 |
-| [`KorailInvalidRequestError`][korail_mobile_api.errors.KorailInvalidRequestError] | `KorailAppError` | 서버가 입력값 검증에서 거절했을 때 |
-| [`KorailNotEntitledError`][korail_mobile_api.errors.KorailNotEntitledError] | `KorailAppError` | 할인이나 상품을 이용할 자격이 없을 때 |
-| [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError] | `KorailAppError` | 서비스나 연결을 이용할 수 없다는 안내로 응답했을 때. 서버 장애만을 뜻하지는 않습니다. |
-| [`KorailRateLimitError`][korail_mobile_api.errors.KorailRateLimitError] | `KorailAppError` | 요청 횟수 초과·반복 호출 차단 안내(`BT019`, `BT023`). 해제 시각이나 재시도 간격은 알 수 없습니다. |
-| [`KorailProcessingError`][korail_mobile_api.errors.KorailProcessingError] | `KorailAppError` | 요청이 처리 중이거나 이미 완료됐을 수 있다는 안내(`WRT900900`). 예약·승차권 목록을 먼저 확인하세요. |
-| [`KorailAlreadyProcessedError`][korail_mobile_api.errors.KorailAlreadyProcessedError] | `KorailAppError` | 이미 반환된 승차권(`EZZ000014`)·취소된 예약(`EVZ000102`). 현재 요청을 성공으로 바꾸지는 않습니다. |
-| [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError] | `KorailAppError` | 앱 업데이트를 요구하는 응답일 때(`SUPDATE`, 2.6.2부터 [`-8204`](#app-update) 포함) |
-| [`KorailNetFunnelError`][korail_mobile_api.errors.KorailNetFunnelError] | `KorailApiError` | 대기열을 통과하지 못했을 때. 이 예외가 나면 API 요청은 보내지 않은 것입니다. |
-| [`KorailQueueRejectedError`][korail_mobile_api.errors.KorailQueueRejectedError] | `KorailNetFunnelError` | 대기열 서버가 요청을 차단했을 때(`301`, `302`) |
+| [`KorailApiError`][korail_mobile_api.KorailApiError] | `Exception` | 모든 라이브러리 예외의 기반 클래스입니다. 이 클래스 자체를 발생시키지는 않습니다. |
+| [`KorailTransportError`][korail_mobile_api.KorailTransportError] | `KorailApiError` | 연결 실패나 시간 초과 같은 네트워크 오류가 났을 때, 서버가 2xx가 아닌 HTTP 상태로 응답했을 때(3xx 포함, 리다이렉트는 따라가지 않음) |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `KorailApiError` | 요청 전 입력 검사에 실패했을 때, 응답이 JSON 객체가 아니거나 봉투 필드의 타입이 틀렸을 때, 필수 값이 없어 응답을 읽을 수 없을 때, 닫힌 클라이언트로 요청하려 할 때, DynaPath 토큰 함수가 예외를 발생시키거나 문자열이 아니거나 ASCII가 아닌 값을 돌려줬을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | `KorailApiError` | 로그인에 실패했을 때, 로그인이 필요한 메서드를 로그인하지 않고 호출했을 때(요청을 보내지 않음), 고객번호가 필요한 메서드인데 세션에 고객번호가 없을 때 |
+| [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError] | `KorailAuthError` | 서버가 결과 코드 `P058`로 세션 만료를 알려 왔을 때. 로컬 세션을 비웁니다. |
+| [`KorailAccountLockedError`][korail_mobile_api.KorailAccountLockedError] | `KorailAuthError` | 로그인 응답이 비밀번호 오류 허용 횟수 초과(`WRC000390`)를 알렸을 때. 로그인을 반복하지 말고 계정 상태를 확인하세요. |
+| [`KorailAuthContinuationRequired`][korail_mobile_api.KorailAuthContinuationRequired] | `KorailAuthError` | 로그인 응답이 휴면 계정 해제나 비밀번호 변경 같은 웹 단계를 요구할 때(`WRC000116`, `WRC000420`) |
+| [`KorailDynaPathError`][korail_mobile_api.KorailDynaPathError] | `KorailApiError` | DynaPath 토큰을 붙이는 경로의 응답에서 차단 코드를 감지했을 때. HTTP 상태와 봉투보다 먼저 판정합니다. |
+| [`KorailDynaPathRequiredError`][korail_mobile_api.KorailDynaPathRequiredError] | `KorailApiError` | DynaPath를 끈 설정으로 로그인 요청을 보내려 할 때(요청을 보내지 않음) |
+| [`KorailAppError`][korail_mobile_api.KorailAppError] | `KorailApiError` | 서버가 실패로 응답했을 때. 결과 코드가 [결과 코드와 예외](#result-codes)의 표에 없으면 이 클래스 그대로 발생합니다. |
+| [`KorailNoResultsError`][korail_mobile_api.KorailNoResultsError] | `KorailAppError` | 조회 조건에 맞는 결과가 없을 때 |
+| [`KorailNoDirectTrainError`][korail_mobile_api.KorailNoDirectTrainError] | `KorailNoResultsError` | 직통 열차가 없을 때 |
+| [`KorailSoldOutError`][korail_mobile_api.KorailSoldOutError] | `KorailAppError` | 매진됐거나 남은 좌석이 없을 때 |
+| [`KorailSeatUnavailableError`][korail_mobile_api.KorailSeatUnavailableError] | `KorailAppError` | 지정한 좌석을 이용할 수 없을 때 |
+| [`KorailReservationRefusedError`][korail_mobile_api.KorailReservationRefusedError] | `KorailAppError` | 중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인 등의 이유로 예약을 거절했을 때 |
+| [`KorailInvalidRequestError`][korail_mobile_api.KorailInvalidRequestError] | `KorailAppError` | 서버가 입력값 검증에서 거절했을 때 |
+| [`KorailNotEntitledError`][korail_mobile_api.KorailNotEntitledError] | `KorailAppError` | 할인이나 상품을 이용할 자격이 없을 때 |
+| [`KorailServiceUnavailableError`][korail_mobile_api.KorailServiceUnavailableError] | `KorailAppError` | 서비스나 연결을 이용할 수 없다는 안내로 응답했을 때. 서버 장애만을 뜻하지는 않습니다. |
+| [`KorailRateLimitError`][korail_mobile_api.KorailRateLimitError] | `KorailAppError` | 요청 횟수 초과·반복 호출 차단 안내(`BT019`, `BT023`). 해제 시각이나 재시도 간격은 알 수 없습니다. |
+| [`KorailProcessingError`][korail_mobile_api.KorailProcessingError] | `KorailAppError` | 요청이 처리 중이거나 이미 완료됐을 수 있다는 안내(`WRT900900`). 예약·승차권 목록을 먼저 확인하세요. |
+| [`KorailAlreadyProcessedError`][korail_mobile_api.KorailAlreadyProcessedError] | `KorailAppError` | 이미 반환된 승차권(`EZZ000014`)·취소된 예약(`EVZ000102`). 현재 요청을 성공으로 바꾸지는 않습니다. |
+| [`KorailAppUpdateRequiredError`][korail_mobile_api.KorailAppUpdateRequiredError] | `KorailAppError` | 앱 업데이트를 요구하는 응답일 때(`SUPDATE`, 2.6.2부터 [`-8204`](#app-update) 포함) |
+| [`KorailNetFunnelError`][korail_mobile_api.KorailNetFunnelError] | `KorailApiError` | 대기열을 통과하지 못했을 때. 이 예외가 나면 API 요청은 보내지 않은 것입니다. |
+| [`KorailQueueRejectedError`][korail_mobile_api.KorailQueueRejectedError] | `KorailNetFunnelError` | 대기열 서버가 요청을 차단했을 때(`301`, `302`) |
 
 - 대기열 서버와의 네트워크 오류는 `KorailTransportError`로 나오지 않습니다. 관문에 따라 경고 로그를 남기고 건너뛰거나 `KorailNetFunnelError`로 바뀝니다. 자세한 규칙은 [설정](configuration.md#netfunnel)을 참고하세요.
   다만 2.6.2부터 httpx가 해석하지 못하는 대기열 주소는 `KorailTransportError`입니다. 이전에는 `httpx.InvalidURL`이 그대로 전파됐습니다.
@@ -114,7 +114,7 @@ finally:
 ## 결과 코드와 예외 {#result-codes}
 
 서버 응답의 `strResult`가 `FAIL`이면 실패로 판정합니다. 봉투가 반드시 있어야 하는 응답에서 `strResult`가 빠져도 실패로 봅니다.
-실패 응답의 결과 코드가 `P058`이면 [`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError]를 발생시키고, 그 밖에는 결과 코드로 [`KorailAppError`][korail_mobile_api.errors.KorailAppError]의 하위 예외를 고릅니다.
+실패 응답의 결과 코드가 `P058`이면 [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError]를 발생시키고, 그 밖에는 결과 코드로 [`KorailAppError`][korail_mobile_api.KorailAppError]의 하위 예외를 고릅니다.
 
 - 표의 결과 코드가 와도 `strResult`가 `SUCC`이면 예외가 아닙니다.
 - 실패를 응답 모델로 돌려주는 메서드(예: [`pay_with_card`](../api/payments.md#pay_with_card))는 이 분류를 거치지 않습니다. 각 메서드 설명에 표시했습니다.
@@ -242,7 +242,7 @@ finally:
 
 ## 세션이 만료됐을 때 {#session-expired}
 
-로그인 후 서버 세션이 끝나면 다음 요청에서 [`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError]가 발생합니다.
+로그인 후 서버 세션이 끝나면 다음 요청에서 [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError]가 발생합니다.
 이때 라이브러리는 로컬 세션과 쿠키를 비우지만, 다시 로그인하거나 요청을 다시 보내지는 않습니다.
 
 - `KorailSessionExpiredError`는 `KorailAuthError`의 하위 예외입니다. 둘을 따로 처리하려면 `KorailSessionExpiredError`를 먼저 잡으세요.
@@ -377,13 +377,13 @@ except KorailProtocolError as error:
 
 ## 카드 결제가 거절됐을 때 {#card-decline}
 
-[`pay_with_card`](../api/payments.md#pay_with_card)는 카드 거절 같은 실패 응답에서 예외를 발생시키지 않고 [`ReservationPaymentResponse`][korail_mobile_api.mutation_models.ReservationPaymentResponse]를 반환합니다.
+[`pay_with_card`](../api/payments.md#pay_with_card)는 카드 거절 같은 실패 응답에서 예외를 발생시키지 않고 [`ReservationPaymentResponse`][korail_mobile_api.ReservationPaymentResponse]를 반환합니다.
 거절이면 `str_result`가 `"FAIL"`이고, 응답에 `strResult`가 없으면 `None`입니다. 사유는 `h_msg_cd`와 `h_msg_txt`에 있습니다.
 `str_result`가 `"SUCC"`일 때만 결제 완료로 처리하세요.
 
 다음 경우에는 여전히 예외가 발생합니다.
 
-- 요청 전 검사: 예약대기 홀드, 결제 금액이 0원인 홀드, 형식이 맞지 않는 카드 입력은 요청을 보내기 전에 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]로 거절합니다.
+- 요청 전 검사: 예약대기 홀드, 결제 금액이 0원인 홀드, 형식이 맞지 않는 카드 입력은 요청을 보내기 전에 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]로 거절합니다.
 - 대기열: `pay` 관문을 통과하지 못하면 `KorailNetFunnelError`가 발생하고 결제 요청은 보내지 않습니다.
 - 세션 만료(`P058`), 네트워크 오류, 읽을 수 없는 응답은 다른 메서드와 같이 예외가 발생합니다. 이때는 다시 결제하기 전에 [결과를 확인](#mutations)하세요.
 
@@ -408,7 +408,7 @@ if payment.str_result != "SUCC":
 
 ## 웹 단계가 필요한 로그인 {#auth-continuation}
 
-휴면 계정 해제나 비밀번호 변경처럼 웹 화면에서 처리해야 하면 [`login`](../api/session.md#login)이 [`KorailAuthContinuationRequired`][korail_mobile_api.errors.KorailAuthContinuationRequired]를 발생시킵니다.
+휴면 계정 해제나 비밀번호 변경처럼 웹 화면에서 처리해야 하면 [`login`](../api/session.md#login)이 [`KorailAuthContinuationRequired`][korail_mobile_api.KorailAuthContinuationRequired]를 발생시킵니다.
 `redirect_url`에 서버가 알려 준 주소가, `code`에 결과 코드가 들어 있습니다. 라이브러리는 이 단계를 진행하지 않으며 로그인된 상태로 만들지도 않습니다.
 앱이나 웹에서 조치를 마친 뒤 다시 로그인하세요.
 
@@ -430,7 +430,7 @@ finally:
 
 !!! danger "원본과 모델은 마스킹하지 않습니다"
     응답 모델과 예외의 `raw`에는 서버가 보낸 응답이 가공 없이 들어 있습니다. 이름, 전화번호, 고객번호, 예약 번호, 결제 정보 같은 개인정보가 포함될 수 있습니다.
-    응답 모델을 `print`하거나 로그에 남기면 `raw`를 포함한 모든 필드가 그대로 출력됩니다. [`KorailSession`][korail_mobile_api.models.KorailSession]에는 세션 쿠키 값과 로그인 ID도 들어 있습니다.
+    응답 모델을 `print`하거나 로그에 남기면 `raw`를 포함한 모든 필드가 그대로 출력됩니다. [`KorailSession`][korail_mobile_api.KorailSession]에는 세션 쿠키 값과 로그인 ID도 들어 있습니다.
     모델이 바꿀 수 없는(frozen) dataclass여도 `raw` 안의 사전과 목록은 복사하거나 고정하지 않습니다.
     오류를 기록할 때는 예외의 클래스 이름과 `code`처럼 필요한 값만 남기고, `raw`와 모델 전체를 로그나 오류 보고에 넣지 마세요.
     2.6.2부터 네트워크 오류로 `KorailTransportError.__cause__`에 붙는 `httpx` 예외에는 메서드와 쿼리를 뺀 URL만 남고 요청 본문·쿠키·DynaPath 토큰은 지웁니다. 응답 모델, `raw`, `dataclasses.asdict`와 pickle 결과는 여전히 마스킹하지 않습니다.

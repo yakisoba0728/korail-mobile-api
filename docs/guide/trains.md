@@ -6,7 +6,7 @@
 
 ## 조회 조건 {#query}
 
-조회 조건은 [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery]로 만들어 [`search_trains`](../api/trains.md#search_trains)에 넘깁니다.
+조회 조건은 [`TrainSearchQuery`][korail_mobile_api.TrainSearchQuery]로 만들어 [`search_trains`](../api/trains.md#search_trains)에 넘깁니다.
 필수 필드는 출발역, 도착역, 출발일 세 개이고 나머지는 기본값이 있습니다.
 
 ```python
@@ -47,7 +47,7 @@ finally:
 | 중증 장애인 | `high_disability_passengers` |
 | 경증 장애인 | `low_disability_passengers` |
 
-인원 필드는 모두 정수여야 하며, 아니면 요청을 보내기 전에 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
+인원 필드는 모두 정수여야 하며, 아니면 요청을 보내기 전에 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
 인원의 범위와 합계는 라이브러리가 검사하지 않고 서버에 맡깁니다.
 
 청소년 인원은 검색 호환용입니다. 일반 운임 예약에는 `adult` 인원으로 지정해야 하며,
@@ -58,7 +58,7 @@ finally:
 ### 역 이름과 역 코드 {#stations}
 
 `departure_station_code`와 `arrival_station_code`에는 역 이름(`"서울"`)이나 숫자로만 된 역 코드를 넣습니다.
-역 코드를 넣으면 처음 한 번 [`get_station_data`](../api/session.md#get_station_data)로 역 목록을 받아 이름으로 바꿔 보내고, 대응표는 클라이언트에 보관합니다. 목록에 없는 코드는 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]입니다.
+역 코드를 넣으면 처음 한 번 [`get_station_data`](../api/session.md#get_station_data)로 역 목록을 받아 이름으로 바꿔 보내고, 대응표는 클라이언트에 보관합니다. 목록에 없는 코드는 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]입니다.
 역 이름은 앞뒤 공백만 뺀 뒤 그대로 보냅니다. 비어 있으면 요청 전에 거절합니다.
 
 다른 메서드는 역을 받는 방식이 다릅니다.
@@ -90,7 +90,7 @@ finally:
 
 ## 조회 결과 {#results}
 
-[`TrainSearchResult`][korail_mobile_api.models.TrainSearchResult]의 `trains`에 열차가 [`TrainSummary`][korail_mobile_api.models.TrainSummary] 목록으로 들어 있습니다. 자주 쓰는 필드는 다음과 같습니다.
+[`TrainSearchResult`][korail_mobile_api.TrainSearchResult]의 `trains`에 열차가 [`TrainSummary`][korail_mobile_api.TrainSummary] 목록으로 들어 있습니다. 자주 쓰는 필드는 다음과 같습니다.
 
 | 필드 | 뜻 |
 |---|---|
@@ -99,12 +99,12 @@ finally:
 | `general_availability_name`, `special_availability_name` | 일반실·특실 예약 상태 문구 |
 | `free_car_count` | 자유석 칸 수 |
 
-조건에 맞는 열차가 없으면 예외 없이 `trains`가 비어 있을 수 있습니다. 직통 열차가 없다는 결과 코드(`WRD000061`)에는 [`KorailNoDirectTrainError`][korail_mobile_api.errors.KorailNoDirectTrainError]가 발생합니다.
+조건에 맞는 열차가 없으면 예외 없이 `trains`가 비어 있을 수 있습니다. 직통 열차가 없다는 결과 코드(`WRD000061`)에는 [`KorailNoDirectTrainError`][korail_mobile_api.KorailNoDirectTrainError]가 발생합니다.
 `result.metadata.notice_message`에 검색 안내 문구가 올 수 있습니다. 앱은 이 값이 있으면 안내 창을 띄웁니다.
 
 ## 다음 페이지 조회 {#next-page}
 
-결과는 한 페이지씩 옵니다. `next_page()`가 [`TrainSearchContinuation`][korail_mobile_api.models.TrainSearchContinuation]을 돌려주면 같은 `query`와 함께 `continuation`으로 넘깁니다.
+결과는 한 페이지씩 옵니다. `next_page()`가 [`TrainSearchContinuation`][korail_mobile_api.TrainSearchContinuation]을 돌려주면 같은 `query`와 함께 `continuation`으로 넘깁니다.
 `next_page()`는 목록이 비었거나, 다음 페이지 표시가 없거나, 필요한 값이 빠졌으면 `None`입니다.
 
 ```python
@@ -139,7 +139,7 @@ finally:
 ## 환승 여정 조회 {#transfer}
 
 직통 열차가 없는 구간은 [`search_transfer_trains`](../api/trains.md#search_transfer_trains)로 환승 여정을 찾습니다.
-결과의 `itineraries`에 두 구간을 묶은 [`TransferItinerary`][korail_mobile_api.models.TransferItinerary]가 들어 있습니다.
+결과의 `itineraries`에 두 구간을 묶은 [`TransferItinerary`][korail_mobile_api.TransferItinerary]가 들어 있습니다.
 
 ```python
 from datetime import datetime, timedelta, timezone
@@ -175,7 +175,7 @@ finally:
 
 ## 직통이 없을 때 환승 조회 {#transfer-fallback}
 
-[`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback)은 직통 조회가 [`KorailNoDirectTrainError`][korail_mobile_api.errors.KorailNoDirectTrainError]로 끝났을 때만 같은 조건으로 환승 첫 페이지를 조회합니다.
+[`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback)은 직통 조회가 [`KorailNoDirectTrainError`][korail_mobile_api.KorailNoDirectTrainError]로 끝났을 때만 같은 조건으로 환승 첫 페이지를 조회합니다.
 직통 결과가 빈 목록이거나 다른 오류가 난 경우에는 환승 조회로 넘어가지 않습니다.
 
 ```python
@@ -259,11 +259,11 @@ finally:
 
 ### 좌석 속성 {#seat-attributes}
 
-호차의 `attributes`는 그 호차에서 고를 수 있는 좌석 속성([`SeatAttribute`][korail_mobile_api.models.SeatAttribute])의 이름 `name`과 코드 `code`입니다.
+호차의 `attributes`는 그 호차에서 고를 수 있는 좌석 속성([`SeatAttribute`][korail_mobile_api.SeatAttribute])의 이름 `name`과 코드 `code`입니다.
 두 메서드의 `seat_attribute_code`에 코드를 넣으면 그 값을, 넣지 않으면 조회 결과 행의 `train.seat_attribute_code`를 보냅니다. 코드는 숫자 세 자리여야 하며, 아니면 요청 전에 거절합니다.
 앱처럼 호차 목록과 좌석 배치에는 같은 `room_class_code`와 `seat_attribute_code`를 넘기세요.
 
-좌석 배치의 좌석마다 [`PhysicalSeat`][korail_mobile_api.models.PhysicalSeat]가 있습니다.
+좌석 배치의 좌석마다 [`PhysicalSeat`][korail_mobile_api.PhysicalSeat]가 있습니다.
 
 | 필드 | 뜻 |
 |---|---|
@@ -273,14 +273,14 @@ finally:
 | `direction_code`, `requested_attribute_code`, `other_attribute_code` | 좌석 방향 속성, 요청 좌석 속성, 기타 속성 코드입니다. |
 | `message` | 좌석에 붙은 안내 문구입니다. |
 
-`KorailSeatAssignment.from_inventory()`는 판매할 수 있는 좌석만 받아 좌석 지정 입력([`KorailSeatAssignment`][korail_mobile_api.mutation_models.KorailSeatAssignment])으로 바꿉니다.
+`KorailSeatAssignment.from_inventory()`는 판매할 수 있는 좌석만 받아 좌석 지정 입력([`KorailSeatAssignment`][korail_mobile_api.KorailSeatAssignment])으로 바꿉니다.
 이 값은 좌석 지정 예약(`job_type=KorailReservationJobType.SEAT_DESIGNATED`)으로 [`reserve`](../api/reservations.md#reserve)를 호출할 때 `seats`에 승객 수만큼 넘깁니다.
 자유석 호차는 [`get_free_seat_car_info`](../api/trains.md#get_free_seat_car_info)로 따로 조회합니다. 호차가 숫자가 아니라 안내 문자열로 옵니다.
 
 ## 예매 전 운임 조회 {#fare}
 
 [`get_price_fare_quote`](../api/trains.md#get_price_fare_quote)는 열차 한 편이나 환승 두 구간의 운임을 예매 전에 조회합니다.
-2.6.1부터 [`PriceFareLeg.from_train()`][korail_mobile_api.read_payloads.PriceFareLeg.from_train]으로 조회 결과의 식별값을 옮길 수 있습니다. 이전 버전에서는 같은 필드를 직접 지정해야 합니다. 팩토리는 운행일·역·종별·좌석 속성을 추측하지 않고, 응답의 상품 번호도 보존합니다.
+2.6.1부터 [`PriceFareLeg.from_train()`][korail_mobile_api.PriceFareLeg.from_train]으로 조회 결과의 식별값을 옮길 수 있습니다. 이전 버전에서는 같은 필드를 직접 지정해야 합니다. 팩토리는 운행일·역·종별·좌석 속성을 추측하지 않고, 응답의 상품 번호도 보존합니다.
 
 ```python
 from datetime import datetime, timedelta, timezone
@@ -300,7 +300,7 @@ finally:
     client.close()
 ```
 
-- 조회 결과 행에 필요한 값이 없으면(`None`) `PriceFareLeg`를 만들 때 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
+- 조회 결과 행에 필요한 값이 없으면(`None`) `PriceFareLeg`를 만들 때 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
 - 금액은 서버가 보낸 표시용 문자열이며 기준 운임입니다. 결제할 금액은 예약한 뒤 홀드의 `received_amount`를 쓰세요. 할인이 적용되면 결제 금액은 이 운임보다 낮을 수 있습니다.
 
 ## 다음 단계 {#next}

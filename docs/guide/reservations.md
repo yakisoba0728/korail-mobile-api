@@ -12,7 +12,7 @@
 
 ## 홀드와 결제 기한 {#hold}
 
-예약 메서드([`reserve`](../api/reservations.md#reserve), [`reserve_transfer`](../api/reservations.md#reserve_transfer), [`reserve_merge`](../api/reservations.md#reserve_merge))는 결제 전 예약인 홀드를 만들고 [`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse]를 반환합니다.
+예약 메서드([`reserve`](../api/reservations.md#reserve), [`reserve_transfer`](../api/reservations.md#reserve_transfer), [`reserve_merge`](../api/reservations.md#reserve_merge))는 결제 전 예약인 홀드를 만들고 [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse]를 반환합니다.
 홀드는 좌석을 점유하며, 결제 기한까지 결제하거나 취소해야 합니다. 라이브러리는 홀드를 자동으로 결제하거나 취소하지 않습니다.
 
 | 필드 | 뜻 |
@@ -21,7 +21,7 @@
 | `received_amount` | 결제할 금액입니다. 카드 결제는 이 금액으로 합니다. |
 | `payment_deadline_date`, `payment_deadline_time` | 결제 기한의 날짜와 시각입니다. 앱은 두 값을 이어 붙여 표시합니다. |
 | `payable` | 결제할 수 있는 홀드인지 여부입니다. 예약대기 홀드는 `False`입니다. |
-| `journeys` | 예약된 여정 목록([`ReservationJourney`][korail_mobile_api.mutation_models.ReservationJourney])입니다. |
+| `journeys` | 예약된 여정 목록([`ReservationJourney`][korail_mobile_api.ReservationJourney])입니다. |
 
 `payment_deadline_message`는 이름과 달리 결제 기한 값이 아닙니다. `total_price`는 표시용 합계이므로 결제 금액으로 쓰지 마세요.
 
@@ -29,7 +29,7 @@
 
 청소년 예약 사전 거절과 `ERR299943` 오류 분류 변경은 2.5.0부터 적용합니다.
 
-[`KorailPassengerCounts`][korail_mobile_api.mutation_models.KorailPassengerCounts]로 승객 종류별 인원을 정합니다. 예약 메서드에 넘기지 않으면 어른 1명입니다.
+[`KorailPassengerCounts`][korail_mobile_api.KorailPassengerCounts]로 승객 종류별 인원을 정합니다. 예약 메서드에 넘기지 않으면 어른 1명입니다.
 
 | 필드 | 승객 종류 | 기본값 |
 |---|---|---|
@@ -43,7 +43,7 @@
 | `guide_dog` | 안내견 | `0` |
 
 - 각 값은 0 이상의 `int`여야 하며 `True`·`False`는 받지 않습니다.
-- 전체 인원(`total`)은 유아와 안내견을 포함해 1명 이상 9명 이하입니다. 어기면 객체를 만들 때 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
+- 전체 인원(`total`)은 유아와 안내견을 포함해 1명 이상 9명 이하입니다. 어기면 객체를 만들 때 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
 - 예약 요청 전에 두 조합을 더 검사합니다. 유아가 있으면 어린이·유아 외의 승객이 있어야 하고, 안내견은 장애 승객(`severe_disability`와 `mild_disability`의 합)보다 많을 수 없습니다.
 - 예약에 사용할 승객 구성으로 조회하세요. 검색의 청소년 인원은 어른 수에 합산되지만 예약에는 사용할 수 없습니다.
 
@@ -55,7 +55,7 @@
 
 열차 예약은 앱의 `PassengerType.basicList()`와 같은 일곱 종류를 받습니다. `teenager > 0`이면
 직통·좌석 지정·예약대기·환승·병합 예약과 간편 API의 `reservations.create()` 모두 요청 전에
-[`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다. 대기열 요청도 보내지 않습니다.
+[`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다. 대기열 요청도 보내지 않습니다.
 청소년을 일반 운임으로 예약하려면 호출자가 `adult` 인원으로 지정하세요.
 
 `teenager`의 `P11` 할인은 청소년드림 상품과 별개이며, 기존 전송에서는
@@ -127,7 +127,7 @@ finally:
 좌석 지정 예약(`KorailReservationJobType.SEAT_DESIGNATED`)은 호차와 좌석을 직접 골라 잡습니다.
 앱과 같은 순서로 [`get_seat_cars`](../api/trains.md#get_seat_cars)로 호차 목록을 먼저 읽고 [`get_seat_inventory`](../api/trains.md#get_seat_inventory)로 좌석 배치를 읽습니다. 호차 목록을 읽지 않고 좌석 배치를 바로 조회하면 서버가 오류로 응답할 수 있습니다.
 
-좌석 배치에서 판매 가능한 좌석(`sale_possible`이 `"Y"`)을 골라 [`KorailSeatAssignment`][korail_mobile_api.mutation_models.KorailSeatAssignment]의 `from_inventory`로 좌석 입력을 만듭니다.
+좌석 배치에서 판매 가능한 좌석(`sale_possible`이 `"Y"`)을 골라 [`KorailSeatAssignment`][korail_mobile_api.KorailSeatAssignment]의 `from_inventory`로 좌석 입력을 만듭니다.
 좌석은 전체 인원(`passengers.total`)만큼, 서로 다르게 넣어야 합니다.
 아래 예제는 일반 예약의 `hold`가 잡은 `train`과 다른 열차를 고르고, 만든 홀드를 마지막에 취소합니다.
 
@@ -151,7 +151,7 @@ print(seat_hold.pnr_no, seat_hold.received_amount)
 client.cancel_unpaid_hold(seat_hold)
 ```
 
-`from_inventory`는 좌석 배치 응답에 호차 번호(`car_no`)가 없으면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다. 이때는 `KorailSeatAssignment(car_no=car.car_no, seat_no=seat.seat_no)`처럼 직접 만듭니다.
+`from_inventory`는 좌석 배치 응답에 호차 번호(`car_no`)가 없으면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다. 이때는 `KorailSeatAssignment(car_no=car.car_no, seat_no=seat.seat_no)`처럼 직접 만듭니다.
 
 !!! warning "실제로 처리됩니다"
     `reserve`는 고른 좌석을 점유하는 홀드를 실제로 만들고, `cancel_unpaid_hold`는 그 홀드를 실제로 취소합니다.
@@ -191,7 +191,7 @@ client.cancel_unpaid_hold(standby)
 ## 환승 예약 {#transfer}
 
 [`search_transfer_trains`](../api/trains.md#search_transfer_trains)로 찾은 환승 여정은 [`reserve_transfer`](../api/reservations.md#reserve_transfer)로 한 PNR에 홀드합니다.
-[`TransferItinerary`][korail_mobile_api.models.TransferItinerary]의 `legs`가 탑승 순서대로 놓인 두 구간이므로 그대로 넘깁니다.
+[`TransferItinerary`][korail_mobile_api.TransferItinerary]의 `legs`가 탑승 순서대로 놓인 두 구간이므로 그대로 넘깁니다.
 두 구간은 서로 다른 열차여야 하고 두 번째 구간은 첫 구간 이후에 출발해야 합니다. 구간마다 일반 예약과 같은 예약 가능 여부를 검사합니다.
 객실 등급은 `seat_classes`에 값 하나(두 구간 공통)나 구간별 목록으로 넣습니다.
 아래 예제는 만든 환승 홀드를 마지막에 취소합니다.
@@ -242,7 +242,7 @@ first = client.reserve(merge_train, passengers=passengers, job_type=KorailReserv
 
 ### 2. 병합 조회 {#merge-inquiry}
 
-[`MergeSeatsInquiryRequest`][korail_mobile_api.read_payloads.MergeSeatsInquiryRequest]에 첫 홀드의 열차 정보를 넣습니다. 이 조회는 서버 상태를 바꾸지 않습니다.
+[`MergeSeatsInquiryRequest`][korail_mobile_api.MergeSeatsInquiryRequest]에 첫 홀드의 열차 정보를 넣습니다. 이 조회는 서버 상태를 바꾸지 않습니다.
 
 ```python
 from korail_mobile_api import MergeSeatsInquiryRequest
@@ -264,7 +264,7 @@ merge = client.get_merge_seats_inquiry(
 print([station.name for station in merge.intermediate_stations])
 ```
 
-응답의 `trains`([`TrainScheduleItem`][korail_mobile_api.read_models.TrainScheduleItem] 목록)를 4단계에 그대로 넘깁니다. 첫 행의 도착역이 좌석이 갈리는 중간역이 됩니다.
+응답의 `trains`([`TrainScheduleItem`][korail_mobile_api.TrainScheduleItem] 목록)를 4단계에 그대로 넘깁니다. 첫 행의 도착역이 좌석이 갈리는 중간역이 됩니다.
 `trains`가 비어 있으면 `reserve_merge`가 요청 전에 거절하므로, 첫 홀드를 취소하고 멈춥니다.
 
 ### 3. 첫 홀드 취소 {#merge-cancel}
@@ -318,7 +318,7 @@ for journey in detail.journeys:
 ## 장바구니 {#cart}
 
 [`add_to_cart`](../api/reservations.md#add_to_cart)는 홀드를 계정의 장바구니에 담고, [`get_cart_list`](../api/reservations.md#get_cart_list)는 장바구니를 조회합니다.
-장바구니 행([`CartItem`][korail_mobile_api.read_models.CartItem])은 열차·공항버스 예약이나 부가서비스 한 건입니다.
+장바구니 행([`CartItem`][korail_mobile_api.CartItem])은 열차·공항버스 예약이나 부가서비스 한 건입니다.
 라이브러리에는 장바구니에서 행을 빼는 메서드가 없습니다.
 
 ```python

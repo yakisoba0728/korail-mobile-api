@@ -7,7 +7,7 @@
 
 ## 클라이언트
 
-::: korail_mobile_api.client.KorailClient
+::: korail_mobile_api.KorailClient
     options:
       members: false
       show_root_heading: true
@@ -31,15 +31,15 @@
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailTransportError`][korail_mobile_api.errors.KorailTransportError] | 네트워크 오류가 나거나 서버가 2xx가 아닌 HTTP 상태로 응답했을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 요청 전 입력 검사에 실패했을 때, 응답이 JSON이 아니거나 필수 값이 없어 읽을 수 없을 때 |
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인이 필요한 메서드를 로그인하지 않고 호출했을 때 |
-| [`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError] | 서버 세션이 만료됐을 때(결과 코드 `P058`). 로컬 세션도 비웁니다. |
-| [`KorailAppError`][korail_mobile_api.errors.KorailAppError]와 하위 예외 | 서버가 실패(`FAIL`)로 응답했을 때. 결과 코드에 따라 하위 예외로 나뉩니다. 실패를 응답으로 돌려주는 메서드는 예외를 발생시키지 않습니다. |
-| [`KorailDynaPathError`][korail_mobile_api.errors.KorailDynaPathError] | DynaPath 보호 경로의 응답이 차단 신호였을 때 |
-| [`KorailDynaPathRequiredError`][korail_mobile_api.errors.KorailDynaPathRequiredError] | `KorailConfig(disable_dynapath=True)`로 토큰이 필요한 로그인을 호출했을 때. 로그인 요청은 보내지 않습니다. |
-| [`KorailNetFunnelError`][korail_mobile_api.errors.KorailNetFunnelError] | 대기열을 통과하지 못해 요청을 보내지 않았을 때. `reserve`·`pay`·`reservation_view` 관문은 대기열 서버 오류나 통과 외 응답에서, 모든 관문은 누적 대기 시간이 `netfunnel_wait_limit`를 넘거나 대기 응답에 입장 키가 없을 때 발생합니다. 열차 조회 관문은 대기열 서버 오류 시 대기열 없이 요청을 보냅니다. |
-| [`KorailQueueRejectedError`][korail_mobile_api.errors.KorailQueueRejectedError] | 대기열 서버가 요청을 차단했을 때(`301`, `302`) |
+| [`KorailTransportError`][korail_mobile_api.KorailTransportError] | 네트워크 오류가 나거나 서버가 2xx가 아닌 HTTP 상태로 응답했을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 요청 전 입력 검사에 실패했을 때, 응답이 JSON이 아니거나 필수 값이 없어 읽을 수 없을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인이 필요한 메서드를 로그인하지 않고 호출했을 때 |
+| [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError] | 서버 세션이 만료됐을 때(결과 코드 `P058`). 로컬 세션도 비웁니다. |
+| [`KorailAppError`][korail_mobile_api.KorailAppError]와 하위 예외 | 서버가 실패(`FAIL`)로 응답했을 때. 결과 코드에 따라 하위 예외로 나뉩니다. 실패를 응답으로 돌려주는 메서드는 예외를 발생시키지 않습니다. |
+| [`KorailDynaPathError`][korail_mobile_api.KorailDynaPathError] | DynaPath 보호 경로의 응답이 차단 신호였을 때 |
+| [`KorailDynaPathRequiredError`][korail_mobile_api.KorailDynaPathRequiredError] | `KorailConfig(disable_dynapath=True)`로 토큰이 필요한 로그인을 호출했을 때. 로그인 요청은 보내지 않습니다. |
+| [`KorailNetFunnelError`][korail_mobile_api.KorailNetFunnelError] | 대기열을 통과하지 못해 요청을 보내지 않았을 때. `reserve`·`pay`·`reservation_view` 관문은 대기열 서버 오류나 통과 외 응답에서, 모든 관문은 누적 대기 시간이 `netfunnel_wait_limit`를 넘거나 대기 응답에 입장 키가 없을 때 발생합니다. 열차 조회 관문은 대기열 서버 오류 시 대기열 없이 요청을 보냅니다. |
+| [`KorailQueueRejectedError`][korail_mobile_api.KorailQueueRejectedError] | 대기열 서버가 요청을 차단했을 때(`301`, `302`) |
 
 ## 전체 메서드
 

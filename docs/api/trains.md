@@ -7,7 +7,7 @@
 흐름:
 
 1. [`search_trains`](#search_trains)로 직통 열차를 찾습니다. 직통이 없으면 [`search_transfer_trains`](#search_transfer_trains)나 [`search_trains_with_transfer_fallback`](#search_trains_with_transfer_fallback)으로 환승 여정을 찾습니다.
-2. 조회 결과의 [`TrainSummary`][korail_mobile_api.models.TrainSummary]로 [`get_seat_cars`](#get_seat_cars), [`get_seat_inventory`](#get_seat_inventory) 순서로 호차와 좌석을 봅니다.
+2. 조회 결과의 [`TrainSummary`][korail_mobile_api.TrainSummary]로 [`get_seat_cars`](#get_seat_cars), [`get_seat_inventory`](#get_seat_inventory) 순서로 호차와 좌석을 봅니다.
 3. [`get_price_fare_quote`](#get_price_fare_quote)로 예매 전 운임을 확인한 뒤 [예약](reservations.md)으로 넘어갑니다.
 
 ## `search_trains`
@@ -24,13 +24,13 @@ KorailClient.search_trains(
 ) -> TrainSearchResult
 ```
 
-조회 조건은 [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery]로 넘깁니다.
+조회 조건은 [`TrainSearchQuery`][korail_mobile_api.TrainSearchQuery]로 넘깁니다.
 인접역 일정 표시가 필요하면 `query.include_nearby_stations=True`로 지정합니다. 기본값은 `False`입니다.
 출발역·도착역이 숫자로만 된 역 코드이면 처음 한 번 역 목록([`get_station_data`](session.md#get_station_data))을 조회해 역 이름으로 바꿔 보내고, 코드와 이름의 대응표는 클라이언트에 보관합니다.
 숫자가 아닌 값은 역 이름으로 보고 앞뒤 공백만 뺀 뒤 그대로 보냅니다.
 로그인하지 않아도 조회할 수 있습니다. 로그인한 세션에 회원카드 번호(`member_card_no`)가 있으면 요청에 함께 싣습니다.
 
-결과는 한 번에 한 페이지씩 옵니다. 다음 페이지가 있으면 결과의 `next_page()`가 [`TrainSearchContinuation`][korail_mobile_api.models.TrainSearchContinuation]을 돌려주고, 이 값을 `continuation`에 넣어 같은 `query`로 다시 호출합니다.
+결과는 한 번에 한 페이지씩 옵니다. 다음 페이지가 있으면 결과의 `next_page()`가 [`TrainSearchContinuation`][korail_mobile_api.TrainSearchContinuation]을 돌려주고, 이 값을 `continuation`에 넣어 같은 `query`로 다시 호출합니다.
 조건에 맞는 열차가 없을 때 예외 없이 `trains`가 빈 결과가 올 수 있으므로 목록이 비었는지 확인하세요.
 
 요청 전에 대기열을 거칩니다. 관문은 기본이 `inquiry`이고, `peak_season=True`이면 `peak_season_inquiry`, `use_special_schedule=True`이면 `peak_season`과 관계없이 `product_inquiry`입니다.
@@ -40,24 +40,24 @@ KorailClient.search_trains(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `query` | [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery] | 필수 | 조회 조건입니다. 필드별 설명은 [열차 조회 가이드](../guide/trains.md)에 있습니다. |
-| `continuation` | [`TrainSearchContinuation`][korail_mobile_api.models.TrainSearchContinuation] \| `None` | `None` | 다음 페이지를 조회할 때 이전 결과의 `next_page()` 값을 넣습니다. `None`이면 첫 페이지를 조회합니다. |
+| `query` | [`TrainSearchQuery`][korail_mobile_api.TrainSearchQuery] | 필수 | 조회 조건입니다. 필드별 설명은 [열차 조회 가이드](../guide/trains.md)에 있습니다. |
+| `continuation` | [`TrainSearchContinuation`][korail_mobile_api.TrainSearchContinuation] \| `None` | `None` | 다음 페이지를 조회할 때 이전 결과의 `next_page()` 값을 넣습니다. `None`이면 첫 페이지를 조회합니다. |
 | `use_special_schedule` | `bool` | `False` | `True`이면 특가 상품 조회 경로로 보내고 `product_inquiry` 관문을 거칩니다. |
 | `peak_season` | `bool` | `False` | 출발일이 성수기이면 `True`로 합니다. 대기열 관문만 `peak_season_inquiry`로 바뀌고 요청 내용은 같습니다. 앱은 운행 달력으로 성수기를 판정하지만 그 기준값이 공개돼 있지 않아 호출자가 정합니다. |
 
 **반환값**
 
-[`TrainSearchResult`][korail_mobile_api.models.TrainSearchResult] — `trains`에 열차가 [`TrainSummary`][korail_mobile_api.models.TrainSummary] 목록으로, `metadata`에 페이지 정보와 검색 안내 문구(`notice_message`)가 들어 있습니다.
+[`TrainSearchResult`][korail_mobile_api.TrainSearchResult] — `trains`에 열차가 [`TrainSummary`][korail_mobile_api.TrainSummary] 목록으로, `metadata`에 페이지 정보와 검색 안내 문구(`notice_message`)가 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailNoDirectTrainError`][korail_mobile_api.errors.KorailNoDirectTrainError] | 직통 열차가 없을 때 (결과 코드 `WRD000061`) |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 출발역·도착역이 비었거나, 역 목록에 없는 역 코드일 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 승객 수 필드 가운데 정수가 아닌 값이 있을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `seat_attribute_code`나 `query_division_code`가 빈 문자열이거나, `connection_station_codes`·`connection_train_group_code`에 빈 값이 있을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `continuation`이 [`TrainSearchContinuation`][korail_mobile_api.models.TrainSearchContinuation]이 아닐 때 |
+| [`KorailNoDirectTrainError`][korail_mobile_api.KorailNoDirectTrainError] | 직통 열차가 없을 때 (결과 코드 `WRD000061`) |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 출발역·도착역이 비었거나, 역 목록에 없는 역 코드일 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 승객 수 필드 가운데 정수가 아닌 값이 있을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `seat_attribute_code`나 `query_division_code`가 빈 문자열이거나, `connection_station_codes`·`connection_train_group_code`에 빈 값이 있을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `continuation`이 [`TrainSearchContinuation`][korail_mobile_api.TrainSearchContinuation]이 아닐 때 |
 
 **정보**
 
@@ -101,7 +101,7 @@ KorailClient.search_transfer_trains(
 요청은 [`search_trains`](#search_trains)와 같고, 여정 구분만 환승으로 바꿔 보냅니다. 역 이름·역 코드 처리와 대기열 관문도 같습니다.
 
 응답의 열차 행은 `train_sequence`가 같은 것끼리 응답에 나온 순서대로 묶습니다.
-두 행으로 된 묶음만 [`TransferItinerary`][korail_mobile_api.models.TransferItinerary]가 되어 `itineraries`에 들어가고, 그 밖의 행은 `trains`에만 남습니다.
+두 행으로 된 묶음만 [`TransferItinerary`][korail_mobile_api.TransferItinerary]가 되어 `itineraries`에 들어가고, 그 밖의 행은 `trains`에만 남습니다.
 `train_sequence`가 없는(`None`) 행끼리도 한 묶음으로 보므로, 그런 행이 두 개이면 하나의 여정으로 묶입니다. 예약에 넘기기 전에 두 구간의 `train_sequence`와 역을 확인하세요.
 여정의 `transfer_station_code`와 `transfer_station_name`은 첫 구간의 도착역과 둘째 구간의 출발역이 같을 때만 값이 있습니다. 다르면 `None`이므로 두 구간의 역을 직접 확인하세요.
 
@@ -112,20 +112,20 @@ KorailClient.search_transfer_trains(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `query` | [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery] | 필수 | 조회 조건입니다. 출발역과 최종 도착역을 넣습니다. |
-| `continuation` | [`TrainSearchContinuation`][korail_mobile_api.models.TrainSearchContinuation] \| `None` | `None` | 다음 페이지를 조회할 때 이전 환승 결과의 `next_page()` 값을 넣습니다. |
+| `query` | [`TrainSearchQuery`][korail_mobile_api.TrainSearchQuery] | 필수 | 조회 조건입니다. 출발역과 최종 도착역을 넣습니다. |
+| `continuation` | [`TrainSearchContinuation`][korail_mobile_api.TrainSearchContinuation] \| `None` | `None` | 다음 페이지를 조회할 때 이전 환승 결과의 `next_page()` 값을 넣습니다. |
 | `use_special_schedule` | `bool` | `False` | `True`이면 특가 상품 조회 경로로 보내고 `product_inquiry` 관문을 거칩니다. |
 | `peak_season` | `bool` | `False` | `True`이면 `peak_season_inquiry` 관문을 거칩니다. `use_special_schedule=True`이면 이 값과 관계없이 `product_inquiry` 관문을 거칩니다. |
 
 **반환값**
 
-[`TransferSearchResult`][korail_mobile_api.models.TransferSearchResult] — `itineraries`에 두 구간으로 묶은 여정, `trains`에 응답의 모든 열차 행, `metadata`에 페이지 정보가 들어 있습니다.
+[`TransferSearchResult`][korail_mobile_api.TransferSearchResult] — `itineraries`에 두 구간으로 묶은 여정, `trains`에 응답의 모든 열차 행, `metadata`에 페이지 정보가 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | [`search_trains`](#search_trains)와 같은 요청 전 입력 검사에 실패했을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | [`search_trains`](#search_trains)와 같은 요청 전 입력 검사에 실패했을 때 |
 
 **정보**
 
@@ -164,7 +164,7 @@ KorailClient.search_trains_with_transfer_fallback(
 ```
 
 먼저 [`search_trains`](#search_trains)를 호출합니다.
-[`KorailNoDirectTrainError`][korail_mobile_api.errors.KorailNoDirectTrainError](결과 코드 `WRD000061`)가 발생했을 때만 같은 `query`, `use_special_schedule`, `peak_season`으로 [`search_transfer_trains`](#search_transfer_trains)를 한 번 호출해 첫 페이지를 반환합니다.
+[`KorailNoDirectTrainError`][korail_mobile_api.KorailNoDirectTrainError](결과 코드 `WRD000061`)가 발생했을 때만 같은 `query`, `use_special_schedule`, `peak_season`으로 [`search_transfer_trains`](#search_transfer_trains)를 한 번 호출해 첫 페이지를 반환합니다.
 다른 오류는 그대로 발생하며, 예외 없이 빈 결과가 온 경우에도 환승 조회로 넘어가지 않습니다.
 앱은 환승 조회 전에 확인 창을 띄우고 열차 종류 선택을 바꾸지만, 이 메서드는 그런 단계 없이 바로 조회합니다.
 
@@ -175,20 +175,20 @@ KorailClient.search_trains_with_transfer_fallback(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `query` | [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery] | 필수 | 조회 조건입니다. 직통 조회와 환승 조회에 같은 값을 씁니다. |
-| `continuation` | [`TrainSearchContinuation`][korail_mobile_api.models.TrainSearchContinuation] \| `None` | `None` | 직통 조회에만 넘깁니다. 환승 조회로 넘어가면 쓰지 않고 첫 페이지를 조회합니다. |
+| `query` | [`TrainSearchQuery`][korail_mobile_api.TrainSearchQuery] | 필수 | 조회 조건입니다. 직통 조회와 환승 조회에 같은 값을 씁니다. |
+| `continuation` | [`TrainSearchContinuation`][korail_mobile_api.TrainSearchContinuation] \| `None` | `None` | 직통 조회에만 넘깁니다. 환승 조회로 넘어가면 쓰지 않고 첫 페이지를 조회합니다. |
 | `use_special_schedule` | `bool` | `False` | `True`이면 두 조회 모두 특가 상품 조회 경로로 보내고 `product_inquiry` 관문을 거칩니다. |
 | `peak_season` | `bool` | `False` | `True`이면 두 조회 모두 `peak_season_inquiry` 관문을 거칩니다. `use_special_schedule=True`이면 이 값과 관계없이 `product_inquiry` 관문을 거칩니다. |
 
 **반환값**
 
-[`TrainSearchResult`][korail_mobile_api.models.TrainSearchResult] \| [`TransferSearchResult`][korail_mobile_api.models.TransferSearchResult] — 직통 조회가 성공하면 `TrainSearchResult`, 환승 조회로 넘어갔으면 `TransferSearchResult`입니다.
+[`TrainSearchResult`][korail_mobile_api.TrainSearchResult] \| [`TransferSearchResult`][korail_mobile_api.TransferSearchResult] — 직통 조회가 성공하면 `TrainSearchResult`, 환승 조회로 넘어갔으면 `TransferSearchResult`입니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | [`search_trains`](#search_trains)와 같은 요청 전 입력 검사에 실패했을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | [`search_trains`](#search_trains)와 같은 요청 전 입력 검사에 실패했을 때 |
 
 **정보**
 
@@ -238,7 +238,7 @@ KorailClient.get_transfer_stations(
 
 **반환값**
 
-[`TransferStationListResponse`][korail_mobile_api.models.TransferStationListResponse] — `stations`에 [`TransferStation`][korail_mobile_api.models.TransferStation] 목록(`station_code`, `station_name`)이 들어 있습니다.
+[`TransferStationListResponse`][korail_mobile_api.TransferStationListResponse] — `stations`에 [`TransferStation`][korail_mobile_api.TransferStation] 목록(`station_code`, `station_name`)이 들어 있습니다.
 
 **예외**
 
@@ -269,7 +269,7 @@ KorailClient.get_train_schedule(run_date: str, train_no: str) -> TrainScheduleRe
 
 운행일과 열차 번호로 조회합니다. 조회 결과 행의 `run_date`와 `train_no`를 그대로 넘기면 됩니다.
 열차 번호는 다섯 자리가 되도록 앞에 0을 채워 보냅니다.
-정차역마다 계획 시각(`planned_arrival_time`, `planned_departure_time`)과 실제 시각(`actual_arrival_time`, `actual_departure_time`)이 [`TrainScheduleStop`][korail_mobile_api.models.TrainScheduleStop]으로 들어 있습니다.
+정차역마다 계획 시각(`planned_arrival_time`, `planned_departure_time`)과 실제 시각(`actual_arrival_time`, `actual_departure_time`)이 [`TrainScheduleStop`][korail_mobile_api.TrainScheduleStop]으로 들어 있습니다.
 응답 필드는 모두 선택값이라 서버가 보내지 않으면 `None`입니다.
 
 **매개변수**
@@ -281,7 +281,7 @@ KorailClient.get_train_schedule(run_date: str, train_no: str) -> TrainScheduleRe
 
 **반환값**
 
-[`TrainScheduleResponse`][korail_mobile_api.models.TrainScheduleResponse] — `stops`에 정차역 목록이, 그 밖에 노선 이름(`route_name`), 시발역·종착역 이름(`origin_station_name`, `terminal_station_name`), 지연 사유(`delay_detail_reason_content`) 등이 들어 있습니다.
+[`TrainScheduleResponse`][korail_mobile_api.TrainScheduleResponse] — `stops`에 정차역 목록이, 그 밖에 노선 이름(`route_name`), 시발역·종착역 이름(`origin_station_name`, `terminal_station_name`), 지연 사유(`delay_detail_reason_content`) 등이 들어 있습니다.
 
 **예외**
 
@@ -326,24 +326,24 @@ KorailClient.get_seat_cars(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `train` | [`TrainSummary`][korail_mobile_api.models.TrainSummary] | 필수 | 조회할 열차입니다. 열차 조회 결과의 행을 넘깁니다. |
+| `train` | [`TrainSummary`][korail_mobile_api.TrainSummary] | 필수 | 조회할 열차입니다. 열차 조회 결과의 행을 넘깁니다. |
 | `passenger_count` | `int` | `1` | 총 승객 수입니다. 1~9의 정수여야 합니다. |
-| `room_class_code` | [`KorailRoomClassCode`][korail_mobile_api.constants.KorailRoomClassCode] | `'1'` | 객실 등급입니다. `"1"`(일반실) 또는 `"2"`(특실)이며 [`KorailSeatClass`][korail_mobile_api.constants.KorailSeatClass] 값도 받습니다. |
+| `room_class_code` | [`KorailRoomClassCode`][korail_mobile_api.KorailRoomClassCode] | `'1'` | 객실 등급입니다. `"1"`(일반실) 또는 `"2"`(특실)이며 [`KorailSeatClass`][korail_mobile_api.KorailSeatClass] 값도 받습니다. |
 | `seat_attribute_code` | `str` \| `None` | `None` | 숫자 세 자리의 좌석 속성 코드입니다. `None`이면 `train.seat_attribute_code`를 씁니다. |
 
 **반환값**
 
-[`SeatCarListResponse`][korail_mobile_api.models.SeatCarListResponse] — `cars`에 [`SeatCar`][korail_mobile_api.models.SeatCar] 목록(호차 번호 `car_no`, 객실 이름 `room_class_name`, 잔여석 `remaining_seat_count`, 좌석 속성 `attributes`)이, `recommended_car_no`에 추천 호차 번호가 들어 있습니다.
+[`SeatCarListResponse`][korail_mobile_api.SeatCarListResponse] — `cars`에 [`SeatCar`][korail_mobile_api.SeatCar] 목록(호차 번호 `car_no`, 객실 이름 `room_class_name`, 잔여석 `remaining_seat_count`, 좌석 속성 `attributes`)이, `recommended_car_no`에 추천 호차 번호가 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `train`이 [`TrainSummary`][korail_mobile_api.models.TrainSummary]가 아니거나, `train.goods_no`에 출력 가능한 ASCII가 아닌 문자가 있을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `passenger_count`가 1~9의 정수가 아닐 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `room_class_code`가 `"1"`이나 `"2"`가 아닐 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 보낼 좌석 속성 코드(`seat_attribute_code` 또는 `train.seat_attribute_code`)가 숫자 세 자리가 아닐 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `train`이 [`TrainSummary`][korail_mobile_api.TrainSummary]가 아니거나, `train.goods_no`에 출력 가능한 ASCII가 아닌 문자가 있을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `passenger_count`가 1~9의 정수가 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `room_class_code`가 `"1"`이나 `"2"`가 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 보낼 좌석 속성 코드(`seat_attribute_code` 또는 `train.seat_attribute_code`)가 숫자 세 자리가 아닐 때 |
 
 **정보**
 
@@ -379,32 +379,32 @@ KorailClient.get_seat_inventory(
 같은 세션에서 [`get_seat_cars`](#get_seat_cars)를 먼저 호출한 뒤 사용하세요. 실서버에서는 호차 목록을 조회하지 않고 바로 호출하면 인증 정보 오류가 돌아올 수 있었습니다. 앱도 호차 목록, 좌석 배치도 순서로 조회합니다.
 열차 식별값과 좌석 속성 코드를 정하는 규칙은 [`get_seat_cars`](#get_seat_cars)와 같습니다.
 
-좌석마다 [`PhysicalSeat`][korail_mobile_api.models.PhysicalSeat]가 있습니다. 예약할 때는 표시용 `specification`이 아니라 식별자 `seat_no`를 씁니다.
-`sale_possible`이 `"Y"`인 좌석은 [`KorailSeatAssignment`][korail_mobile_api.mutation_models.KorailSeatAssignment]의 `from_inventory()`로 좌석 지정 입력으로 바꿀 수 있습니다.
+좌석마다 [`PhysicalSeat`][korail_mobile_api.PhysicalSeat]가 있습니다. 예약할 때는 표시용 `specification`이 아니라 식별자 `seat_no`를 씁니다.
+`sale_possible`이 `"Y"`인 좌석은 [`KorailSeatAssignment`][korail_mobile_api.KorailSeatAssignment]의 `from_inventory()`로 좌석 지정 입력으로 바꿀 수 있습니다.
 응답에 호차 번호(`car_no`)가 없으면 `from_inventory()`를 쓸 수 없으므로 `KorailSeatAssignment(car_no=..., seat_no=...)`로 직접 만듭니다.
 
 **매개변수**
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `train` | [`TrainSummary`][korail_mobile_api.models.TrainSummary] | 필수 | 조회할 열차입니다. [`get_seat_cars`](#get_seat_cars)에 넘긴 것과 같은 행을 넘깁니다. |
+| `train` | [`TrainSummary`][korail_mobile_api.TrainSummary] | 필수 | 조회할 열차입니다. [`get_seat_cars`](#get_seat_cars)에 넘긴 것과 같은 행을 넘깁니다. |
 | `car_no` | `int` | 필수 | 호차 번호입니다. [`get_seat_cars`](#get_seat_cars) 결과의 `car_no`를 넘깁니다. 1 이상의 정수여야 합니다. |
 | `passenger_count` | `int` | `1` | 총 승객 수입니다. 1~9의 정수여야 합니다. |
-| `room_class_code` | [`KorailRoomClassCode`][korail_mobile_api.constants.KorailRoomClassCode] | `'1'` | 객실 등급입니다. `"1"`(일반실) 또는 `"2"`(특실)입니다. |
+| `room_class_code` | [`KorailRoomClassCode`][korail_mobile_api.KorailRoomClassCode] | `'1'` | 객실 등급입니다. `"1"`(일반실) 또는 `"2"`(특실)입니다. |
 | `seat_attribute_code` | `str` \| `None` | `None` | 숫자 세 자리의 좌석 속성 코드입니다. `None`이면 `train.seat_attribute_code`를 씁니다. |
 
 **반환값**
 
-[`SeatInventoryResponse`][korail_mobile_api.models.SeatInventoryResponse] — `seats`에 좌석 목록, `windows`에 창문 위치 비율([`SeatWindow`][korail_mobile_api.models.SeatWindow]), `car_no`에 서버가 돌려준 호차 번호가 들어 있습니다.
+[`SeatInventoryResponse`][korail_mobile_api.SeatInventoryResponse] — `seats`에 좌석 목록, `windows`에 창문 위치 비율([`SeatWindow`][korail_mobile_api.SeatWindow]), `car_no`에 서버가 돌려준 호차 번호가 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `car_no`가 1 이상의 정수가 아닐 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | [`get_seat_cars`](#get_seat_cars)와 같은 입력 검사(`train`, `passenger_count`, `room_class_code`, 좌석 속성 코드)에 실패했을 때 |
-| [`KorailAppError`][korail_mobile_api.errors.KorailAppError] | 같은 세션에서 [`get_seat_cars`](#get_seat_cars)를 먼저 호출하지 않아 서버가 인증 정보 오류로 응답했을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `car_no`가 1 이상의 정수가 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | [`get_seat_cars`](#get_seat_cars)와 같은 입력 검사(`train`, `passenger_count`, `room_class_code`, 좌석 속성 코드)에 실패했을 때 |
+| [`KorailAppError`][korail_mobile_api.KorailAppError] | 같은 세션에서 [`get_seat_cars`](#get_seat_cars)를 먼저 호출하지 않아 서버가 인증 정보 오류로 응답했을 때 |
 
 **정보**
 
@@ -433,7 +433,7 @@ if sellable:
 KorailClient.get_free_seat_car_info(request: FreeSeatCarRequest) -> FreeSeatCarResponse
 ```
 
-[`FreeSeatCarRequest`][korail_mobile_api.read_payloads.FreeSeatCarRequest]에 조회 결과 행의 운행일, 열차 번호, 출발·도착역 구성 순번과 운행 순번을 옮겨 넣습니다. 열차 번호는 다섯 자리가 되도록 앞에 0을 채워 보냅니다.
+[`FreeSeatCarRequest`][korail_mobile_api.FreeSeatCarRequest]에 조회 결과 행의 운행일, 열차 번호, 출발·도착역 구성 순번과 운행 순번을 옮겨 넣습니다. 열차 번호는 다섯 자리가 되도록 앞에 0을 채워 보냅니다.
 자유석 호차는 숫자 목록이 아니라 `car_no`에 안내 문자열로 오며, 호차가 여러 개이면 한 문자열에 함께 들어 있습니다.
 자유석 칸이 없는 열차는 예외 없이 `car_no`가 `None`인 응답이 옵니다(결과 코드 `IRZ000005`).
 실서버에서는 조회 결과 행의 `free_car_count`가 `"000"`이 아닌 열차에만 자유석 호차가 있었습니다.
@@ -442,11 +442,11 @@ KorailClient.get_free_seat_car_info(request: FreeSeatCarRequest) -> FreeSeatCarR
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`FreeSeatCarRequest`][korail_mobile_api.read_payloads.FreeSeatCarRequest] | 필수 | 조회할 열차의 운행일, 열차 번호, 구성 순번, 운행 순번입니다. |
+| `request` | [`FreeSeatCarRequest`][korail_mobile_api.FreeSeatCarRequest] | 필수 | 조회할 열차의 운행일, 열차 번호, 구성 순번, 운행 순번입니다. |
 
 **반환값**
 
-[`FreeSeatCarResponse`][korail_mobile_api.read_models.FreeSeatCarResponse] — 안내 제목 `title`, 자유석 호차 문자열 `car_no`, 안내 내용 `content`가 들어 있습니다.
+[`FreeSeatCarResponse`][korail_mobile_api.FreeSeatCarResponse] — 안내 제목 `title`, 자유석 호차 문자열 `car_no`, 안내 내용 `content`가 들어 있습니다.
 
 **예외**
 
@@ -489,7 +489,7 @@ KorailClient.get_seat_assignment_schedule(
 ```
 
 앱의 좌석배정 예매 화면이 쓰는 열차 조회입니다. [`search_trains`](#search_trains)와 달리 역을 이름으로만 받으며 코드를 이름으로 바꾸지 않습니다.
-[`SeatAssignmentScheduleRequest`][korail_mobile_api.read_payloads.SeatAssignmentScheduleRequest]는 만들 때 `passenger_count`가 1~9의 정수인지 검사하고, 아니면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
+[`SeatAssignmentScheduleRequest`][korail_mobile_api.SeatAssignmentScheduleRequest]는 만들 때 `passenger_count`가 1~9의 정수인지 검사하고, 아니면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
 요청에는 승객 수만큼 번호를 붙여 좌석 속성 코드, 승객 표시, 구분 이름을 반복해 싣고, 빈 문자열인 필드는 보내지 않습니다.
 `seatAttCdN/psgNumN/stlbDturDvNmN`의 `*2` 이상은 기존 SDK 확장입니다. 7.0.10 앱 DTO에서
 확인한 한 묶음과 같은 계약이라고 주장하지 않으며, 기존 1~9명 지원은 유지합니다.
@@ -503,18 +503,18 @@ KorailClient.get_seat_assignment_schedule(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`SeatAssignmentScheduleRequest`][korail_mobile_api.read_payloads.SeatAssignmentScheduleRequest] | 필수 | 메뉴 ID, 출발일(`YYYYMMDD`)·출발 시각(`HHMMSS`), 출발·도착역 이름, 열차군·객실 등급·좌석 속성 코드, 승객 수 등 조회 조건입니다. |
+| `request` | [`SeatAssignmentScheduleRequest`][korail_mobile_api.SeatAssignmentScheduleRequest] | 필수 | 메뉴 ID, 출발일(`YYYYMMDD`)·출발 시각(`HHMMSS`), 출발·도착역 이름, 열차군·객실 등급·좌석 속성 코드, 승객 수 등 조회 조건입니다. |
 | `peak_season` | `bool` | `False` | 출발일이 성수기이면 `True`로 합니다. 대기열 관문만 바뀝니다. |
 
 **반환값**
 
-[`SeatAssignmentScheduleResponse`][korail_mobile_api.read_models.SeatAssignmentScheduleResponse] — `trains`에 열차가 [`TrainScheduleItem`][korail_mobile_api.read_models.TrainScheduleItem] 목록으로 들어 있습니다. 다음 페이지 정보(`next_page_flag` 등)도 담지만 이 메서드에는 이어서 조회하는 매개변수가 없습니다.
+[`SeatAssignmentScheduleResponse`][korail_mobile_api.SeatAssignmentScheduleResponse] — `trains`에 열차가 [`TrainScheduleItem`][korail_mobile_api.TrainScheduleItem] 목록으로 들어 있습니다. 다음 페이지 정보(`next_page_flag` 등)도 담지만 이 메서드에는 이어서 조회하는 매개변수가 없습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAppError`][korail_mobile_api.errors.KorailAppError] | 날짜·구간에 따라 서버가 결과 코드 `WRD000057`로 거절했을 때 |
+| [`KorailAppError`][korail_mobile_api.KorailAppError] | 날짜·구간에 따라 서버가 결과 코드 `WRD000057`로 거절했을 때 |
 
 **정보**
 
@@ -561,9 +561,9 @@ KorailClient.get_merge_seats_inquiry(
 ```
 
 [병합 예약](../concepts/glossary.md)에서 입석 구간의 첫 홀드를 만든 뒤, 이어 붙일 좌석 구간을 찾을 때 씁니다.
-[`MergeSeatsInquiryRequest`][korail_mobile_api.read_payloads.MergeSeatsInquiryRequest]의 `boarding_datetime`과 `run_datetime`에는 출발일과 출발 시각을 이어 붙인 값(`YYYYMMDDHHMMSS`)을 넣고, 역은 이름으로 넘깁니다.
+[`MergeSeatsInquiryRequest`][korail_mobile_api.MergeSeatsInquiryRequest]의 `boarding_datetime`과 `run_datetime`에는 출발일과 출발 시각을 이어 붙인 값(`YYYYMMDDHHMMSS`)을 넣고, 역은 이름으로 넘깁니다.
 열차 번호는 다섯 자리가 되도록 앞에 0을 채워 보내고, `selected_station_name`이 `None`이면 보내지 않습니다.
-요청 객체는 만들 때 `passenger_count`가 1~9의 정수인지 검사하고, 아니면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
+요청 객체는 만들 때 `passenger_count`가 1~9의 정수인지 검사하고, 아니면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
 
 반환된 `trains`는 [`reserve_merge`](reservations.md#reserve_merge)의 `merge_rows`로 넘깁니다. 전체 순서는 [예약 가이드](../guide/reservations.md)를 참고하세요.
 
@@ -571,11 +571,11 @@ KorailClient.get_merge_seats_inquiry(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`MergeSeatsInquiryRequest`][korail_mobile_api.read_payloads.MergeSeatsInquiryRequest] | 필수 | 승차·운행 일시, 열차 번호, 출발·도착역 이름, 선택한 중간역 이름, 객실 등급·좌석 속성 코드, 승객 수입니다. |
+| `request` | [`MergeSeatsInquiryRequest`][korail_mobile_api.MergeSeatsInquiryRequest] | 필수 | 승차·운행 일시, 열차 번호, 출발·도착역 이름, 선택한 중간역 이름, 객실 등급·좌석 속성 코드, 승객 수입니다. |
 
 **반환값**
 
-[`MergeSeatsInquiryResponse`][korail_mobile_api.read_models.MergeSeatsInquiryResponse] — `intermediate_stations`에 중간역([`IntermediateStation`][korail_mobile_api.read_models.IntermediateStation]) 목록, `trains`에 병합 대상 구간([`TrainScheduleItem`][korail_mobile_api.read_models.TrainScheduleItem]) 목록, `merge_reservation_possible_flag`에 병합 예약 가능 표시가 들어 있습니다.
+[`MergeSeatsInquiryResponse`][korail_mobile_api.MergeSeatsInquiryResponse] — `intermediate_stations`에 중간역([`IntermediateStation`][korail_mobile_api.IntermediateStation]) 목록, `trains`에 병합 대상 구간([`TrainScheduleItem`][korail_mobile_api.TrainScheduleItem]) 목록, `merge_reservation_possible_flag`에 병합 예약 가능 표시가 들어 있습니다.
 
 **예외**
 
@@ -630,17 +630,17 @@ KorailClient.get_guide_seat_condition(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`GuideSeatConditionRequest`][korail_mobile_api.read_payloads.GuideSeatConditionRequest] | 필수 | 안내를 받을 좌석 속성 코드(`seat_attribute_code`)입니다. |
+| `request` | [`GuideSeatConditionRequest`][korail_mobile_api.GuideSeatConditionRequest] | 필수 | 안내를 받을 좌석 속성 코드(`seat_attribute_code`)입니다. |
 
 **반환값**
 
-[`GuideSeatConditionResponse`][korail_mobile_api.read_models.GuideSeatConditionResponse] — 봉투 필드(`str_result`, `h_msg_cd`, `h_msg_txt`)와 서버 시각 `time_stamp`가 들어 있습니다.
+[`GuideSeatConditionResponse`][korail_mobile_api.GuideSeatConditionResponse] — 봉투 필드(`str_result`, `h_msg_cd`, `h_msg_txt`)와 서버 시각 `time_stamp`가 들어 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 응답에 `strResult`가 없거나 값이 `SUCC`·`FAIL`이 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 응답에 `strResult`가 없거나 값이 `SUCC`·`FAIL`이 아닐 때 |
 
 **정보**
 
@@ -669,10 +669,10 @@ KorailClient.get_price_fare_quote(
 ) -> PriceFareQuoteResponse
 ```
 
-구간마다 [`PriceFareLeg`][korail_mobile_api.read_payloads.PriceFareLeg]를 만들어 [`PriceFareQuoteRequest`][korail_mobile_api.read_payloads.PriceFareQuoteRequest]로 묶습니다. 환승 여정은 두 구간을 탑승 순서대로 넣습니다.
+구간마다 [`PriceFareLeg`][korail_mobile_api.PriceFareLeg]를 만들어 [`PriceFareQuoteRequest`][korail_mobile_api.PriceFareQuoteRequest]로 묶습니다. 환승 여정은 두 구간을 탑승 순서대로 넣습니다.
 각 구간에는 조회 결과 행의 역 코드, 운행일, 열차 번호, 좌석 속성 코드, 열차군 코드, 열차 종류 코드를 옮겨 넣습니다. 열차 번호는 0을 채우지 않고 넣은 그대로 보냅니다.
 `goods_no`가 `None`이면 앱처럼 빈 상품 번호를 보냅니다. 상품 번호는 모든 구간에 넣거나 모든 구간에서 비워야 합니다.
-`PriceFareLeg`는 만들 때 필수 필드가 비었거나 쉼표가 들어 있으면, `PriceFareQuoteRequest`는 구간이 1개나 2개가 아니면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
+`PriceFareLeg`는 만들 때 필수 필드가 비었거나 쉼표가 들어 있으면, `PriceFareQuoteRequest`는 구간이 1개나 2개가 아니면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
 
 받은 금액은 표시용 기준 운임입니다. 결제할 금액은 예약한 뒤 홀드의 `received_amount`를 쓰세요. 할인이 적용되면 결제 금액은 이 운임보다 낮을 수 있습니다.
 금액 필드는 서버가 보낸 문자열 그대로이며(예: `"21,600원"`) 숫자로 바꾸지 않습니다. 앱 화면 기준으로 `received_price`는 운임, `received_fare`는 요금(특실 추가 요금 등), `total_amount`는 합계입니다.
@@ -681,18 +681,18 @@ KorailClient.get_price_fare_quote(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `request` | [`PriceFareQuoteRequest`][korail_mobile_api.read_payloads.PriceFareQuoteRequest] | 필수 | 운임을 조회할 구간 1~2개와 메뉴 ID(기본값 `"11"`)입니다. |
+| `request` | [`PriceFareQuoteRequest`][korail_mobile_api.PriceFareQuoteRequest] | 필수 | 운임을 조회할 구간 1~2개와 메뉴 ID(기본값 `"11"`)입니다. |
 
 **반환값**
 
-[`PriceFareQuoteResponse`][korail_mobile_api.read_models.PriceFareQuoteResponse] — `fares`에 [`PriceFare`][korail_mobile_api.read_models.PriceFare] 목록이 들어 있습니다. 행마다 구간 순번 `journey_sequence`와 객실 이름 `room_class_name`이 있습니다.
+[`PriceFareQuoteResponse`][korail_mobile_api.PriceFareQuoteResponse] — `fares`에 [`PriceFare`][korail_mobile_api.PriceFare] 목록이 들어 있습니다. 행마다 구간 순번 `journey_sequence`와 객실 이름 `room_class_name`이 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `request`가 [`PriceFareQuoteRequest`][korail_mobile_api.read_payloads.PriceFareQuoteRequest]가 아닐 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 일부 구간에만 `goods_no`가 있을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `request`가 [`PriceFareQuoteRequest`][korail_mobile_api.PriceFareQuoteRequest]가 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 일부 구간에만 `goods_no`가 있을 때 |
 
 **정보**
 

@@ -64,8 +64,8 @@
 | `h_msg_cd` | 결과 코드 (예: `IRZ000001`) |
 | `h_msg_txt` | 결과 메시지 |
 
-- `strResult`가 `FAIL`이면 실패입니다. 결과 코드에 따라 [`KorailAppError`][korail_mobile_api.errors.KorailAppError]의 하위 예외(예: 매진, 결과 없음)를 발생시킵니다.
-- 실패 코드가 `P058`이면 세션 만료로 보고 [`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError]를 발생시키며, 로컬 세션을 비웁니다.
+- `strResult`가 `FAIL`이면 실패입니다. 결과 코드에 따라 [`KorailAppError`][korail_mobile_api.KorailAppError]의 하위 예외(예: 매진, 결과 없음)를 발생시킵니다.
+- 실패 코드가 `P058`이면 세션 만료로 보고 [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError]를 발생시키며, 로컬 세션을 비웁니다.
 - 카드 결제처럼 실패도 정상 응답으로 돌려줘야 하는 메서드는 예외 대신 `str_result`가 `FAIL`인 응답 모델을 반환합니다. 각 메서드 설명에 표시했습니다.
 
 ## 5. 응답 읽기
@@ -74,7 +74,7 @@
 
 - **정수와 문자열**: 앱이 문자열로 선언한 필드를 서버가 JSON 정수로 보내는 경우가 있습니다(예: `"0001"` 대신 `1`). 이런 값은 `str()`로 바꿔 `"1"`로 담으며, 앞자리 `0`은 복원하지 않습니다. `true`/`false`는 정수로 취급하지 않습니다.
 - **선택 필드**: 응답에 없거나 `null`이거나 타입이 맞지 않는 선택 필드는 `None`입니다. 아래 [앱 기본값을 쓰는 필드](#앱-기본값을-쓰는-필드) 18개는 예외입니다.
-- **필수 필드**: 다음 요청에 다시 보내야 하는 값(예약 번호, 반환 식별자 등)이 없거나 타입이 틀리면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
+- **필수 필드**: 다음 요청에 다시 보내야 하는 값(예약 번호, 반환 식별자 등)이 없거나 타입이 틀리면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
 - **원본 보존**: 조회 응답의 `raw`는 대체로 서버가 보낸 원본 객체를 참조합니다. 변경 응답·기존 예약의 홀드 복원과 일부 하위 행·검색 메타데이터는 얕게 복사합니다. 별도 `raw`가 없는 하위 모델의 원본도 최상위 `raw`에 남으며, 중첩 사전·목록은 복사하거나 동결하지 않습니다.
 
 ### 앱 기본값을 쓰는 필드
@@ -83,7 +83,7 @@
 
 - 문자열 필드는 응답에서 빠지면 `None` 대신 앱과 같은 기본값 `""`을 씁니다.
 - 숫자로 바꾸는 필드(`h_srcar_no`, `h_rest_seat_cnt`, `st_loc_rt`, `cls_loc_rt`)는 빠지거나 `""`이면 `None`입니다.
-- 18개 필드 모두 값이 `null`이거나 타입이 맞지 않으면 `None`으로 바꾸지 않고 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
+- 18개 필드 모두 값이 `null`이거나 타입이 맞지 않으면 `None`으로 바꾸지 않고 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
 
 | 위치 | 필드 | 개수 |
 |---|---|---:|
@@ -95,7 +95,7 @@
 
 ## 6. 실패했을 때
 
-- 응답을 읽지 못하면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] 등의 예외를 발생시킵니다.
+- 응답을 읽지 못하면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] 등의 예외를 발생시킵니다.
   예외의 `raw`에는 서버가 보낸 응답 전체가, `parser_raw`에는 읽다가 멈춘 부분이 들어 있습니다.
 - 예약·결제·환불 같은 변경 요청은 자동으로 다시 보내지 않습니다. 응답을 읽지 못했어도 서버에서는 이미 처리됐을 수 있기 때문입니다.
   이때는 예외의 `raw`를 먼저 확인하고, 예약은 [`get_reservation_history()`](../api/reservations.md#get_reservation_history), 결제·환불은 [`get_ticket_list()`](../api/account.md#get_ticket_list)로 결과를 확인한 뒤에 다시 호출할지 정하세요.
@@ -107,7 +107,7 @@
 - **환불 대상 연결**: 실제 수수료 조회 성공 응답의 비공개 문맥과 원표 식별자·동반자 정보가 일치해야 환불합니다. 직접 생성·파싱한 응답이나 원표 반환일이 없는 입력은 요청 전에 거절합니다. 금액 유효기간·서버 승인을 보장하지 않으며 자동 조회·재시도는 하지 않습니다.
 - **좌석배정 번호 그룹**: `seatAttCdN/psgNumN/stlbDturDvNmN` 중 `*2` 이상은 기존 SDK 확장으로 유지합니다. 7.0.10 앱 DTO의 단일 묶음과 동등하다고 보지 않습니다.
 - **기존 예약 가져오기**: [`get_reservation_hold`](../api/reservations.md#get_reservation_hold)는 상세의 PNR·실제 창구번호·여정·좌석·정산액을 검사합니다. 실서버 상세에서 생략되는 결제 플래그는 `None`으로 유지하고 명시된 경우에만 `Y`인지 검사합니다. 이는 라이브러리의 보수적 검증 정책이며 앱의 모든 상태 판정을 재현한 것은 아닙니다. 상세 조회 후에도 예약 상태는 바뀔 수 있습니다.
-- **로그인 확인**: 로그인이 필요한 메서드를 로그인하지 않은 상태에서 호출하면 요청을 보내지 않고 [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError]를 발생시킵니다. 앱에는 없는 검사입니다.
+- **로그인 확인**: 로그인이 필요한 메서드를 로그인하지 않은 상태에서 호출하면 요청을 보내지 않고 [`KorailAuthError`][korail_mobile_api.KorailAuthError]를 발생시킵니다. 앱에는 없는 검사입니다.
 - **로그인 암호화 정보**: 앱은 앱을 시작할 때 받아 둔 암호화 키를 쓰고, 키가 비어 있을 때만 다시 받습니다. 라이브러리는 로그인할 때마다 새로 받습니다.
 - **0원 결제**: 앱은 결제할 금액이 0원이면 카드 없이 발권을 요청합니다. 라이브러리는 이 경로를 구현하지 않으며, 0원 홀드를 [`pay_with_card`](../api/payments.md#pay_with_card)로 결제하려고 하면 요청 전에 거절합니다.
 - **환승 조회 전환**: [`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback)은 직통 열차가 없다는 결과 코드(`WRD000061`)를 받으면 같은 조건으로 환승 조회 첫 페이지를 받습니다. 앱과 달리 확인 창을 띄우거나 열차군을 바꾸지 않습니다.

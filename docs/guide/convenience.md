@@ -1,6 +1,6 @@
 # 간편 API
 
-[`Korail`][korail_mobile_api.facade.Korail]은 기존 `KorailClient` 위에 자주 쓰는 작업을 묶은 선택형 진입점입니다. 전체 API나 세부 요청 옵션은 `korail.client`에서 그대로 사용합니다.
+[`Korail`][korail_mobile_api.Korail]은 기존 `KorailClient` 위에 자주 쓰는 작업을 묶은 선택형 진입점입니다. 전체 API나 세부 요청 옵션은 `korail.client`에서 그대로 사용합니다.
 
 !!! note "2.6.1의 추가 기능"
     `trains.iter_search`, `PriceFareLeg.from_train`, `membership`, `airport_bus`는 2.6.1부터 제공합니다. 이 흐름의 검증은 소켓을 차단한 합성 응답 기준이며 실서버 성공 기록은 추가하지 않았습니다.
