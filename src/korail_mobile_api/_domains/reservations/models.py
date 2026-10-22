@@ -269,7 +269,7 @@ class ReservationSeatDetail:
     room_class_code: str | None = None
     room_class_name: str | None = None
     passenger_type_code: str | None = None
-    # 홀드 정산액 계산: mutation_parsers._received_amount (좌석 합을 먼저 구하고 선언 총액과 대조, 좌석 행이 없으면 선언 총액).
+    # 홀드 정산액 계산: reservations/parsers.py 의 _received_amount (좌석 합을 먼저 구하고 선언 총액과 대조, 좌석 행이 없으면 선언 총액).
     #: 좌석별 받을 금액(``h_rcvd_amt``)입니다. 예약 메서드가 돌려주는 ``ReservationHoldResponse``의 ``received_amount``는 홀드
     #: 응답에 좌석 행이 있으면 그 행들의 이 값을 합한 금액입니다.
     received_amount: str | None = None
@@ -387,7 +387,7 @@ class ReservationHoldResponse(BaseKorailResponse):
     # 기준액은 54,400원, 정산액은 53,900/78,400원이었습니다.
     #: 앱이 표시하는 합계 금액(``h_tot_prc``)입니다. 결제에는 ``received_amount``를 쓰세요.
     total_price: str | None = None
-    # 좌석 합을 먼저 구하고 선언 총액과 대조하며, 사용할 좌석 행이 없으면 선언 총액을 사용합니다(mutation_parsers._received_amount).
+    # 좌석 합을 먼저 구하고 선언 총액과 대조하며, 사용할 좌석 행이 없으면 선언 총액을 사용합니다(reservations/parsers.py 의 _received_amount).
     #: 결제할 금액입니다. 좌석별 금액(``h_rcvd_amt``)의 합이며, 응답의 총액(``h_tot_rcvd_amt``)과 다르면 응답을 읽을 때
     #: ``KorailProtocolError``가 발생합니다. 좌석 행이 없으면 응답의 총액을 쓰고, 좌석 금액을 읽을 수 없으면 ``None``입니다.
     received_amount: str | None = None

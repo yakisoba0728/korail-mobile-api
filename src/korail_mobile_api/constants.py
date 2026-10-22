@@ -25,7 +25,7 @@ KORAIL_DEFAULT_ANDROID_OS_RELEASE = "17"
 #: 기본 대기열 ``User-Agent``에 넣는 안드로이드 빌드 ID입니다.
 KORAIL_DEFAULT_ANDROID_BUILD_ID = "CP2A.260605.016"
 # 실기기 기록: analysis/device-pull/2026-09-14_korail-7.0.6/device/summary.tsv:10. 앱은 고정 상수 대신 창 크기를
-# 읽습니다(NetworkService.java:2002,2014). live.build_config_from_env 의 기본 화면 크기도 같은 표본에 맞췄습니다.
+# 읽습니다(NetworkService.java:2002,2014). config.build_config_from_env 의 기본 화면 크기도 같은 표본에 맞췄습니다.
 #: 기본 화면 너비(픽셀)입니다. 공통코드 요청에 보냅니다.
 KORAIL_DEFAULT_DEVICE_WIDTH = 1440
 #: 기본 화면 높이(픽셀)입니다. 공통코드 요청에 보냅니다.
@@ -163,7 +163,7 @@ KORAIL_DIRECT_JOURNEY_TYPE_CODE = "11"
 KORAIL_TRANSFER_JOURNEY_TYPE_CODE = "14"
 
 # 병합 홀드 응답의 여정 종류는 선행 "21"·후행 "22" 입니다(JourneyDefine.java:89-90, 평문 보호; ·22 라이브 관측). 요청은 여정을 나누지 않습니다 —
-# mutation_payloads.build_merge_reservation_form 참고.
+# _domains/reservations/forms.py 의 build_merge_reservation_form 참고.
 
 # 필드명: TrainScheduleOutTrainInfo.java:147,1480. 판정 메서드: TrainScheduleOutTrainInfo.java:1500-1552.
 #: 객실 등급 코드별로 병합 예약을 할 수 있는 ``merge_seat_application_flag`` 값입니다. 일반실(``"1"``)은 ``"A"``·``"G"``,

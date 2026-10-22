@@ -125,7 +125,7 @@ class KorailApiError(Exception):
     #: 서버가 보낸 응답 원본입니다. 없으면 ``None``입니다.
     raw: object | None = None
     # 조회·변경 응답의 모델 파싱이 실패하면 raw 는 그때 받은 응답 전체로 바뀌므로, 파서가 예외에 붙였던 부분 원본을 이쪽에
-    # 옮겨 둡니다(client._parse_mutation_response, _parsing._preserve_read_raw).
+    # 옮겨 둡니다(client._parse_mutation_response, _core.parsing._preserve_read_raw).
     #: 응답 모델을 읽다가 실패했을 때 파서가 읽던 부분 원본입니다. 이때 ``raw``에는 받은 응답 전체가 들어 있습니다.
     #: 없으면 ``None``입니다.
     parser_raw: object | None = None
@@ -194,7 +194,7 @@ class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
 
     # 판정: strResult 가 FAIL 이거나 CommonOut 봉투에서 누락된 때입니다(누락 기본값이 실패, CommonOut.java:361). 앱은
     # commonFail() 뒤에 P058을 비교합니다(7.0.8 CommonOut.java:428, 일반 오류 문자열 복원 및 smali 대조). typed read 는 strResult 누락을
-    # KorailProtocolError 로 거절합니다(read_parsers).
+    # KorailProtocolError 로 거절합니다(_core.parsing._validate_envelope).
     # 로컬 세션 비우기는 KorailClient._run_read 가 맡습니다. search_trains·search_transfer_trains 도 바깥에서 _run_read 로
     # 감쌉니다(tests/test_train_reads.py::test_p058_clears_session_even_on_guidance_path).
 

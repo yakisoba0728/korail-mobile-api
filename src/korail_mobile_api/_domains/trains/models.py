@@ -726,7 +726,7 @@ class TrainScheduleItem:
     ``get_seat_assignment_schedule``과 ``get_merge_seats_inquiry``는 응답 모양이 달라 채우는 필드가 다릅니다. 한쪽 응답에 없는
     필드는 ``None``입니다."""
 
-    # 각 DTO 는 다르므로 read_parsers 의 라우트별 필드 맵으로 채웁니다. 한쪽에 없는 필드는 None 이며 맵을 하나로 합치면 안 됩니다.
+    # 각 DTO 는 다르므로 trains/parsers.py 의 라우트별 필드 맵으로 채웁니다. 한쪽에 없는 필드는 None 이며 맵을 하나로 합치면 안 됩니다.
     train_no: str | None = None
     train_no_qb: str | None = None
     train_sequence: str | None = None
@@ -792,7 +792,7 @@ class SeatAssignmentScheduleResponse(BaseKorailResponse):
     조회 조건 필드의 이름은 열차 조회 결과의 ``TrainSearchMetadata``와 대부분 같습니다. ``merge_reservation_possible_flag``는
     이 응답에서 읽지 않으므로 항상 ``None``입니다."""
 
-    # 앱 근거: TrainScheduleOut.java:67. 같은 DTO 모양을 쓰는 형제 파서 parsers.py::parse_train_search_metadata/TrainSearchMetadata
+    # 앱 근거: TrainScheduleOut.java:67. 같은 DTO 모양을 쓰는 형제 파서 trains/parsers.py::parse_train_search_metadata/TrainSearchMetadata
     # 가 이미 이 필드 집합을 정확히 이렇게 읽으므로 그 이름을 그대로 따릅니다. h_merge_rsv_psb_flg 는 MergeSeatsCOutTrnInfos 에만
     # 선언됩니다.
     next_page_flag: str | None = None

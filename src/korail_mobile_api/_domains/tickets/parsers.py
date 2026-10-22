@@ -218,7 +218,7 @@ _KORAIL_POINT_SUMMARY_FIELDS = {
     "customer_lead_flag": "h_cust_lead_flg",
     "disability_type_code": "h_hdcp_tp_cd",
     "disability_type_name": "h_hdcp_tp_cd_nm",
-    # 아래 넷의 네이버/카카오/구글/애플 **순서는 7.0.6 에서 미확인** 입니다 (read_models.KorailPointSummaryResponse 의 해당 주석 참고).
+    # 아래 넷의 네이버/카카오/구글/애플 **순서는 7.0.6 에서 미확인** 입니다 (tickets/models.py 의 KorailPointSummaryResponse 해당 주석 참고).
     "naver_linked_flag": "h_logn_tp_cd1",
     "kakao_linked_flag": "h_logn_tp_cd2",
     "google_linked_flag": "h_logn_tp_cd4",

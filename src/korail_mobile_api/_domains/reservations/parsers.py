@@ -444,7 +444,7 @@ _DIGITS_RE = re.compile(r"[0-9]+")
 
 
 def _response_mapping(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """봉투 3필드의 타입은 _parsing._envelope 가 검사하며 성공 여부는 이 모듈이 검사하지 않습니다."""
+    """봉투 3필드의 타입은 _core.parsing._envelope 가 검사하며 성공 여부는 이 모듈이 검사하지 않습니다."""
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     return dict(raw)

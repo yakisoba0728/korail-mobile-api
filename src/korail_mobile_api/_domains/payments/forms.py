@@ -140,7 +140,7 @@ class CardPayment:
     birthday: str = field(repr=False)
     # 앱 INS_0 이름만으로 "0"/"00"을 확정하지 않습니다. enum 값은 보호돼 있습니다(PaymentDefine.java:152-164,185-189,207-210).
     # 기본 선택은 InstallmentViewModel.java:55,94-96, 결제수단 인덱스 접미사는 PaymentMethod.java:672-694와
-    # ReservationPaymentInStlInfo.java:33을 따릅니다. 형식 검사는 mutation_payloads.build_card_payment_form 에 있습니다.
+    # ReservationPaymentInStlInfo.java:33을 따릅니다. 형식 검사는 build_card_payment_form 에 있습니다.
     #: 할부 개월 수입니다. 숫자 1~2자리이며 기본값 ``"0"``은 일시불입니다.
     installment: str = field(default="0", repr=False)
     #: 카드 종류입니다. ``"J"``(기본값)는 개인 카드, ``"S"``는 법인 카드입니다. 다른 값이면 ``KorailProtocolError``가

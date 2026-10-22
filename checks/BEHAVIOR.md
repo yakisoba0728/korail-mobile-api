@@ -44,7 +44,7 @@ DynaPath 차단 판정 경로는 내장 목록이 아니라 `config.dynapath.all
 
 응답 모델은 자동 마스킹하지 않습니다. `frozen=True`는 중첩 사전·목록의 불변성을 뜻하지 않습니다.
 공개 `raw` 타입은 읽기 인터페이스인 `Mapping[str, object]`입니다. 조회 응답은 대체로 원문 객체를 그대로 참조하지만,
-`mutation_parsers`의 변경 응답·기존 홀드 복원과 일부 하위 행·검색 메타데이터는 사전을 얕게 복사합니다.
+변경 응답 파서(`_domains/*/parsers.py`)의 변경 응답·기존 홀드 복원과 일부 하위 행·검색 메타데이터는 사전을 얕게 복사합니다.
 어느 쪽도 중첩 객체를 복사하거나 동결하지 않습니다.
 거절한 응답의 전체 원문은 예외 `raw`, 파서가 남긴 부분 원문은 `parser_raw`입니다.
 
@@ -57,7 +57,7 @@ DynaPath 차단 판정 경로는 내장 목록이 아니라 `config.dynapath.all
 Python의 정수 문자열 변환 한도를 넘는 봉투 값도 `KorailProtocolError`로 처리하고 원문을 남깁니다.
 
 `BaseKorailResponse.from_raw`는 객체·봉투 타입을 검사하되 성공·실패를 판정하지 않습니다.
-`http.parse_base_response`는 `FAIL` 또는 필수 `strResult`의 누락을 실패로 봅니다.
+`_core.http.parse_base_response`는 `FAIL` 또는 필수 `strResult`의 누락을 실패로 봅니다.
 `null`·빈 문자열·미지의 결과 코드를 임의로 `FAIL`로 바꾸지는 않습니다.
 서버 코드 `-8204`(#32 관측값, 앱 리터럴 아님)는 로그인을 포함한 모든 경로에서 `KorailAppUpdateRequiredError`이며
 서버 메시지를 보존합니다. `SUPDATE`와 같은 하위 예외이고 자동 재시도나 버전 자동 변경으로 이어지지 않습니다.
@@ -192,4 +192,5 @@ Android push ACK·비회원 UI·진단 화면은 이식하지 않습니다.
 
 N카드 일부 기능, 채워진 지연료 영수증, 셀프 체크인 좌석 확인·등록·취소 및 전달표 회수는 실서버 수용을 확인하지 않았습니다.
 저장소의 테스트와 검사기는 모두 오프라인이며 실서버 수용을 증명하지 않습니다.
-세 `_*_unsupported.py`는 기록용으로 유지하고 공개 클라이언트에서 import하지 않습니다.
+세 `_*_unsupported.py`와 그 호출만 쓰는 빌더·파서·모델은 기록용으로 `tests/records/`에 두며 배포 패키지에 넣지 않고
+패키지 소스에서 import하지 않습니다.

@@ -26,19 +26,18 @@ Runtime paths below are relative to `src/korail_mobile_api/`.
 
 | Change | Entry points |
 |---|---|
-| Public calls and convenience API | `client.py`, `facade.py`; exports in `__init__.py` |
-| Request construction | `payloads.py`, `read_payloads.py` → `_read_payload_*.py`; `mutation_payloads.py`, `limousine_payloads.py` |
-| Response parsing | `parsers.py`, `read_parsers.py` → `_read_*_parsers.py`; `mutation_parsers.py`, `limousine_parsers.py`; shared rules in `_parsing.py` |
-| Public data and factories | `models.py`, `read_models.py`, `mutation_models.py`, `limousine_models.py` |
-| HTTP, authentication and cleanup | `http.py`, `_transport.py`, `session.py`, `crypto.py`, `_cleanup.py` |
-| Gates, tokens and configuration | `netfunnel.py`, `netfunnel_safety.py`, `dynapath.py`, `config.py`, `device.py`, `live.py` |
-| Error policy and message catalog | `errors.py`, `error_messages.py`; catalog generator `checks/build_error_catalog.py` |
+| Public calls and convenience API | `client.py`, `facade.py`; exports in `__init__.py` (the only public import path) |
+| Domain code | `_domains/<domain>/models.py` (responses), `forms.py` (request types and form builders), `parsers.py`; a domain is the `docs/api/` page of the public method using the code: `common` (session), `trains`, `reservations`, `payments`, `tickets` (account), `passes`, `airport_bus`, `checkin` (delivery-checkin) |
+| Shared request and parsing rules | `_core/wire.py` (common fields, digit checks), `_core/validation.py`, `_core/parsing.py` |
+| HTTP, authentication and cleanup | `_core/http.py`, `_core/session.py`, `_core/crypto.py`, `_core/cleanup.py` |
+| Gates, tokens and configuration | `_core/netfunnel.py`, `_core/dynapath.py`, `config.py` (includes device profiles and `build_config_from_env`) |
+| Error policy and message catalog | `errors.py` (includes the catalog lookup); catalog generator `checks/build_error_catalog.py` |
 
-The `_*_unsupported.py` modules are reference records, not supported APIs. Keep them out of normal client imports and public exports.
+The `tests/records/_*_unsupported.py` modules are reference records, not supported APIs; they and the code only they use stay out of the package.
 
 ## Safety boundaries
 
-- Work offline by default. Use synthetic identifiers and `httpx.MockTransport` through the existing test fixtures. README examples and `live.py` are not offline test harnesses.
+- Work offline by default. Use synthetic identifiers and `httpx.MockTransport` through the existing test fixtures. README examples and `build_config_from_env` are not offline test harnesses.
 - Require explicit permission for live requests, login attempts and state changes. The agreed scope must cover each reservation, cancellation, payment or refund; an approval to test or merge code is not transaction permission.
 - Keep credentials, cookies, tokens, PNRs, card data and real response bodies out of commits, reports and fixtures. Models and exception `raw` are not automatically masked.
 - Preserve queue/token checks and unresolved app values. Record missing evidence rather than inventing protected literals, endpoints or successful compatibility claims.

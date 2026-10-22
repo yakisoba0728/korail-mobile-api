@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- 3.0 구조 개편 1단계(순수 이동): 공개 import 경로는 패키지 루트(`korail_mobile_api`)뿐입니다. 구현은 `_core/`(HTTP·세션·대기열·DynaPath·공통 파싱·검증)와 `_domains/<도메인>/{models,forms,parsers}.py`로 옮기고, `read_payloads`·`read_parsers`의 재노출과 `__module__` 재작성을 없앴습니다. `device.py`·`live.py`는 `config.py`에, `error_messages.py`는 `errors.py`에 합쳤습니다. 루트가 내보내는 이름·시그니처와 요청 바이트는 같습니다. `korail_mobile_api.models`·`korail_mobile_api.read_payloads`·`korail_mobile_api.device` 같은 이전 모듈 경로와 그 경로를 가리키는 pickle(응답 모델, `KorailDeviceProfile`, `KorailConfig` 안의 `DynapathConfig` 등)은 더 이상 열리지 않는 의도된 3.0 변경입니다. 대기열 로거 이름(`korail_mobile_api.netfunnel`, `korail_mobile_api.netfunnel_safety`)은 유지합니다. 옛 `models.py` 모델의 주석은 이제 지연 평가 문자열이며 `typing.get_type_hints` 결과는 같습니다. 문서의 타입 앵커는 `korail_mobile_api.<이름>`입니다.
+- 미지원 호출 기록 `_maas_unsupported`·`_social_login_unsupported`·`_travel_search_unsupported`와 그 호출만 쓰던 빌더·파서·모델(부가서비스 취소 수수료·장바구니 상태·미결제 해제, 여행상품 검색)은 `tests/records/`로 옮겨 wheel에 넣지 않습니다. sdist에는 테스트와 함께 들어갑니다.
+
 ## [2.6.2] - 2026-10-23
 
 - GitHub #32: 2026-10-21부터 기본 요청 버전(AppVersion 7.0.8·Version 250601003)에 `-8204`("최신 버전으로 업데이트") 응답이 보고됐습니다. `-8204`를 로그인 포함 모든 경로에서 `KorailAppUpdateRequiredError`로 분류하고 서버 문구를 보존합니다. 앱 리터럴이 아니라 실서버 관측 코드입니다. `build_config_from_env()`는 `KORAIL_APP_VERSION`·`KORAIL_API_VERSION`을 읽습니다. 기본 요청 버전은 바꾸지 않았습니다. 기록된 성공은 AppVersion 7.0.10·Version 250722001·`2!` 헤더 조합의 병합 전 작업트리 관측 1건뿐이며, 현재 기본 조합은 실서버에서 확인하지 않았습니다.
