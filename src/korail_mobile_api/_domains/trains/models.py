@@ -158,8 +158,8 @@ class TrainSearchQuery:
     이름으로 보고 그대로 보냅니다. 앱이 쓰는 열차군·조회 구분 코드는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
     기본값과 다른 값이 필요하면 ``train_group_code``와 ``query_division_code``를 직접 지정하세요."""
 
-    departure_station_code: str
-    arrival_station_code: str
+    departure_station: str
+    arrival_station: str
     departure_date: str
     departure_time: str = "000000"
     passengers: int = 1
@@ -419,7 +419,7 @@ class TrainSearchMetadata:
 
     job_id: str | None = wire("strJobId")
     menu_id: str | None = wire("h_menu_id")
-    product_no: str | None = wire("h_gd_no")
+    goods_no: str | None = wire("h_gd_no")
     next_page_flag: str | None = wire("h_next_pg_flg")
     next_query_station_no: str | None = wire("h_qry_st_no_next")
     next_train_no: str | None = wire("h_trn_no_next")

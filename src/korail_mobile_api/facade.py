@@ -17,14 +17,14 @@ import httpx
 
 from ._core.cleanup import _close_connections
 from ._core.validation import _optional_text, _passenger_count, _required_text
-from ._domains.airport_bus.forms import LimousineScheduleQuery, LimousineSeatInventoryQuery
+from ._domains.airport_bus.forms import AirportBusScheduleQuery, AirportBusSeatInventoryQuery
 from ._domains.airport_bus.models import (
-    LIMOUSINE_ROOM_CLASS_CODE,
-    LIMOUSINE_SEAT_ATTRIBUTE_CODE,
-    LimousineSchedule,
-    LimousineScheduleResponse,
-    LimousineSeatInventoryResponse,
-    LimousineStop,
+    AIRPORT_BUS_ROOM_CLASS_CODE,
+    AIRPORT_BUS_SEAT_ATTRIBUTE_CODE,
+    AirportBusSchedule,
+    AirportBusScheduleResponse,
+    AirportBusSeatInventoryResponse,
+    AirportBusStop,
 )
 from ._domains.airport_bus.parsers import parse_limousine_stops
 from ._domains.common.models import BaseKorailResponse, KorailSession, KorailStation
@@ -158,8 +158,8 @@ class TrainResource:
         if self._validate_stations:
             self._stations.ensure_exists(departure, arrival)
         return TrainSearchQuery(
-            departure_station_code=departure,
-            arrival_station_code=arrival,
+            departure_station=departure,
+            arrival_station=arrival,
             departure_date=moment.strftime("%Y%m%d"),
             departure_time=moment.strftime("%H%M%S"),
             passengers=counts.adult,
@@ -322,9 +322,9 @@ class AirportBusResource:
 
     def __init__(self, client: KorailClient) -> None:
         self._client = client
-        self._stops: tuple[LimousineStop, ...] | None = None
+        self._stops: tuple[AirportBusStop, ...] | None = None
 
-    def stops(self, *, refresh: bool = False) -> tuple[LimousineStop, ...]:
+    def stops(self, *, refresh: bool = False) -> tuple[AirportBusStop, ...]:
         """정류장 이름·코드 목록을 한 번 조회해 캐시합니다. 잘못된 응답은 캐시하지 않습니다."""
         if self._stops is None or refresh:
             response = self._client.get_common_codes(["app.limousine.stationNm", "app.limousine.stationCd"])
@@ -339,7 +339,7 @@ class AirportBusResource:
         service_code: str,
         depart_after: datetime | None = None,
         reservation_sale_division_code: str = "",
-    ) -> LimousineScheduleResponse:
+    ) -> AirportBusScheduleResponse:
         """이름 또는 코드로 운행 편 한 페이지를 조회합니다. 운행 그룹은 명시적으로 받습니다."""
         moment = _departure_moment(depart_after)
         _required_text(service_code, "service_code")
@@ -358,26 +358,28 @@ class AirportBusResource:
                 raise KorailInvalidInputError(f"공항버스 정류장 이름·코드를 구분할 수 없습니다: {reference!r}")
             codes.append(matches[0].code)
         return self._client.list_airport_bus_schedules(
-            LimousineScheduleQuery(
+            AirportBusScheduleQuery(
                 moment.strftime("%Y%m%d"),
                 codes[0],
                 codes[1],
                 service_code,
-                LIMOUSINE_ROOM_CLASS_CODE,
+                AIRPORT_BUS_ROOM_CLASS_CODE,
                 moment.strftime("%H%M%S"),
                 "",
-                LIMOUSINE_SEAT_ATTRIBUTE_CODE,
+                AIRPORT_BUS_SEAT_ATTRIBUTE_CODE,
                 reservation_sale_division_code,
             )
         )
 
-    def seats(self, schedule: LimousineSchedule, *, passenger_count: int = 1) -> LimousineSeatInventoryResponse:
+    def seats(
+        self, schedule: AirportBusSchedule, *, passenger_count: int = 1
+    ) -> AirportBusSeatInventoryResponse:
         """조회한 편의 식별값으로 좌석 배치를 읽습니다. 필수값이 없으면 요청 전에 거절합니다."""
-        if not isinstance(schedule, LimousineSchedule):
-            raise TypeError("schedule must be a LimousineSchedule")
+        if not isinstance(schedule, AirportBusSchedule):
+            raise TypeError("schedule must be a AirportBusSchedule")
         _passenger_count(passenger_count, "passenger_count")
         return self._client.get_airport_bus_seat_inventory(
-            LimousineSeatInventoryQuery.from_schedule(schedule, passenger_count=passenger_count)
+            AirportBusSeatInventoryQuery.from_schedule(schedule, passenger_count=passenger_count)
         )
 
 

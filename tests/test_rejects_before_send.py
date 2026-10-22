@@ -467,12 +467,12 @@ ROWS = [
         "continuation",
         INVALID,
     ),
-    Row("search-station-blank", lambda c: _search(c, departure_station_code=" "), "must not be empty", INVALID),
+    Row("search-station-blank", lambda c: _search(c, departure_station=" "), "must not be empty", INVALID),
     # A non-str station used to reach the station-name lookup as an AttributeError.
     Row(
         "search-station-int",
-        lambda c: _search(c, arrival_station_code=1),
-        "arrival_station_code must be a string",
+        lambda c: _search(c, arrival_station=1),
+        "arrival_station must be a string",
     ),
     Row("search-attribute-blank", lambda c: _search(c, seat_attribute_code=""), "seat_attribute_code", INVALID),
     Row("search-division-blank", lambda c: _search(c, query_division_code=""), "query_division_code", INVALID),

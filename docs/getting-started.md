@@ -90,8 +90,8 @@ departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
 client = KorailClient()
 try:
     query = TrainSearchQuery(
-        departure_station_code="서울",
-        arrival_station_code="부산",
+        departure_station="서울",
+        arrival_station="부산",
         departure_date=departure_date,
         departure_time="090000",
         passengers=1,
@@ -105,7 +105,7 @@ finally:
 
 | 필드 | 형식 | 설명 |
 |---|---|---|
-| `departure_station_code`, `arrival_station_code` | 역 이름 또는 역 코드 | 역 코드를 넣으면 역 목록을 조회해 역 이름으로 바꿔 보냅니다. |
+| `departure_station`, `arrival_station` | 역 이름 또는 역 코드 | 역 코드를 넣으면 역 목록을 조회해 역 이름으로 바꿔 보냅니다. |
 | `departure_date` | `YYYYMMDD` | 출발일입니다. |
 | `departure_time` | `HHMMSS` | 이 시각 이후에 출발하는 열차를 조회합니다. 기본값은 `"000000"`입니다. |
 | `passengers` | 정수 | 어른 인원입니다. 어린이·경로 등은 `child_passengers`, `senior_passengers` 같은 필드로 따로 넣습니다. |

@@ -19,8 +19,8 @@ departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
 client = KorailClient()
 try:
     query = TrainSearchQuery(
-        departure_station_code="서울",
-        arrival_station_code="부산",
+        departure_station="서울",
+        arrival_station="부산",
         departure_date=departure_date,
         departure_time="090000",
         passengers=2,
@@ -57,7 +57,7 @@ finally:
 
 ### 역 이름과 역 코드 {#stations}
 
-`departure_station_code`와 `arrival_station_code`에는 역 이름(`"서울"`)이나 숫자로만 된 역 코드를 넣습니다.
+`departure_station`과 `arrival_station`에는 역 이름(`"서울"`)이나 숫자로만 된 역 코드를 넣습니다.
 역 코드를 넣으면 처음 한 번 [`list_stations`](../api/session.md#list_stations)로 역 목록을 받아 이름으로 바꿔 보내고, 대응표는 클라이언트에 보관합니다. 목록에 없는 코드는 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]입니다.
 역 이름은 앞뒤 공백만 뺀 뒤 그대로 보냅니다. 비어 있으면 요청 전에 거절합니다.
 

@@ -217,7 +217,7 @@ with Korail() as korail:
         print(len(inventory.seats))
 ```
 
-정류장 목록은 이름·코드 공통코드를 한 번 받아 캐시하며 `stops(refresh=True)`로 갱신합니다. 목록 길이·필수값·이름/코드의 중복이 잘못되면 전체 원문을 가진 `KorailProtocolError`로 거절하고 잘못된 응답은 캐시하지 않습니다. 입력이 여러 정류장의 이름·코드와 겹치면 임의로 고르지 않고 `ValueError`로 거절합니다. 검색은 `LimousineScheduleResponse`, 좌석 조회는 배치·창문·원문을 포함한 `LimousineSeatInventoryResponse`입니다. 좌석 조회는 편의 필수 식별값을 에코하고 승객 수는 1~9명으로 제한합니다. 예약·결제·취소는 자동 실행하지 않습니다.
+정류장 목록은 이름·코드 공통코드를 한 번 받아 캐시하며 `stops(refresh=True)`로 갱신합니다. 목록 길이·필수값·이름/코드의 중복이 잘못되면 전체 원문을 가진 `KorailProtocolError`로 거절하고 잘못된 응답은 캐시하지 않습니다. 입력이 여러 정류장의 이름·코드와 겹치면 임의로 고르지 않고 `ValueError`로 거절합니다. 검색은 `AirportBusScheduleResponse`, 좌석 조회는 배치·창문·원문을 포함한 `AirportBusSeatInventoryResponse`입니다. 좌석 조회는 편의 필수 식별값을 에코하고 승객 수는 1~9명으로 제한합니다. 예약·결제·취소는 자동 실행하지 않습니다.
 
 ## 한 기기의 값 사용하기
 

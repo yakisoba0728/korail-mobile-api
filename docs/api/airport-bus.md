@@ -22,11 +22,11 @@
 
 ```python
 KorailClient.list_airport_bus_schedules(
-    query: LimousineScheduleQuery,
-) -> LimousineScheduleResponse
+    query: AirportBusScheduleQuery,
+) -> AirportBusScheduleResponse
 ```
 
-조회 조건은 [`LimousineScheduleQuery`][korail_mobile_api.LimousineScheduleQuery]로 만듭니다. 아홉 필드가 모두 필수이며, 라이브러리는 값을 검사하거나 기본값을 채우지 않고 그대로 보냅니다.
+조회 조건은 [`AirportBusScheduleQuery`][korail_mobile_api.AirportBusScheduleQuery]로 만듭니다. 아홉 필드가 모두 필수이며, 라이브러리는 값을 검사하거나 기본값을 채우지 않고 그대로 보냅니다.
 빈 문자열을 넣은 필드는 요청에서 빠집니다. 각 코드의 전체 목록은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 
 | 필드 | 요청 키 | 설명 |
@@ -46,11 +46,11 @@ KorailClient.list_airport_bus_schedules(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `query` | [`LimousineScheduleQuery`][korail_mobile_api.LimousineScheduleQuery] | 필수 | 조회 조건입니다. |
+| `query` | [`AirportBusScheduleQuery`][korail_mobile_api.AirportBusScheduleQuery] | 필수 | 조회 조건입니다. |
 
 **반환값**
 
-[`LimousineScheduleResponse`][korail_mobile_api.LimousineScheduleResponse] — `schedules`에 운행 편이 [`LimousineSchedule`][korail_mobile_api.LimousineSchedule] 목록으로 들어 있습니다.
+[`AirportBusScheduleResponse`][korail_mobile_api.AirportBusScheduleResponse] — `schedules`에 운행 편이 [`AirportBusSchedule`][korail_mobile_api.AirportBusSchedule] 목록으로 들어 있습니다.
 편마다 운행일, 편 번호, 출발·도착 정류장 코드와 시각, 잔여석 수(`general_remaining_seat_count` 등), 운임 문자열(`received_price`)이 있습니다. 응답의 편 목록(`trainList`)이 없거나 `null`이면 빈 튜플입니다.
 
 **예외**
@@ -68,11 +68,11 @@ KorailClient.list_airport_bus_schedules(
 ```python
 from datetime import datetime, timedelta, timezone
 
-from korail_mobile_api import LimousineScheduleQuery
+from korail_mobile_api import AirportBusScheduleQuery
 
 departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
-query = LimousineScheduleQuery(
+query = AirportBusScheduleQuery(
     departure_date=departure_date,
     departure_station_code=input("출발 정류장 코드: "),
     arrival_station_code=input("도착 정류장 코드: "),
@@ -96,26 +96,26 @@ for bus in schedules.schedules:
 
 ```python
 KorailClient.get_airport_bus_seat_inventory(
-    query: LimousineSeatInventoryQuery,
-) -> LimousineSeatInventoryResponse
+    query: AirportBusSeatInventoryQuery,
+) -> AirportBusSeatInventoryResponse
 ```
 
-조회 조건은 [`LimousineSeatInventoryQuery`][korail_mobile_api.LimousineSeatInventoryQuery]로 만듭니다.
-열차 종류·운행 그룹 코드, 운행일, 편 번호, 출발·도착 정류장 코드와 순서는 [`list_airport_bus_schedules`](#list_airport_bus_schedules)가 반환한 [`LimousineSchedule`][korail_mobile_api.LimousineSchedule]의 같은 이름 필드(`train_class_code`, `service_code`, `run_date`, `train_no`, `departure_station_code`, `arrival_station_code`, `departure_run_order`, `arrival_run_order`)에서 옮깁니다.
+조회 조건은 [`AirportBusSeatInventoryQuery`][korail_mobile_api.AirportBusSeatInventoryQuery]로 만듭니다.
+열차 종류·운행 그룹 코드, 운행일, 편 번호, 출발·도착 정류장 코드와 순서는 [`list_airport_bus_schedules`](#list_airport_bus_schedules)가 반환한 [`AirportBusSchedule`][korail_mobile_api.AirportBusSchedule]의 같은 이름 필드(`train_class_code`, `service_code`, `run_date`, `train_no`, `departure_station_code`, `arrival_station_code`, `departure_run_order`, `arrival_run_order`)에서 옮깁니다.
 [`reserve_airport_bus`](#reserve_airport_bus)은 호차 번호를 항상 `"0001"`로 보내므로 좌석도 같은 호차(`car_no="0001"`)로 조회하세요.
 
 `passenger_count`는 인원 수이며, 이 조회에서는 1~9 범위를 검사하지 않습니다. `product_no`가 `None`(기본값)이면 보내지 않고, `is_arrow`는 `"true"`나 `"false"`로 보냅니다(기본값 `False`).
-[`LimousineSeatInventoryQuery`][korail_mobile_api.LimousineSeatInventoryQuery]를 만들 때 `passenger_count`가 `int`가 아니거나 `is_arrow`가 `bool`이 아니면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
+[`AirportBusSeatInventoryQuery`][korail_mobile_api.AirportBusSeatInventoryQuery]를 만들 때 `passenger_count`가 `int`가 아니거나 `is_arrow`가 `bool`이 아니면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
 
 **매개변수**
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `query` | [`LimousineSeatInventoryQuery`][korail_mobile_api.LimousineSeatInventoryQuery] | 필수 | 조회 조건입니다. |
+| `query` | [`AirportBusSeatInventoryQuery`][korail_mobile_api.AirportBusSeatInventoryQuery] | 필수 | 조회 조건입니다. |
 
 **반환값**
 
-[`LimousineSeatInventoryResponse`][korail_mobile_api.LimousineSeatInventoryResponse] — `seats`에 좌석이 [`LimousineSeat`][korail_mobile_api.LimousineSeat] 목록으로 들어 있습니다.
+[`AirportBusSeatInventoryResponse`][korail_mobile_api.AirportBusSeatInventoryResponse] — `seats`에 좌석이 [`AirportBusSeat`][korail_mobile_api.AirportBusSeat] 목록으로 들어 있습니다.
 좌석마다 좌석 번호(`seat_no`)와 판매 가능 표시(`sale_possible_flag`)가 있습니다. 응답에는 이 밖에 호차 번호, 배치 형식(`layout_type`), 창문 위치(`windows`)가 있습니다. 좌석 목록(`seatList`)이 없거나 `null`이면 빈 튜플입니다.
 
 **예외**
@@ -131,10 +131,10 @@ KorailClient.get_airport_bus_seat_inventory(
 **예제**
 
 ```python
-from korail_mobile_api import LimousineSeatInventoryQuery
+from korail_mobile_api import AirportBusSeatInventoryQuery
 
 bus = schedules.schedules[0]
-seat_query = LimousineSeatInventoryQuery(
+seat_query = AirportBusSeatInventoryQuery(
     train_class_code=bus.train_class_code,
     service_code=bus.service_code,
     run_date=bus.run_date,
@@ -160,7 +160,7 @@ free = [seat.seat_no for seat in inventory.seats if seat.sale_possible_flag == "
 
 ```python
 KorailClient.reserve_airport_bus(
-    schedule: LimousineSchedule,
+    schedule: AirportBusSchedule,
     seat_nos: Sequence[str],
     *,
     passengers: KorailPassengerCounts | None = None,
@@ -184,7 +184,7 @@ KorailClient.reserve_airport_bus(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `schedule` | [`LimousineSchedule`][korail_mobile_api.LimousineSchedule] | 필수 | 예약할 편입니다. [`list_airport_bus_schedules`](#list_airport_bus_schedules) 결과의 `schedules` 원소를 넘깁니다. |
+| `schedule` | [`AirportBusSchedule`][korail_mobile_api.AirportBusSchedule] | 필수 | 예약할 편입니다. [`list_airport_bus_schedules`](#list_airport_bus_schedules) 결과의 `schedules` 원소를 넘깁니다. |
 | `seat_nos` | `Sequence[str]` | 필수 | 예약할 좌석 번호입니다. 좌석 조회 결과의 `seat_no`를 인원 수만큼 넣습니다. |
 | `passengers` | [`KorailPassengerCounts`][korail_mobile_api.KorailPassengerCounts] \| `None` | `None` | 승객 구성입니다. `adult`와 `child`만 쓸 수 있습니다. `None`이면 어른 1명입니다. |
 
@@ -197,7 +197,7 @@ KorailClient.reserve_airport_bus(
 | 예외 | 발생 조건 |
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `schedule`이 [`LimousineSchedule`][korail_mobile_api.LimousineSchedule]이 아니거나 위 검사를 통과하지 못했을 때, `passengers`가 [`KorailPassengerCounts`][korail_mobile_api.KorailPassengerCounts]가 아니거나 어른·어린이 외의 승객이 있을 때, `seat_nos`가 시퀀스가 아니거나 문자열·바이트일 때, 문자열이 아니거나 빈 좌석 번호, 중복 좌석 번호가 있을 때, 좌석 수가 전체 인원 수와 다를 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `schedule`이 [`AirportBusSchedule`][korail_mobile_api.AirportBusSchedule]이 아니거나 위 검사를 통과하지 못했을 때, `passengers`가 [`KorailPassengerCounts`][korail_mobile_api.KorailPassengerCounts]가 아니거나 어른·어린이 외의 승객이 있을 때, `seat_nos`가 시퀀스가 아니거나 문자열·바이트일 때, 문자열이 아니거나 빈 좌석 번호, 중복 좌석 번호가 있을 때, 좌석 수가 전체 인원 수와 다를 때 |
 
 **정보**
 

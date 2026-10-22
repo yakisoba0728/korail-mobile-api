@@ -213,8 +213,8 @@ departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
 client = KorailClient(KorailConfig(netfunnel_wait_limit=120.0))
 try:
     query = TrainSearchQuery(
-        departure_station_code="서울",
-        arrival_station_code="부산",
+        departure_station="서울",
+        arrival_station="부산",
         departure_date=departure_date,
         departure_time="090000",
         passengers=1,

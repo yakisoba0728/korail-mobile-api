@@ -11,11 +11,11 @@ import httpx
 import pytest
 
 from korail_mobile_api import (
+    AirportBusSchedule,
+    AirportBusScheduleQuery,
+    AirportBusSeatInventoryQuery,
     KorailInvalidInputError,
     KorailPassengerCounts,
-    LimousineSchedule,
-    LimousineScheduleQuery,
-    LimousineSeatInventoryQuery,
     TrainSearchQuery,
 )
 from korail_mobile_api._core.netfunnel import (
@@ -30,7 +30,7 @@ from korail_mobile_api._domains.airport_bus.forms import (
     build_limousine_schedule_form,
     build_limousine_seat_inventory_form,
 )
-from korail_mobile_api._domains.airport_bus.models import LIMOUSINE_CAR_NO
+from korail_mobile_api._domains.airport_bus.models import AIRPORT_BUS_CAR_NO
 from korail_mobile_api._domains.airport_bus.parsers import (
     parse_limousine_schedule_response,
     parse_limousine_seat_inventory_response,
@@ -658,13 +658,13 @@ def config() -> KorailConfig:
 
 
 @pytest.fixture
-def schedule_query() -> LimousineScheduleQuery:
-    return LimousineScheduleQuery("20990101", "9001", "9002", "980", "1", "120000", "", "015", "")
+def schedule_query() -> AirportBusScheduleQuery:
+    return AirportBusScheduleQuery("20990101", "9001", "9002", "980", "1", "120000", "", "015", "")
 
 
 @pytest.fixture
-def seat_query() -> LimousineSeatInventoryQuery:
-    return LimousineSeatInventoryQuery(
+def seat_query() -> AirportBusSeatInventoryQuery:
+    return AirportBusSeatInventoryQuery(
         "99", "980", "20990101", "99001", "0001", "1", "9001", "9002", "015", "1", "2", 2
     )
 
@@ -935,8 +935,8 @@ def test_window_optional_parsing_and_raw() -> None:
 
 
 @pytest.fixture
-def schedule() -> LimousineSchedule:
-    return LimousineSchedule(
+def schedule() -> AirportBusSchedule:
+    return AirportBusSchedule(
         arrival_date="20990101",
         arrival_station_code="9002",
         arrival_run_order="2",
@@ -1110,7 +1110,7 @@ def test_reservation_wrong_types_and_fixed_car(config, schedule) -> None:
     with pytest.raises(KorailInvalidInputError):
         build_limousine_reservation_form(config, schedule, ["SYNTHETIC-SEAT-A"], passengers={"adult": 1})
     form = build_limousine_reservation_form(config, schedule, ["SYNTHETIC-SEAT-A"])
-    assert form["txtSrcarNo1"] == LIMOUSINE_CAR_NO == "0001"
+    assert form["txtSrcarNo1"] == AIRPORT_BUS_CAR_NO == "0001"
 
 
 @pytest.mark.parametrize("remaining", [None, "", "²", "１", "abc", "1", "0" * 9 + "1", "9" * 5000])
@@ -1194,15 +1194,15 @@ def test_optional_schedule_filters_may_be_blank_but_not_none(schedule_query, nam
 def test_seat_query_from_schedule(config, schedule, seat_query) -> None:
     """from_schedule copies the eight schedule identifiers and adds the bus car, room class and seat attribute, so
     the form is byte-identical to the hand-built query."""
-    query = LimousineSeatInventoryQuery.from_schedule(schedule, passenger_count=2)
+    query = AirportBusSeatInventoryQuery.from_schedule(schedule, passenger_count=2)
     assert query == seat_query
     form = build_limousine_seat_inventory_form(config, query)
     assert form == expected_seat_form() and list(form) == list(expected_seat_form())
-    assert LimousineSeatInventoryQuery.from_schedule(schedule).passenger_count == 1
-    with pytest.raises(KorailInvalidInputError, match="LimousineSchedule"):
-        LimousineSeatInventoryQuery.from_schedule({})  # type: ignore[arg-type]
+    assert AirportBusSeatInventoryQuery.from_schedule(schedule).passenger_count == 1
+    with pytest.raises(KorailInvalidInputError, match="AirportBusSchedule"):
+        AirportBusSeatInventoryQuery.from_schedule({})  # type: ignore[arg-type]
     with pytest.raises(KorailInvalidInputError, match="run_date"):
-        LimousineSeatInventoryQuery.from_schedule(replace(schedule, run_date=None))
+        AirportBusSeatInventoryQuery.from_schedule(replace(schedule, run_date=None))
 
 
 @pytest.fixture

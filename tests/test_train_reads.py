@@ -946,7 +946,7 @@ def test_numeric_station_codes_are_resolved_once_then_cached(rig):
         "stns": {"stn": [{"stn_cd": "0001", "stn_nm": "SYNTH_DEP"}, {"stn_cd": "0099", "stn_nm": "SYNTH_ARR"}]}
     }
     client, calls, _ = rig([raw, SEARCH, SEARCH])
-    query = replace(QUERY, departure_station_code="0001", arrival_station_code="0099")
+    query = replace(QUERY, departure_station="0001", arrival_station="0099")
     client.search_trains(query)
     client.search_trains(query)
     exact_request(calls[0], P + "common.stationdata", {})
@@ -967,10 +967,10 @@ def test_station_names_come_from_the_parsed_station_list(rig):
         }
     }
     client, calls, _ = rig([raw, SEARCH])
-    client.search_trains(replace(QUERY, departure_station_code="1", arrival_station_code="0099"))
+    client.search_trains(replace(QUERY, departure_station="1", arrival_station="0099"))
     exact_request(calls[1], P + "seatMovie.ScheduleView", SEARCH_FORM)
     with pytest.raises(KorailProtocolError, match="station code is unknown: 0050"):
-        client.search_trains(replace(QUERY, departure_station_code="0050"))
+        client.search_trains(replace(QUERY, departure_station="0050"))
     assert len(calls) == 2
 
 

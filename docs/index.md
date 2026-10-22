@@ -55,8 +55,8 @@ client = KorailClient()
 try:
     result = client.search_trains(
         TrainSearchQuery(
-            departure_station_code="서울",
-            arrival_station_code="부산",
+            departure_station="서울",
+            arrival_station="부산",
             departure_date=departure_date,
             departure_time="090000",
         )

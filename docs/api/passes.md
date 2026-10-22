@@ -556,8 +556,8 @@ from korail_mobile_api import TrainSearchQuery
 departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 query = TrainSearchQuery(
-    departure_station_code="서울",
-    arrival_station_code="부산",
+    departure_station="서울",
+    arrival_station="부산",
     departure_date=departure_date,
     departure_time="090000",
 )

@@ -10,6 +10,8 @@ import pytest
 
 from korail_mobile_api import (
     AirportBusResource,
+    AirportBusSchedule,
+    AirportBusStop,
     BaseKorailResponse,
     Korail,
     KorailConfig,
@@ -19,8 +21,6 @@ from korail_mobile_api import (
     KorailProtocolError,
     KorailSession,
     KorailTransportError,
-    LimousineSchedule,
-    LimousineStop,
     MembershipResource,
     PaidTicket,
     PriceFareLeg,
@@ -434,7 +434,7 @@ def test_bus_stop_cache_refresh_and_name_search(scripted_client_factory, config)
         config=config,
     )
     bus = AirportBusResource(client)
-    assert bus.stops() == (LimousineStop("9901", "시험출발"), LimousineStop("9903", "시험도착"))
+    assert bus.stops() == (AirportBusStop("9901", "시험출발"), AirportBusStop("9903", "시험도착"))
     assert bus.stops() is bus.stops() and len(requests) == 1
     result = bus.search(" 시험출발 ", "9903", service_code="980", depart_after=MOMENT)
     assert result.raw["extra"] == "kept" and result.schedules == ()
@@ -525,7 +525,7 @@ def test_bus_seats_copy_schedule_identifiers(scripted_client_factory, config):
     client, requests, _ = scripted_client_factory(
         [{"strResult": "SUCC", "seatList": [], "extra": "kept"}], config=config
     )
-    schedule = LimousineSchedule(
+    schedule = AirportBusSchedule(
         train_class_code="98",
         service_code="980",
         run_date="20990102",
@@ -546,7 +546,7 @@ def test_bus_seats_copy_schedule_identifiers(scripted_client_factory, config):
 def test_incomplete_bus_schedule_never_sends(scripted_client_factory, config):
     client, requests, _ = scripted_client_factory([], config=config)
     with pytest.raises(KorailProtocolError, match="train_class_code"):
-        AirportBusResource(client).seats(LimousineSchedule())
+        AirportBusResource(client).seats(AirportBusSchedule())
     assert requests == []
 
 
@@ -554,5 +554,5 @@ def test_incomplete_bus_schedule_never_sends(scripted_client_factory, config):
 def test_invalid_bus_passenger_count_never_sends(scripted_client_factory, config, count):
     client, requests, _ = scripted_client_factory([], config=config)
     with pytest.raises(KorailProtocolError, match="passenger_count"):
-        AirportBusResource(client).seats(LimousineSchedule(), passenger_count=count)
+        AirportBusResource(client).seats(AirportBusSchedule(), passenger_count=count)
     assert requests == []

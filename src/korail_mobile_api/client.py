@@ -17,8 +17,8 @@ from ._core.netfunnel import KorailNetFunnelClient, KorailNetFunnelGateName
 from ._core.parsing import _preserve_read_raw
 from ._core.session import KorailSessionClient
 from ._domains.airport_bus.forms import (
-    LimousineScheduleQuery,
-    LimousineSeatInventoryQuery,
+    AirportBusScheduleQuery,
+    AirportBusSeatInventoryQuery,
     MaasServiceDetailQuery,
     _build_ticket_maas_menu_form,
     build_limousine_reservation_form,
@@ -29,9 +29,9 @@ from ._domains.airport_bus.forms import (
     build_maas_station_form,
 )
 from ._domains.airport_bus.models import (
-    LimousineSchedule,
-    LimousineScheduleResponse,
-    LimousineSeatInventoryResponse,
+    AirportBusSchedule,
+    AirportBusScheduleResponse,
+    AirportBusSeatInventoryResponse,
     MaasMenuListResponse,
     MaasServiceDetailListResponse,
 )
@@ -588,8 +588,8 @@ class KorailClient:
 
     def list_airport_bus_schedules(
         self,
-        query: LimousineScheduleQuery,
-    ) -> LimousineScheduleResponse:
+        query: AirportBusScheduleQuery,
+    ) -> AirportBusScheduleResponse:
         """리무진 연계 구간의 운행 스케줄 한 페이지를 조회합니다."""
         return self._post_read(
             "/classes/com.korail.mobile.lmu.scdlQry.do",
@@ -600,8 +600,8 @@ class KorailClient:
 
     def get_airport_bus_seat_inventory(
         self,
-        query: LimousineSeatInventoryQuery,
-    ) -> LimousineSeatInventoryResponse:
+        query: AirportBusSeatInventoryQuery,
+    ) -> AirportBusSeatInventoryResponse:
         """리무진 연계 편 한 호차의 좌석 점유 상태를 조회합니다."""
         return self._post_read(
             "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do",
@@ -1452,8 +1452,8 @@ class KorailClient:
         peak_season: bool = False,
     ) -> BaseKorailResponse:
         validate_train_search_query(query)
-        departure_name = self._resolve_station_reference(query.departure_station_code)
-        arrival_name = self._resolve_station_reference(query.arrival_station_code)
+        departure_name = self._resolve_station_reference(query.departure_station)
+        arrival_name = self._resolve_station_reference(query.arrival_station)
         current = self.session.current
         form = build_train_search_form(
             self.config,
@@ -1658,7 +1658,7 @@ class KorailClient:
 
     def reserve_airport_bus(
         self,
-        schedule: LimousineSchedule,
+        schedule: AirportBusSchedule,
         seat_nos: Sequence[str],
         *,
         passengers: KorailPassengerCounts | None = None,

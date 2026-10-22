@@ -14,14 +14,14 @@ from ..common.models import BaseKorailResponse
 from ..trains.models import SeatWindow
 
 #: 공항버스 좌석 조회와 예약에 쓰는 호차 번호입니다. 앱 상수 ``DEFINE_SRCARNO``의 보호된 값입니다.
-LIMOUSINE_CAR_NO = "0001"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:101
+AIRPORT_BUS_CAR_NO = "0001"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:101
 # 앱 공항버스 화면이 보내는 보호된 값이며 2026-09-24 실서버 예약에서 받아들여졌습니다.
-LIMOUSINE_ROOM_CLASS_CODE = "1"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:752-788
-LIMOUSINE_SEAT_ATTRIBUTE_CODE = "015"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:752-788
+AIRPORT_BUS_ROOM_CLASS_CODE = "1"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:752-788
+AIRPORT_BUS_SEAT_ATTRIBUTE_CODE = "015"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:752-788
 
 
 @dataclass(frozen=True)
-class LimousineStop:
+class AirportBusStop:
     """공통 코드 조회에서 짝지은 공항버스 정류장 코드와 이름입니다."""
 
     code: str
@@ -29,7 +29,7 @@ class LimousineStop:
 
 
 @dataclass(frozen=True)
-class LimousineSchedule:
+class AirportBusSchedule:
     """조회된 공항버스 한 편의 구간·운행·운임 정보를 담습니다."""
 
     arrival_date: str | None = wire("arvDt")
@@ -60,16 +60,16 @@ class LimousineSchedule:
 
 
 @dataclass(frozen=True)
-class LimousineScheduleResponse(BaseKorailResponse):
+class AirportBusScheduleResponse(BaseKorailResponse):
     """공항버스 운행 스케줄 한 페이지를 담습니다."""
 
     following_page_extension: str | None = wire("fllwPgExt")
     long_short_division_code: str | None = wire("lgtmShtmDvCd")
-    schedules: tuple[LimousineSchedule, ...] = ()
+    schedules: tuple[AirportBusSchedule, ...] = ()
 
 
 @dataclass(frozen=True)
-class LimousineSeat:
+class AirportBusSeat:
     """공항버스 좌석표 한 자리의 식별자와 점유 상태를 담습니다."""
 
     direction_attribute_code: str | None = wire("dir_seat_att_cd")
@@ -86,7 +86,7 @@ class LimousineSeat:
 
 
 @dataclass(frozen=True)
-class LimousineSeatInventoryResponse(BaseKorailResponse):
+class AirportBusSeatInventoryResponse(BaseKorailResponse):
     """공항버스 한 호차의 좌석표와 배치 정보를 담습니다.
 
     응답 형식은 열차 좌석 재고와 같으며, 창문 위치는 같은 ``SeatWindow``로 담습니다. 좌석 목록이 없거나 ``null``이면
@@ -99,7 +99,7 @@ class LimousineSeatInventoryResponse(BaseKorailResponse):
     layout_type: str | None = wire("layout_type")
     vr_banner_url: str | None = wire("vrBnrUrl")
     windows: tuple[SeatWindow, ...] = ()
-    seats: tuple[LimousineSeat, ...] = ()
+    seats: tuple[AirportBusSeat, ...] = ()
 
 
 @dataclass(frozen=True)

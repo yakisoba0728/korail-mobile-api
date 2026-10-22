@@ -8,16 +8,16 @@ __version__ = "2.6.2"
 
 from ._core.dynapath import DynapathConfig, DynapathRequestContext, DynapathTokenProvider, DynapathTokenSettings
 from ._domains.airport_bus.forms import (
-    LimousineScheduleQuery,
-    LimousineSeatInventoryQuery,
+    AirportBusScheduleQuery,
+    AirportBusSeatInventoryQuery,
     MaasServiceDetailQuery,
 )
 from ._domains.airport_bus.models import (
-    LimousineSchedule,
-    LimousineScheduleResponse,
-    LimousineSeat,
-    LimousineSeatInventoryResponse,
-    LimousineStop,
+    AirportBusSchedule,
+    AirportBusScheduleResponse,
+    AirportBusSeat,
+    AirportBusSeatInventoryResponse,
+    AirportBusStop,
     MaasMenuItem,
     MaasMenuListResponse,
     MaasServiceDetail,
@@ -276,6 +276,13 @@ from .facade import (
 
 __all__ = [
     "AirportBusResource",
+    "AirportBusSchedule",
+    "AirportBusScheduleQuery",
+    "AirportBusScheduleResponse",
+    "AirportBusSeat",
+    "AirportBusSeatInventoryQuery",
+    "AirportBusSeatInventoryResponse",
+    "AirportBusStop",
     "AppDataResponse",
     "AppVersionInfo",
     "BaseKorailResponse",
@@ -363,13 +370,6 @@ __all__ = [
     "KorailTransportError",
     "get_error_message",
     "resolve_error_message",
-    "LimousineSchedule",
-    "LimousineScheduleQuery",
-    "LimousineScheduleResponse",
-    "LimousineSeat",
-    "LimousineSeatInventoryQuery",
-    "LimousineSeatInventoryResponse",
-    "LimousineStop",
     "MembershipResource",
     "MaasMenuItem",
     "MaasMenuListResponse",

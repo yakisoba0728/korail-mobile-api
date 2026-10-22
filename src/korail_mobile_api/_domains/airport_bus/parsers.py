@@ -24,11 +24,11 @@ from ..._core.parsing import (
 from ...errors import KorailProtocolError
 from ..trains.models import SeatWindow
 from .models import (
-    LimousineSchedule,
-    LimousineScheduleResponse,
-    LimousineSeat,
-    LimousineSeatInventoryResponse,
-    LimousineStop,
+    AirportBusSchedule,
+    AirportBusScheduleResponse,
+    AirportBusSeat,
+    AirportBusSeatInventoryResponse,
+    AirportBusStop,
     MaasMenuItem,
     MaasMenuListResponse,
     MaasServiceDetail,
@@ -43,7 +43,7 @@ def _require_exact_success(raw: Mapping[str, object]) -> None:
 
 
 @_preserve_read_raw
-def parse_limousine_stops(raw: Mapping[str, object]) -> tuple[LimousineStop, ...]:
+def parse_limousine_stops(raw: Mapping[str, object]) -> tuple[AirportBusStop, ...]:
     """이름·코드 목록의 순서를 유지합니다. 잘못된 짝을 만들거나 일부 행을 버리지 않습니다."""
     _require_exact_success(raw)
     names = raw.get("app.limousine.stationNm")
@@ -56,29 +56,29 @@ def parse_limousine_stops(raw: Mapping[str, object]) -> tuple[LimousineStop, ...
         code = _strict_scalar_string(pair, "code", "limousine stop")
         if not name or not name.strip() or not code or not code.strip():
             raise KorailProtocolError("KORAIL limousine stop name and code must not be empty")
-        stops.append(LimousineStop(code=code, name=name))
+        stops.append(AirportBusStop(code=code, name=name))
     if len({stop.code for stop in stops}) != len(stops) or len({stop.name for stop in stops}) != len(stops):
         raise KorailProtocolError("KORAIL limousine stop names and codes must be unambiguous")
     return tuple(stops)
 
 
 @_preserve_read_raw
-def parse_limousine_schedule_response(raw: Mapping[str, object]) -> LimousineScheduleResponse:
+def parse_limousine_schedule_response(raw: Mapping[str, object]) -> AirportBusScheduleResponse:
     _require_exact_success(raw)
     schedules = wire_models(
-        LimousineSchedule, _optional_read_rows(raw, "trainList", "limousine schedule"), "limousine schedule"
+        AirportBusSchedule, _optional_read_rows(raw, "trainList", "limousine schedule"), "limousine schedule"
     )
     return wire_model(
-        LimousineScheduleResponse, raw, "limousine schedule", schedules=schedules, **_response_fields(raw)
+        AirportBusScheduleResponse, raw, "limousine schedule", schedules=schedules, **_response_fields(raw)
     )
 
 
 @_preserve_read_raw
-def parse_limousine_seat_inventory_response(raw: Mapping[str, object]) -> LimousineSeatInventoryResponse:
+def parse_limousine_seat_inventory_response(raw: Mapping[str, object]) -> AirportBusSeatInventoryResponse:
     """seatList 생략·null 은 빈 목록, 비목록·비객체 행은 오류이고 잘못된 창문 행은 건너뜁니다."""
     _require_exact_success(raw)
     seats = wire_models(
-        LimousineSeat,
+        AirportBusSeat,
         _optional_read_rows(raw, "seatList", "limousine seat inventory"),
         "limousine seat inventory",
     )
@@ -96,7 +96,7 @@ def parse_limousine_seat_inventory_response(raw: Mapping[str, object]) -> Limous
         except (KorailProtocolError, ValueError, OverflowError):
             continue
     return wire_model(
-        LimousineSeatInventoryResponse,
+        AirportBusSeatInventoryResponse,
         raw,
         "limousine seat inventory",
         windows=tuple(windows),
