@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Self
 
+from ..._core.parsing import _envelope, defaulted_str, required_str, wire
 from ...errors import KorailProtocolError, resolve_error_message
 
 
@@ -34,8 +35,6 @@ class BaseKorailResponse:
     ``str_result``, ``h_msg_cd``, ``h_msg_txt``는 모든 응답에 공통인 봉투 필드이며, ``raw``에는 서버가 보낸 응답이 그대로
     남습니다."""
 
-    # from_raw는 봉투 타입만 검사하며, 성공·실패 판정은 http.parse_base_response가 맡습니다.
-
     h_msg_cd: str | None = None
     h_msg_txt: str | None = None
     str_result: str | None = None
@@ -52,8 +51,6 @@ class BaseKorailResponse:
 
         성공·실패는 판정하지 않습니다. ``raw``가 JSON 객체가 아니거나 봉투 필드가 문자열·정수·``null``이 아니면
         ``KorailProtocolError``가 발생합니다."""
-        from ..._core.parsing import _envelope
-
         if not isinstance(raw, dict):
             error = KorailProtocolError("KORAIL response must be a JSON object")
             error.raw = raw
@@ -71,19 +68,18 @@ class BaseKorailResponse:
 class AppVersionInfo:
     """앱 버전과 업데이트 안내 주소를 담습니다."""
 
-    message: str | None = None
-    new_version: str | None = None
-    # 근거: MobilePlusMainVersion.java:52; AppKt.java:1240,1323,1635.
+    message: str | None = wire("AMESSAGE")
+    new_version: str | None = wire("NEWDVERSION")
     #: 앱 업데이트 안내 주소(``CNTAURL``)입니다.
-    store_url: str | None = None
+    store_url: str | None = wire("CNTAURL")
 
 
 @dataclass(frozen=True)
 class AppDataResponse(BaseKorailResponse):
     """앱 메인 캐시의 버전·공지 정보를 담습니다."""
 
-    disability_certification_msg: str | None = None
-    railplus_cardinfo: str | None = None
+    disability_certification_msg: str | None = wire("disability_certification_msg")
+    railplus_cardinfo: str | None = wire("railplus_cardinfo")
     version: AppVersionInfo | None = None
     notice: NoticeResponse | None = None
 
@@ -92,10 +88,10 @@ class AppDataResponse(BaseKorailResponse):
 class NoticeResponse(BaseKorailResponse):
     """앱 메인 화면의 공지를 담습니다."""
 
-    board_id: str | None = None
-    post_sequence: str | None = None
-    post_title: str | None = None
-    post_content: str | None = None
+    board_id: str | None = wire("BbrdId")
+    post_sequence: str | None = wire("PtwtSqno")
+    post_title: str | None = wire("PtwtTtl")
+    post_content: str | None = wire("PtwtCont")
 
 
 @dataclass(frozen=True)
@@ -109,21 +105,20 @@ class UuidResponse(BaseKorailResponse):
 class KorailStation:
     """역 코드·이름과 역별 안내 정보를 담습니다."""
 
-    code: str
-    name: str
-    longitude: str | None = None
-    latitude: str | None = None
+    code: str = wire("stn_cd", defaulted_str)
+    name: str = wire("stn_nm", defaulted_str)
+    longitude: str | None = wire("longitude")
+    latitude: str | None = wire("latitude")
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
-    group: str | None = None
-    major: str | None = None
-    # popupType 은 String 선언이므로 문자열로 유지합니다(StationDataOutStnItem.java:60).
+    group: str | None = wire("group")
+    major: str | None = wire("major")
     #: 역 안내 팝업의 종류(``popupType``)입니다. 서버가 정수로 보내도 문자열로 담습니다.
-    popup_type: str | None = None
-    popup_message: str | None = None
-    popup_link_title: str | None = None
-    popup_link_url: str | None = None
-    area: str | None = None
-    stop: str | None = None
+    popup_type: str | None = wire("popupType")
+    popup_message: str | None = wire("popupMessage")
+    popup_link_title: str | None = wire("popupLinkTitle")
+    popup_link_url: str | None = wire("popupLinkUrl")
+    area: str | None = wire("area")
+    stop: str | None = wire("stop")
 
 
 @dataclass(frozen=True)
@@ -137,28 +132,28 @@ class StationDataResponse(BaseKorailResponse):
 class StationInfoResponse(BaseKorailResponse):
     """역 데이터의 판본과 역 수를 담습니다."""
 
-    # count 는 String 선언이므로 정수로 바꾸지 않습니다(StationInfoOut.java:47).
     #: 역 수입니다. 정수로 바꾸지 않고 문자열로 담습니다.
-    count: str = ""
-    map_version: str | None = None
+    count: str = wire("count", required_str, default="")
+    map_version: str | None = wire("map_version", required_str, default=None)
 
 
 @dataclass(frozen=True)
 class TrainCalendarDay:
     """열차 운행일 한 날짜와 예매 조건을 담습니다."""
 
-    run_date: str | None = None
-    business_day_stage_code: str | None = None
-    day_division_code: str | None = None
-    holiday_division_code: str | None = None
-    sale_day_division_code: str | None = None
-    a_train_operation_flag: str | None = None
-    d_train_operation_flag: str | None = None
-    g_train_operation_flag: str | None = None
-    o_train_operation_flag: str | None = None
-    s_train_operation_flag: str | None = None
-    v_train_operation_flag: str | None = None
-    x_train_operation_flag: str | None = None
+    # 앱의 누락 기본값(날짜·휴일 구분)은 보호돼 있어 재현하지 않고 None 으로 둡니다.
+    run_date: str | None = wire("runDt")
+    business_day_stage_code: str | None = wire("bizDdStgCd")
+    day_division_code: str | None = wire("dayDvCd")
+    holiday_division_code: str | None = wire("hldyDvCd")
+    sale_day_division_code: str | None = wire("saleDdDvCd")
+    a_train_operation_flag: str | None = wire("aTrnOpFlg")
+    d_train_operation_flag: str | None = wire("dTrnOpFlg")
+    g_train_operation_flag: str | None = wire("gTrnOpFlg")
+    o_train_operation_flag: str | None = wire("oTrnOpFlg")
+    s_train_operation_flag: str | None = wire("sTrnOpFlg")
+    v_train_operation_flag: str | None = wire("vTrnOpFlg")
+    x_train_operation_flag: str | None = wire("xTrnOpFlg")
     raw: Mapping[str, object] = field(
         default_factory=dict[str, object],
         compare=False,
@@ -188,8 +183,8 @@ class ServiceStatusResponse(BaseKorailResponse):
 class CrewRequestOption:
     """승무원 호출 시 선택할 요청 사유를 담습니다."""
 
-    message_code: str | None = None
-    content: str | None = None
+    message_code: str | None = wire("intgMsgCd")
+    content: str | None = wire("prsCont")
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 

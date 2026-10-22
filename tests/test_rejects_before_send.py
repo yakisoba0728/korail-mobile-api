@@ -58,6 +58,7 @@ SEATED_HOLD = replace(
     ),
 )
 LOGGED_OUT: dict[str, Any] = {"error": api.KorailAuthError, "logged_in": False}
+INVALID = api.KorailInvalidInputError
 
 
 @dataclass(frozen=True)
@@ -353,6 +354,7 @@ ROWS = [
     Row("seat-cars-goods-no-space", lambda c: c.get_seat_cars(_train(goods_no="A B")), "printable ASCII"),
     Row("seat-cars-room-class", lambda c: c.get_seat_cars(TRAIN, room_class_code="3"), "room_class_code must"),
     Row("search-continuation-type", lambda c: c.search_trains(QUERY, continuation=("1", "2")), "continuation"),
+    Row("search-station-blank", lambda c: _search(c, departure_station_code=" "), "must not be empty", INVALID),
     Row("search-attribute-blank", lambda c: _search(c, seat_attribute_code=""), "seat_attribute_code must be"),
     Row("search-division-blank", lambda c: _search(c, query_division_code=""), "query_division_code must be"),
     Row("search-connections-text", lambda c: _search(c, connection_station_codes="0001"), "connection_station"),
@@ -415,6 +417,13 @@ ROWS = [
         lambda c: c.get_refund_ticket_detail(TICKET, from_purchase_history="Y"),
         "bool",
     ),
+    # Common codes are a str or a sequence of str; bytes used to go out one code per byte (code=97&code=98).
+    Row("common-code-bytes", lambda c: c.get_common_code(b"ab"), "sequence of strings", INVALID, False),
+    Row("common-code-empty-bytes", lambda c: c.get_common_code(b""), "sequence of strings", INVALID, False),
+    Row(
+        "common-code-int-item", lambda c: c.get_common_code(["SYNTH", 1]), "sequence of strings", INVALID, False
+    ),
+    Row("common-code-int", lambda c: c.get_common_code(1), "sequence of strings", INVALID, False),
 ]
 
 # Desired behavior of defects fixed in parallel for 2.6.2. No match=, so a reworded fix still flips them.

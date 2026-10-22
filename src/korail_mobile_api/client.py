@@ -76,8 +76,6 @@ from ._domains.checkin.parsers import (
 from ._domains.common.forms import (
     build_cache_query,
     build_common_code_form,
-    build_crew_request_list_query,
-    build_service_status_query,
 )
 from ._domains.common.models import (
     AppDataResponse,
@@ -97,7 +95,6 @@ from ._domains.common.parsers import (
     parse_service_status_response,
     parse_station_data_response,
     parse_station_info_response,
-    parse_station_name_map,
     parse_train_calendar_response,
     parse_uuid_response,
     resolve_station_name,
@@ -663,10 +660,9 @@ class KorailClient:
         timestamp_ms: int | None = None,
     ) -> ServiceStatusResponse:
         """예매 서비스가 열려 있는지를 서버 봉투로 확인합니다."""
-        query = build_service_status_query(timestamp_ms)
         return self._post_read(
             "/file/CACHE/MobileService.cache",
-            query,
+            build_cache_query(timestamp_ms),
             parser=parse_service_status_response,
             include_common=False,
         )
@@ -859,10 +855,9 @@ class KorailClient:
 
         이 라우트의 실제 DTO(``CrewCallCommonIn.java:50``)의 유일한 입력은 ``timeStamp`` 이며, 주지 않으면 호출 시점의 밀리초 epoch
         입니다."""
-        query = build_crew_request_list_query(timestamp_ms)
         return self._post_read(
             "/classes/com.korail.mobile.push.crwCallRq.do",
-            query,
+            build_cache_query(timestamp_ms),
             parser=parse_crew_request_list_response,
         )
 
@@ -1389,7 +1384,7 @@ class KorailClient:
                     form,
                     include_common=False,
                     require_envelope=False,
-                )
+                ).raw
             )
         )
 
@@ -1415,7 +1410,7 @@ class KorailClient:
                     include_common=False,
                     form_encoded=False,
                     require_envelope=False,
-                )
+                ).raw
             )
         )
 
@@ -1459,7 +1454,7 @@ class KorailClient:
                     form,
                     include_common=False,
                     require_envelope=False,
-                )
+                ).raw
             )
         )
 
@@ -1472,7 +1467,7 @@ class KorailClient:
                     include_common=False,
                     form_encoded=False,
                     require_envelope=False,
-                )
+                ).raw
             )
         )
 
@@ -1485,7 +1480,7 @@ class KorailClient:
                     include_common=False,
                     form_encoded=False,
                     require_envelope=False,
-                )
+                ).raw
             )
         )
 
@@ -1496,7 +1491,7 @@ class KorailClient:
                 self.http.post_form(
                     "/classes/com.korail.mobile.schedule.runDt",
                     build_cache_query(),
-                )
+                ).raw
             )
         )
 
@@ -1661,7 +1656,10 @@ class KorailClient:
         if not reference.strip().isdigit():
             return resolve_station_name(reference, {})
         if self._station_names is None:
-            self._station_names = parse_station_name_map(self._cached_station_data().raw)
+            stations = self._cached_station_data().stations
+            self._station_names = {
+                station.code: station.name for station in stations if station.code and station.name
+            }
         return resolve_station_name(reference, self._station_names)
 
     def get_train_schedule(
