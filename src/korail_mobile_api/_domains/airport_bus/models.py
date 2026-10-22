@@ -9,8 +9,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from ..._core.parsing import wire
 from ..common.models import BaseKorailResponse
 from ..trains.models import SeatWindow
+
+#: 공항버스 좌석 조회와 예약에 쓰는 호차 번호입니다. 앱 상수 ``DEFINE_SRCARNO``의 보호된 값입니다.
+LIMOUSINE_CAR_NO = "0001"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:101
+# 앱 공항버스 화면이 보내는 보호된 값이며 2026-09-24 실서버 예약에서 받아들여졌습니다.
+LIMOUSINE_ROOM_CLASS_CODE = "1"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:752-788
+LIMOUSINE_SEAT_ATTRIBUTE_CODE = "015"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:752-788
 
 
 @dataclass(frozen=True)
@@ -25,38 +32,39 @@ class LimousineStop:
 class LimousineSchedule:
     """조회된 공항버스 한 편의 구간·운행·운임 정보를 담습니다."""
 
-    arrival_date: str | None = None
-    arrival_station_code: str | None = None
-    arrival_run_order: str | None = None
-    arrival_time: str | None = None
-    transfer_division_code: str | None = None
-    departure_date: str | None = None
-    departure_station_code: str | None = None
-    departure_run_order: str | None = None
-    departure_time: str | None = None
-    general_remaining_seat_count: str | None = None
-    delay_minutes: str | None = None
-    free_remaining_seat_count: str | None = None
-    standing_remaining_seat_count: str | None = None
-    run_date: str | None = None
-    special_remaining_seat_count: str | None = None
-    train_class_code: str | None = None
-    service_code: str | None = None
-    train_no: str | None = None
-    train_order_no: str | None = None
-    yms_application_flag: str | None = None
+    arrival_date: str | None = wire("arvDt")
+    arrival_station_code: str | None = wire("arvRsStnCd")
+    arrival_run_order: str | None = wire("arvStnRunOrdr")
+    arrival_time: str | None = wire("arvTm")
+    transfer_division_code: str | None = wire("chtnDvCd")
+    departure_date: str | None = wire("dptDt")
+    departure_station_code: str | None = wire("dptRsStnCd")
+    departure_run_order: str | None = wire("dptStnRunOrdr")
+    departure_time: str | None = wire("dptTm")
+    general_remaining_seat_count: str | None = wire("gnrmRestSeatNum")
+    delay_minutes: str | None = wire("ocurDlayTnum")
+    free_remaining_seat_count: str | None = wire("restFresNum")
+    standing_remaining_seat_count: str | None = wire("restStndNum")
+    run_date: str | None = wire("runDt")
+    special_remaining_seat_count: str | None = wire("sprmRestSeatNum")
+    train_class_code: str | None = wire("stlbTrnClsfCd")
+    service_code: str | None = wire("trnGpCd")
+    train_no: str | None = wire("trnNo")
+    # 실서버 검증 못 함: 앱 속성 선언만 확인했습니다.
+    train_order_no: str | None = wire("trnOrdrNo")
+    # 앱 속성명은 ymsAplFlgYMS 이고, 전송 키 ymsAplFlg 는 실서버 관측입니다.
+    yms_application_flag: str | None = wire("ymsAplFlg")
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
-    # rcvdPrc 선언: ScdlQryOutTrain.java:40,389.
     #: 표시용 운임 문자열(``rcvdPrc``)입니다.
-    received_price: str | None = None
+    received_price: str | None = wire("rcvdPrc")
 
 
 @dataclass(frozen=True)
 class LimousineScheduleResponse(BaseKorailResponse):
     """공항버스 운행 스케줄 한 페이지를 담습니다."""
 
-    following_page_extension: str | None = None
-    long_short_division_code: str | None = None
+    following_page_extension: str | None = wire("fllwPgExt")
+    long_short_division_code: str | None = wire("lgtmShtmDvCd")
     schedules: tuple[LimousineSchedule, ...] = ()
 
 
@@ -64,16 +72,16 @@ class LimousineScheduleResponse(BaseKorailResponse):
 class LimousineSeat:
     """공항버스 좌석표 한 자리의 식별자와 점유 상태를 담습니다."""
 
-    direction_attribute_code: str | None = None
-    other_attribute_code: str | None = None
-    integrated_message: str | None = None
-    integrated_message_code: str | None = None
-    requested_attribute_code: str | None = None
-    sale_possible_flag: str | None = None
-    seat_no: str | None = None
-    specification: str | None = None
-    sequence_no: str | None = None
-    visual_message_division_code: str | None = None
+    direction_attribute_code: str | None = wire("dir_seat_att_cd")
+    other_attribute_code: str | None = wire("etc_seat_att_cd")
+    integrated_message: str | None = wire("intg_msg")
+    integrated_message_code: str | None = wire("intg_msg_cd")
+    requested_attribute_code: str | None = wire("rq_seat_att_cd")
+    sale_possible_flag: str | None = wire("sale_psb_flg")
+    seat_no: str | None = wire("seat_no")
+    specification: str | None = wire("seat_spec")
+    sequence_no: str | None = wire("sqr_no")
+    visual_message_division_code: str | None = wire("vz_msg_dv_cd")
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
@@ -84,15 +92,12 @@ class LimousineSeatInventoryResponse(BaseKorailResponse):
     응답 형식은 열차 좌석 재고와 같으며, 창문 위치는 같은 ``SeatWindow``로 담습니다. 좌석 목록이 없거나 ``null``이면
     ``seats``는 빈 튜플입니다."""
 
-    # 일반 좌석 재고와 TResidualSeatsResearchOut 을 공유합니다(NetworkApi.java:271,741). 배치·배너·창측 위치의 선언은
-    # TResidualSeatsResearchOut.java:29,34-35,114,134,138 참고.
-
-    car_type_code: str | None = None
-    car_no: str | None = None
-    seat_arrangement_code: str | None = None
-    up_down_division_code: str | None = None
-    layout_type: str | None = None
-    vr_banner_url: str | None = None
+    car_type_code: str | None = wire("car_tp_cd")
+    car_no: str | None = wire("scar_no")
+    seat_arrangement_code: str | None = wire("seat_ary_cd")
+    up_down_division_code: str | None = wire("up_dn_dv_cd")
+    layout_type: str | None = wire("layout_type")
+    vr_banner_url: str | None = wire("vrBnrUrl")
     windows: tuple[SeatWindow, ...] = ()
     seats: tuple[LimousineSeat, ...] = ()
 
@@ -101,17 +106,17 @@ class LimousineSeatInventoryResponse(BaseKorailResponse):
 class MaasMenuItem:
     """부가서비스 메뉴 한 항목과 역 선택 조건을 담습니다."""
 
-    active: str | None = None
-    additional_service_code: str | None = None
-    app_data: str | None = None
-    icon_off: str | None = None
-    icon_on: str | None = None
-    info: str | None = None
-    login_required: str | None = None
-    name: str | None = None
-    popup_image: str | None = None
-    menu_type: str | None = None
-    url: str | None = None
+    active: str | None = wire("active")
+    additional_service_code: str | None = wire("addSrvDvCd")
+    app_data: str | None = wire("appData")
+    icon_off: str | None = wire("iconOff")
+    icon_on: str | None = wire("iconOn")
+    info: str | None = wire("info")
+    login_required: str | None = wire("login")
+    name: str | None = wire("name")
+    popup_image: str | None = wire("poppImg")
+    menu_type: str | None = wire("type")
+    url: str | None = wire("url")
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
     @property
@@ -123,8 +128,7 @@ class MaasMenuItem:
         return (
             self.active == "Y"
             and self.menu_type != "N"
-            # appData='N'만 역 선택에서 제외합니다. 실서버 관측: 'C'(604)는 역 15개, 'N'(001)은 0개, 'Y'·'M30'은 25~111개였으므로 Y·M10·M30만 허용하는
-            # 방식으로 제한하지 않습니다.
+            # 실서버에서 역이 0개인 appData 는 'N'뿐이었고 'C'·'Y'·'M30'은 역이 있었으므로 허용 목록으로 좁히지 않습니다.
             and self.app_data not in (None, "", "N")
             and isinstance(self.additional_service_code, str)
             and bool(self.additional_service_code.strip())
@@ -136,49 +140,49 @@ class MaasMenuListResponse(BaseKorailResponse):
     """부가서비스 메뉴 목록을 담습니다."""
 
     items: tuple[MaasMenuItem, ...] = ()
-    departure_elevator_url: str | None = None
-    departure_navigation_url: str | None = None
-    departure_parking_url: str | None = None
-    arrival_elevator_url: str | None = None
-    arrival_bus_info_url: str | None = None
-    arrival_parking_url: str | None = None
-    arrival_baggage_transfer_robot_url: str | None = None
+    departure_elevator_url: str | None = wire("dElevatorUrl")
+    departure_navigation_url: str | None = wire("dLeadNaviUrl")
+    departure_parking_url: str | None = wire("dParkingLotUrl")
+    arrival_elevator_url: str | None = wire("aElevatorUrl")
+    arrival_bus_info_url: str | None = wire("aBisInfoUrl")
+    arrival_parking_url: str | None = wire("aParkingLotUrl")
+    arrival_baggage_transfer_robot_url: str | None = wire("aBggTrsfRbtUrl")
 
 
 @dataclass(frozen=True)
 class MaasServiceDetailInfo:
     """부가서비스의 상품·이용·결제 상세를 담습니다."""
 
-    additional_service_request_no: str | None = None
-    booking_time: str | None = None
-    branch_name: str | None = None
-    partner_name: str | None = None
-    delivery_datetime: str | None = None
-    drop_times: str | None = None
-    dropoff_name: str | None = None
-    image: str | None = None
-    name: str | None = None
-    option_name: str | None = None
-    pickup_name: str | None = None
-    pickup_place: str | None = None
-    pickup_times: str | None = None
-    reservation_date: str | None = None
-    return_datetime: str | None = None
-    start_datetime: str | None = None
-    cancel_deadline_date: str | None = None
-    cancel_return_amount: str | None = None
-    cancel_return_fee: str | None = None
-    goods_sequence: str | None = None
-    intermediate_value: str | None = None
-    received_amount: str | None = None
-    reservation_status_name: str | None = None
-    reservation_passenger_name: str | None = None
-    settlement_deadline_date: str | None = None
-    settlement_deadline_datetime: str | None = None
-    settlement_status_code: str | None = None
-    settlement_status_name: str | None = None
-    total_settlement_amount: str | None = None
-    usage_period_content: str | None = None
+    additional_service_request_no: str | None = wire("addSrvReqNo")
+    booking_time: str | None = wire("bookTime")
+    branch_name: str | None = wire("branchName")
+    partner_name: str | None = wire("coptEntName")
+    delivery_datetime: str | None = wire("deliveryDtm")
+    drop_times: str | None = wire("dropTimes")
+    dropoff_name: str | None = wire("dropoffName")
+    image: str | None = wire("image")
+    name: str | None = wire("name")
+    option_name: str | None = wire("optionName")
+    pickup_name: str | None = wire("pickupName")
+    pickup_place: str | None = wire("pickupPlace")
+    pickup_times: str | None = wire("pickupTimes")
+    reservation_date: str | None = wire("reserveDt")
+    return_datetime: str | None = wire("returnDttm")
+    start_datetime: str | None = wire("startDttm")
+    cancel_deadline_date: str | None = wire("strCncDlnDt")
+    cancel_return_amount: str | None = wire("strCncRetAmt")
+    cancel_return_fee: str | None = wire("strCncRetFee")
+    goods_sequence: str | None = wire("strGdSqno")
+    intermediate_value: str | None = wire("strInt11")
+    received_amount: str | None = wire("strRcvdAmt")
+    reservation_status_name: str | None = wire("strRsvSttNm")
+    reservation_passenger_name: str | None = wire("strRsvpsnm")
+    settlement_deadline_date: str | None = wire("strStlDlnDt")
+    settlement_deadline_datetime: str | None = wire("strStlDlnDttm")
+    settlement_status_code: str | None = wire("strStlSttCd")
+    settlement_status_name: str | None = wire("strStlSttNm")
+    total_settlement_amount: str | None = wire("strTotStlAmt")
+    usage_period_content: str | None = wire("strUtlTrmCont")
     entity_one: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
@@ -187,27 +191,27 @@ class MaasServiceDetailInfo:
 class MaasServiceDetail:
     """신청한 부가서비스 한 건과 그 상세를 담습니다."""
 
-    additional_service_division_code: str | None = None
-    additional_service_goods_code: str | None = None
-    additional_service_id: str | None = None
-    marketing_entity_id: str | None = None
-    marketing_entity_name: str | None = None
-    additional_service_name: str | None = None
-    progress_status_code: str | None = None
-    request_no: str | None = None
-    passenger_reference_content: str | None = None
-    partner_reservation_no: str | None = None
-    delivery_close_time: str | None = None
-    delivery_start_time: str | None = None
-    lead_message_1: str | None = None
-    lead_message_2: str | None = None
-    pnr_no: str | None = None
-    request_date: str | None = None
-    request_quantity: str | None = None
-    reservation_station_code_name: str | None = None
-    reservation_specification_url: str | None = None
-    usage_close_date: str | None = None
-    usage_start_date: str | None = None
+    additional_service_division_code: str | None = wire("addSrvDvCd")
+    additional_service_goods_code: str | None = wire("addSrvGdCd")
+    additional_service_id: str | None = wire("addSrvId")
+    marketing_entity_id: str | None = wire("addSrvMrkEntId")
+    marketing_entity_name: str | None = wire("addSrvMrkEntNm")
+    additional_service_name: str | None = wire("addSrvNm")
+    progress_status_code: str | None = wire("addSrvPrgSttCd")
+    request_no: str | None = wire("addSrvReqNo")
+    passenger_reference_content: str | None = wire("cgPsRefAtclCont")
+    partner_reservation_no: str | None = wire("coptEntRsvNo")
+    delivery_close_time: str | None = wire("dlivPsbClsTm")
+    delivery_start_time: str | None = wire("dlivPsbStTm")
+    lead_message_1: str | None = wire("leadMsgCont1")
+    lead_message_2: str | None = wire("leadMsgCont2")
+    pnr_no: str | None = wire("pnrNo")
+    request_date: str | None = wire("reqDt")
+    request_quantity: str | None = wire("reqQnty")
+    reservation_station_code_name: str | None = wire("rsStnCdNm")
+    reservation_specification_url: str | None = wire("rsvSpecUrl")
+    usage_close_date: str | None = wire("utlClsDt")
+    usage_start_date: str | None = wire("utlStDt")
     detail_info: MaasServiceDetailInfo | None = None
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 

@@ -631,15 +631,11 @@ class KorailClient:
         query: LimousineScheduleQuery,
     ) -> LimousineScheduleResponse:
         """리무진 연계 구간의 운행 스케줄 한 페이지를 조회합니다."""
-        form = build_limousine_schedule_form(self.config, query)
-        return self._run_read(
-            lambda: parse_limousine_schedule_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.lmu.scdlQry.do",
-                    form,
-                    include_common=False,
-                )
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.lmu.scdlQry.do",
+            build_limousine_schedule_form(self.config, query),
+            parser=parse_limousine_schedule_response,
+            include_common=False,
         )
 
     def get_limousine_seat_inventory(
@@ -647,15 +643,11 @@ class KorailClient:
         query: LimousineSeatInventoryQuery,
     ) -> LimousineSeatInventoryResponse:
         """리무진 연계 편 한 호차의 좌석 점유 상태를 조회합니다."""
-        form = build_limousine_seat_inventory_form(self.config, query)
-        return self._run_read(
-            lambda: parse_limousine_seat_inventory_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do",
-                    form,
-                    include_common=False,
-                )
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do",
+            build_limousine_seat_inventory_form(self.config, query),
+            parser=parse_limousine_seat_inventory_response,
+            include_common=False,
         )
 
     def get_service_status(
@@ -1436,14 +1428,11 @@ class KorailClient:
             self._require_session()
             form = _build_ticket_maas_menu_form(pnr_no, ticket_return_numbers)
             include_common = True
-        return self._run_read(
-            lambda: parse_maas_menu_list_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.copt.gdMenuLt.do",
-                    form,
-                    include_common=include_common,
-                )
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.copt.gdMenuLt.do",
+            form,
+            parser=parse_maas_menu_list_response,
+            include_common=include_common,
         )
 
     def get_maas_station_data(

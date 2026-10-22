@@ -6,38 +6,67 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
-from ..._core.validation import _ascii_digits, _required_mutation_text
-from ..._core.wire import _device_version, _device_version_key
+from ..._core.validation import _ascii_digits
+from ..._core.wire import _device_version, _device_version_key, _is_ascii_digits
 from ...config import KorailConfig
 from ...constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_DIRECT_JOURNEY_TYPE_CODE,
     KorailReservationJobType,
-    KorailSeatClass,
 )
-from ...errors import KorailProtocolError
+from ...errors import KorailInvalidInputError
 from ..reservations.forms import (
     _DATE_RE,
+    _DIGITS_RE,
     _TIME_RE,
     KorailPassengerCounts,
     _add_passenger_rows,
     _in_reservation_order,
-    _required_digits,
-    _required_pattern,
     _seat_no_key,
     _sequence_no,
     _srcar_no_key,
 )
-from .models import LimousineSchedule
+from .models import (
+    LIMOUSINE_CAR_NO,
+    LIMOUSINE_ROOM_CLASS_CODE,
+    LIMOUSINE_SEAT_ATTRIBUTE_CODE,
+    LimousineSchedule,
+)
+
+# 좌석 조회가 운행 편에서 그대로 옮기는 식별값입니다.
+_SCHEDULE_IDENTIFIERS = (
+    "train_class_code",
+    "service_code",
+    "run_date",
+    "train_no",
+    "departure_station_code",
+    "arrival_station_code",
+    "departure_run_order",
+    "arrival_run_order",
+)
+
+
+_OPTIONAL_SCHEDULE_FILTERS = ("train_no", "reservation_sale_division_code")
+
+
+def _text(value: object, name: str, *, allow_blank: bool = False) -> str:
+    """빈 값은 서버에서 키가 빠진 요청이 되므로 보내기 전에 거절합니다."""
+    if not isinstance(value, str) or not (allow_blank or value.strip()):
+        raise KorailInvalidInputError(f"{name} must be a {'' if allow_blank else 'non-empty '}string")
+    return value
 
 
 @dataclass(frozen=True)
 class LimousineScheduleQuery:
-    """공항버스 운행 스케줄 조회 조건을 구성합니다."""
+    """공항버스 운행 스케줄 조회 조건을 구성합니다.
+
+    ``train_no``와 ``reservation_sale_division_code``만 빈 문자열로 둘 수 있고(요청에서 빠짐), 나머지가 비었거나 문자열이
+    아니면 ``KorailInvalidInputError``가 발생합니다."""
 
     departure_date: str
     departure_station_code: str
@@ -49,10 +78,16 @@ class LimousineScheduleQuery:
     seat_attribute_code: str
     reservation_sale_division_code: str
 
+    def __post_init__(self) -> None:
+        for item in fields(self):
+            _text(getattr(self, item.name), item.name, allow_blank=item.name in _OPTIONAL_SCHEDULE_FILTERS)
+
 
 @dataclass(frozen=True)
 class LimousineSeatInventoryQuery:
-    """공항버스 한 호차의 좌석 조회 조건을 구성합니다."""
+    """공항버스 한 호차의 좌석 조회 조건을 구성합니다.
+
+    필수 문자열 필드가 비었거나 문자열이 아니면 ``KorailInvalidInputError``가 발생합니다."""
 
     train_class_code: str
     service_code: str
@@ -66,33 +101,46 @@ class LimousineSeatInventoryQuery:
     departure_run_order: str
     arrival_run_order: str
     passenger_count: int
-    # 7.0.6 공항버스 화면은 null 을 넘깁니다(AirportBusSeatMapViewModel.java:865).
     #: 상품 번호(``gdNo``)입니다. 앱의 공항버스 좌석 조회는 이 값을 넘기지 않습니다. ``None``(기본값)이면 요청에서 뺍니다.
     product_no: str | None = None
-    # 기본값 근거: TResidualSeatsResearchIn.java:132; AirportBusSeatMapViewModel.java:865 의 기본값 마스크.
     #: 요청의 ``isArrow`` 값입니다. ``"true"`` 또는 ``"false"``로 보내며, 기본값 ``False``는 앱의 공항버스 좌석 조회와
     #: 같습니다.
     is_arrow: bool = False
 
     def __post_init__(self) -> None:
         if type(self.passenger_count) is not int:
-            raise KorailProtocolError("passenger_count must be an integer")
+            raise KorailInvalidInputError("passenger_count must be an integer")
         if type(self.is_arrow) is not bool:
-            raise KorailProtocolError("is_arrow must be a boolean")
+            raise KorailInvalidInputError("is_arrow must be a boolean")
+        for item in fields(self):
+            if item.name not in ("passenger_count", "product_no", "is_arrow"):
+                _text(getattr(self, item.name), item.name)
+
+    @classmethod
+    def from_schedule(
+        cls, schedule: LimousineSchedule, *, passenger_count: int = 1
+    ) -> LimousineSeatInventoryQuery:
+        """조회한 편의 식별값과 공항버스 호차·객실 등급·좌석 속성으로 좌석 조회 조건을 만듭니다."""
+        if not isinstance(schedule, LimousineSchedule):
+            raise KorailInvalidInputError("schedule must be a LimousineSchedule")
+        return cls(
+            **{name: getattr(schedule, name) for name in _SCHEDULE_IDENTIFIERS},
+            car_no=LIMOUSINE_CAR_NO,
+            room_class_code=LIMOUSINE_ROOM_CLASS_CODE,
+            seat_attribute_code=LIMOUSINE_SEAT_ATTRIBUTE_CODE,
+            passenger_count=passenger_count,
+        )
 
 
 def build_limousine_schedule_form(
     config: KorailConfig,
     query: LimousineScheduleQuery,
 ) -> dict[str, str]:
-    """앱 근거: NetworkApi.java:654-656."""
     return {
         **_device_version_key(config),
         "dptDt": query.departure_date,
         "dptRsStnCd": query.departure_station_code,
         "arvRsStnCd": query.arrival_station_code,
-        # 속성명은 trnGpCd(ScdlQryIn.java:38,60). 보호된 serializer 이름의 길이만으로 전송 키의 평문을 확정할 수는
-        # 없습니다(ScdlQryIn$$serializer.java:32-44).
         "trnGpCd": query.service_code,
         "psrmClCd": query.room_class_code,
         "dptTm": query.departure_time,
@@ -106,9 +154,7 @@ def build_limousine_seat_inventory_form(
     config: KorailConfig,
     query: LimousineSeatInventoryQuery,
 ) -> dict[str, str]:
-    """앱 근거: NetworkApi.java:269-271. isArrow 는 true/false 문자열입니다. ctlDvCd 는 공유 DTO 의 필드이나 공항버스 생성자는 기본값 슬롯을
-    사용합니다 (AirportBusSeatMapViewModel.java:717,865). 열차 좌석변경 생성자 (TrainSeatMapViewModel.java:1976)와 달리 이
-    폼에서는 생략합니다."""
+    # 앱 공항버스 화면은 공유 DTO 의 ctlDvCd 를 기본값으로 두므로 열차 좌석변경과 달리 보내지 않습니다.
     return {
         **_device_version_key(config),
         "trnClsfCd": query.train_class_code,
@@ -128,8 +174,19 @@ def build_limousine_seat_inventory_form(
     }
 
 
-#: 앱 상수 DEFINE_SRCARNO(AirportBusSeatMapViewModel.java:101)는 보호된 4바이트이며 좌석 조회와 예약에 같은 값을 씁니다(:766-783,853,865).
-LIMOUSINE_CAR_NO = "0001"
+# (전송 키, LimousineSchedule 필드, 형식) — 예약 여정 키의 순서입니다.
+_RESERVATION_JOURNEY: tuple[tuple[str, str, re.Pattern[str] | None], ...] = (
+    ("txtTrnNo1", "train_no", None),
+    ("txtTrnClsfCd1", "train_class_code", None),
+    ("txtTrnGpCd1", "service_code", None),
+    ("txtRunDt1", "run_date", _DATE_RE),
+    ("txtDptDt1", "departure_date", _DATE_RE),
+    ("txtDptTm1", "departure_time", _TIME_RE),
+    ("txtDptRsStnCd1", "departure_station_code", _DIGITS_RE),
+    ("txtDptStnRunOrdr1", "departure_run_order", _DIGITS_RE),
+    ("txtArvRsStnCd1", "arrival_station_code", _DIGITS_RE),
+    ("txtArvStnRunOrdr1", "arrival_run_order", _DIGITS_RE),
+)
 
 
 def build_limousine_reservation_form(
@@ -138,52 +195,34 @@ def build_limousine_reservation_form(
     seat_nos: Sequence[str],
     *,
     passengers: KorailPassengerCounts | None = None,
-    car_no: str = LIMOUSINE_CAR_NO,
 ) -> dict[str, str]:
-    """같은 예약 DTO를 쓰되 구성순서는 보내지 않으며 보호된 기본값은 관측값입니다(AirportBusSeatMapViewModel.java:752-788)."""
+    """열차 예약 DTO 를 쓰되 구성순서·변경 플래그는 보내지 않습니다. 보호된 기본값은 실서버에서 받아들여진 값입니다."""
     if not isinstance(schedule, LimousineSchedule):
-        raise KorailProtocolError("KORAIL airport bus reservation requires a LimousineSchedule")
+        raise KorailInvalidInputError("KORAIL airport bus reservation requires a LimousineSchedule")
     if passengers is None:
         passengers = KorailPassengerCounts()
     elif not isinstance(passengers, KorailPassengerCounts):
-        raise KorailProtocolError("KORAIL reservation requires an exact KorailPassengerCounts")
+        raise KorailInvalidInputError("KORAIL reservation requires an exact KorailPassengerCounts")
     if passengers.total - passengers.adult - passengers.child:
-        raise KorailProtocolError("KORAIL airport bus passengers can only be adults and children")
-    if isinstance(seat_nos, (str, bytes)) or not isinstance(seat_nos, Sequence):
-        raise KorailProtocolError("seat_nos must be a sequence of seat numbers")
-    seats = tuple(
-        _required_mutation_text(seat, field="seat_no", context="airport bus reservation") for seat in seat_nos
-    )
+        raise KorailInvalidInputError("KORAIL airport bus passengers can only be adults and children")
+    if isinstance(seat_nos, str | bytes) or not isinstance(seat_nos, Sequence):
+        raise KorailInvalidInputError("seat_nos must be a sequence of seat numbers")
+    seats = tuple(_text(seat, "seat_no") for seat in seat_nos)
     if len(seats) != passengers.total:
-        raise KorailProtocolError("KORAIL airport bus reservation needs exactly one seat per passenger")
-    # 앱은 seat_no 를 토글하므로 같은 좌석을 두 번 선택할 수 없습니다(AirportBusSeatMapViewModel.java:1996-2038).
+        raise KorailInvalidInputError("KORAIL airport bus reservation needs exactly one seat per passenger")
+    # 앱은 좌석을 토글하므로 같은 좌석을 두 번 고를 수 없습니다.
     if len(set(seats)) != len(seats):
-        raise KorailProtocolError("KORAIL airport bus reservation requires distinct seat numbers")
+        raise KorailInvalidInputError("KORAIL airport bus reservation requires distinct seat numbers")
+    # 앱은 잔여석이 인원보다 적은 편을 고르지 못하게 합니다. 숫자가 아닌 잔여석은 알 수 없는 값으로 보고 넘어갑니다.
     remaining = schedule.general_remaining_seat_count
-    # 앱은 잔여석이 인원보다 적은 행을 고를 수 없게 합니다(AirportBusScheduleViewModel.java:407-426).
-    if (
-        isinstance(remaining, str)
-        and remaining.isascii()
-        and remaining.isdigit()
-        and int(remaining) < passengers.total
-    ):
-        raise KorailProtocolError("KORAIL airport bus schedule has fewer remaining seats than passengers")
-    context = "airport bus reservation"
-    journey = {
-        "txtTrnNo1": _required_mutation_text(schedule.train_no, field="train_no", context=context),
-        "txtTrnClsfCd1": _required_mutation_text(
-            schedule.train_class_code, field="train_class_code", context=context
-        ),
-        "txtTrnGpCd1": _required_mutation_text(schedule.service_code, field="service_code", context=context),
-        "txtRunDt1": _required_pattern(schedule.run_date, field="run_date", pattern=_DATE_RE),
-        "txtDptDt1": _required_pattern(schedule.departure_date, field="departure_date", pattern=_DATE_RE),
-        "txtDptTm1": _required_pattern(schedule.departure_time, field="departure_time", pattern=_TIME_RE),
-        "txtDptRsStnCd1": _required_digits(schedule.departure_station_code, field="departure_station_code"),
-        "txtDptStnRunOrdr1": _required_digits(schedule.departure_run_order, field="departure_run_order"),
-        "txtArvRsStnCd1": _required_digits(schedule.arrival_station_code, field="arrival_station_code"),
-        "txtArvStnRunOrdr1": _required_digits(schedule.arrival_run_order, field="arrival_run_order"),
-    }
-    car = _required_mutation_text(car_no, field="car_no", context=context)
+    if _is_ascii_digits(remaining) and int(remaining) < passengers.total:
+        raise KorailInvalidInputError("KORAIL airport bus schedule has fewer remaining seats than passengers")
+    journey: dict[str, str] = {}
+    for key, name, pattern in _RESERVATION_JOURNEY:
+        value = _text(getattr(schedule, name), name)
+        if pattern is not None and pattern.fullmatch(value) is None:
+            raise KorailInvalidInputError(f"KORAIL airport bus schedule field {name} has an invalid shape")
+        journey[key] = value
     form = _device_version_key(config)
     form.update(
         {
@@ -200,9 +239,9 @@ def build_limousine_reservation_form(
             "txtSeatAttCd1": "000",
             "txtSeatAttCd2": "000",
             "txtSeatAttCd3": "000",
-            "txtSeatAttCd4": "015",
+            "txtSeatAttCd4": LIMOUSINE_SEAT_ATTRIBUTE_CODE,
             "txtSeatAttCd5": "000",
-            "txtPsrmClCd1": KorailSeatClass.GENERAL.value,
+            "txtPsrmClCd1": LIMOUSINE_ROOM_CLASS_CODE,
             "txtJrnyCnt": KORAIL_DIRECT_ITINERARY_CODE,
             "txtJrnyTpCd1": KORAIL_DIRECT_JOURNEY_TYPE_CODE,
             "txtJrnySqno1": _sequence_no(KORAIL_DIRECT_ITINERARY_CODE),
@@ -211,13 +250,12 @@ def build_limousine_reservation_form(
         }
     )
     for index, seat in enumerate(seats, start=1):
-        form[_srcar_no_key(1, index)] = car
+        form[_srcar_no_key(1, index)] = LIMOUSINE_CAR_NO
         form[_seat_no_key(1, index)] = seat
     return _in_reservation_order(form)
 
 
 def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
-    """앱 DTO 는 CommonIn 기본 생성자를 사용합니다(GdMenuLtIn.java:59-61). 공통 필드 인코딩: CommonIn.java:448-465."""
     return {
         **_device_version_key(config),
         "timeStamp": str(int(time.time() * 1000)),
@@ -229,14 +267,14 @@ def _build_ticket_maas_menu_form(
     ticket_return_numbers: Sequence[str] | None,
 ) -> list[tuple[str, str]]:
     if not isinstance(pnr_no, str) or not pnr_no.strip():
-        raise KorailProtocolError("KORAIL ticket MaaS menu requires a PNR")
+        raise KorailInvalidInputError("KORAIL ticket MaaS menu requires a PNR")
     if (
         ticket_return_numbers is None
-        or isinstance(ticket_return_numbers, (str, bytes))
+        or isinstance(ticket_return_numbers, str | bytes)
         or not ticket_return_numbers
         or any(not isinstance(number, str) or not number.strip() for number in ticket_return_numbers)
     ):
-        raise KorailProtocolError("KORAIL ticket MaaS menu requires at least one return number")
+        raise KorailInvalidInputError("KORAIL ticket MaaS menu requires at least one return number")
     return [
         ("pnrNo", pnr_no),
         *(("tkRetNo", number) for number in ticket_return_numbers),
@@ -246,7 +284,7 @@ def _build_ticket_maas_menu_form(
 def build_maas_station_form(additional_service_code: str) -> dict[str, str]:
     """부가서비스 코드(``addSrvDvCd``) 하나뿐이고 공통 필드도 붙지 않습니다."""
     if not isinstance(additional_service_code, str) or not additional_service_code.strip():
-        raise KorailProtocolError("additional_service_code must be a non-empty string")
+        raise KorailInvalidInputError("additional_service_code must be a non-empty string")
     return {"addSrvDvCd": additional_service_code}
 
 
@@ -258,10 +296,10 @@ class MaasServiceDetailQuery:
     end_date: str | None = None
 
     def __post_init__(self) -> None:
-        _validate_maas_service_detail_query_values(
-            self.start_date,
-            self.end_date,
-        )
+        # 앱은 두 날짜를 따로 nullable 로 넘기므로 짝·순서는 보지 않고 주어진 값의 YYYYMMDD 형식만 봅니다.
+        for value, name in ((self.start_date, "start_date"), (self.end_date, "end_date")):
+            if value is not None:
+                _ascii_digits(value, name, lengths=frozenset({8}))
 
     @classmethod
     def current(cls) -> MaasServiceDetailQuery:
@@ -288,14 +326,3 @@ def build_maas_service_detail_form(
     if query.end_date is not None:
         form["qryDtTo"] = query.end_date
     return form
-
-
-def _validate_maas_service_detail_query_values(
-    start_date: str | None,
-    end_date: str | None,
-) -> None:
-    # 앱은 두 날짜를 따로 nullable 로 넘깁니다(MaasDetailIn.java:65-68, MyTicketBaseViewModel$executeMaasList$1.java:117).
-    # 짝·순서는 검사하지 않고, 주어진 값의 YYYYMMDD 형식만 봅니다.
-    for value, name in ((start_date, "start_date"), (end_date, "end_date")):
-        if value is not None:
-            _ascii_digits(value, name, lengths=frozenset({8}))

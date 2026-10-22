@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from korail_mobile_api import (
-    BaseKorailResponse,
+    KorailInvalidInputError,
     KorailPassengerCounts,
     LimousineSchedule,
     LimousineScheduleQuery,
@@ -30,6 +30,7 @@ from korail_mobile_api._domains.airport_bus.forms import (
     build_limousine_schedule_form,
     build_limousine_seat_inventory_form,
 )
+from korail_mobile_api._domains.airport_bus.models import LIMOUSINE_CAR_NO
 from korail_mobile_api._domains.airport_bus.parsers import (
     parse_limousine_schedule_response,
     parse_limousine_seat_inventory_response,
@@ -719,7 +720,8 @@ def test_full_schedule_form(config, schedule_query) -> None:
 
 
 def test_full_inventory_form(config, seat_query) -> None:
-    """TResidualSeatsResearchIn.java:65-138,163-219; AirportBusSeatMapViewModel.java:843-865."""
+    """TResidualSeatsResearchIn.java:65-138,163-219; AirportBusSeatMapViewModel.java:843-865. The bus screen leaves
+    the shared DTO's ctlDvCd at its default slot (AirportBusSeatMapViewModel.java:717,865), so it is omitted."""
     form = build_limousine_seat_inventory_form(config, seat_query)
     assert form == expected_seat_form() and list(form) == list(expected_seat_form())
     q = replace(seat_query, product_no="SYNTHETIC-PRODUCT", is_arrow=True)
@@ -744,7 +746,7 @@ def test_full_inventory_form(config, seat_query) -> None:
     ],
 )
 def test_query_type_rejections(seat_query, field_name: str, value: Any) -> None:
-    with pytest.raises(KorailProtocolError):
+    with pytest.raises(KorailInvalidInputError):
         replace(seat_query, **{field_name: value})
 
 
@@ -757,7 +759,9 @@ def test_inventory_query_has_no_reservation_count_range(config, seat_query, coun
 
 
 # Independent field tables from DTO properties/annotations. Protected schedule
-# SerialName strings remain a limitation, even where the library/live keys work.
+# SerialName strings remain a limitation, even where the library/live keys work
+# (ScdlQryOutTrain$$serializer.java:35-55): ymsAplFlg is the live key of property ymsAplFlgYMS and trnOrdrNo is
+# only a declared property (ScdlQryOutTrain.java:48-49); rcvdPrc is declared at ScdlQryOutTrain.java:40,389.
 SCHEDULE_FIELDS = {
     "arvDt": "arrival_date",
     "arvRsStnCd": "arrival_station_code",
@@ -804,10 +808,8 @@ SEAT_TOP = {
 }
 
 
-def envelope(**values: Any) -> BaseKorailResponse:
-    return BaseKorailResponse.from_raw(
-        {"strResult": "SUCC", "h_msg_cd": "SYNTHETIC", "h_msg_txt": "synthetic", **values}
-    )
+def envelope(**values: Any) -> dict[str, Any]:
+    return {"strResult": "SUCC", "h_msg_cd": "SYNTHETIC", "h_msg_txt": "synthetic", **values}
 
 
 @pytest.mark.parametrize(
@@ -827,7 +829,7 @@ def test_every_row_field_string_and_raw(parser, list_key: str, fields: dict[str,
     assert len(rows) == 1
     for wire, attr in fields.items():
         assert getattr(rows[0], attr) == row[wire]
-    assert rows[0].raw == row and parsed.raw is response.raw
+    assert rows[0].raw is row and parsed.raw is response
 
 
 @pytest.mark.parametrize("wire,attr", list(SCHEDULE_FIELDS.items()))
@@ -856,7 +858,7 @@ def test_top_level_integer_string_field_preserved(parser, wire: str, attr: str) 
     """ScdlQryOut.java:58-74; TResidualSeatsResearchOut.java:61-82 optional String fields."""
     response = envelope(**{wire: 7})
     result = parser(response)
-    assert getattr(result, attr) == "7" and result.raw is response.raw
+    assert getattr(result, attr) == "7" and result.raw is response
 
 
 @pytest.mark.parametrize("bad", [True, False, 1.5, [], {}, None])
@@ -896,7 +898,7 @@ def test_bad_lists_preserve_full_error_raw(parser, key: str, bad: Any) -> None:
     response = envelope(**{key: bad, "synthetic_extra": [1, 2]})
     with pytest.raises(KorailProtocolError) as raised:
         parser(response)
-    assert raised.value.raw is response.raw
+    assert raised.value.raw is response
 
 
 @pytest.mark.parametrize("parser", [parse_limousine_schedule_response, parse_limousine_seat_inventory_response])
@@ -905,7 +907,7 @@ def test_exact_success_envelope(parser, result: Any) -> None:
     response = envelope(strResult=result)
     with pytest.raises(KorailProtocolError) as raised:
         parser(response)
-    assert raised.value.raw is response.raw
+    assert raised.value.raw is response
 
 
 def test_window_optional_parsing_and_raw() -> None:
@@ -928,7 +930,7 @@ def test_window_optional_parsing_and_raw() -> None:
         (-2.0, 1.5),
         (None, None),
     ]
-    assert result.raw is response.raw
+    assert result.raw is response
     assert parse_limousine_seat_inventory_response(envelope(windowList={})).windows == ()
 
 
@@ -1057,7 +1059,7 @@ def test_duplicate_seat_rejected(config, schedule) -> None:
     "seats", [None, "SYNTHETIC-SEAT-A", b"seat", {"seat"}, [], [""], [" "], [None], [7], [True], ["A", "B"]]
 )
 def test_reservation_seat_input_rejections(config, schedule, seats: Any) -> None:
-    with pytest.raises(KorailProtocolError):
+    with pytest.raises(KorailInvalidInputError):
         build_limousine_reservation_form(config, schedule, seats)
 
 
@@ -1067,7 +1069,7 @@ def test_reservation_seat_input_rejections(config, schedule, seats: Any) -> None
 def test_reservation_only_adult_and_child(config, schedule, kind: str) -> None:
     """PassengerType.java:56-63 airportList contains only ADULT and CHILD."""
     passengers = KorailPassengerCounts(adult=0, **{kind: 1})
-    with pytest.raises(KorailProtocolError):
+    with pytest.raises(KorailInvalidInputError):
         build_limousine_reservation_form(config, schedule, ["SYNTHETIC-SEAT-A"], passengers=passengers)
 
 
@@ -1096,19 +1098,109 @@ def test_passenger_count_rejections(kwargs: dict[str, Any]) -> None:
     ],
 )
 def test_reservation_bad_schedule_rejected(config, schedule, attr: str, value: Any) -> None:
-    with pytest.raises(KorailProtocolError):
+    with pytest.raises(KorailInvalidInputError):
         build_limousine_reservation_form(config, replace(schedule, **{attr: value}), ["SYNTHETIC-SEAT-A"])
 
 
-def test_reservation_wrong_types_and_car_override(config, schedule) -> None:
-    with pytest.raises(KorailProtocolError):
+def test_reservation_wrong_types_and_fixed_car(config, schedule) -> None:
+    """Every seat goes to the app's DEFINE_SRCARNO car; the builder no longer takes a car_no override."""
+    with pytest.raises(KorailInvalidInputError):
         build_limousine_reservation_form(config, {}, ["SYNTHETIC-SEAT-A"])
-    with pytest.raises(KorailProtocolError):
+    with pytest.raises(KorailInvalidInputError):
         build_limousine_reservation_form(config, schedule, ["SYNTHETIC-SEAT-A"], passengers={"adult": 1})
-    with pytest.raises(KorailProtocolError):
-        build_limousine_reservation_form(config, schedule, ["SYNTHETIC-SEAT-A"], car_no="")
-    form = build_limousine_reservation_form(config, schedule, ["SYNTHETIC-SEAT-A"], car_no="SYNTHETIC-CAR")
-    assert form["txtSrcarNo1"] == "SYNTHETIC-CAR"
+    form = build_limousine_reservation_form(config, schedule, ["SYNTHETIC-SEAT-A"])
+    assert form["txtSrcarNo1"] == LIMOUSINE_CAR_NO == "0001"
+
+
+@pytest.mark.parametrize("remaining", [None, "", "²", "１", "abc", "1"])
+def test_unknown_or_sufficient_remaining_seats_do_not_block(config, schedule, remaining: Any) -> None:
+    """AirportBusScheduleViewModel.java:407-426: the app hides rows with fewer seats than passengers. A missing,
+    non-ASCII or non-numeric count is unknown and skips the check (2.6.2); an equal count passes."""
+    form = build_limousine_reservation_form(
+        config, replace(schedule, general_remaining_seat_count=remaining), ["SYNTHETIC-SEAT-A"]
+    )
+    assert form["txtSeatNo1"] == "SYNTHETIC-SEAT-A"
+
+
+SCHEDULE_QUERY_REQUIRED = (
+    "departure_date",
+    "departure_station_code",
+    "arrival_station_code",
+    "service_code",
+    "room_class_code",
+    "departure_time",
+    "seat_attribute_code",
+)
+SEAT_QUERY_REQUIRED = (
+    "train_class_code",
+    "service_code",
+    "run_date",
+    "train_no",
+    "car_no",
+    "room_class_code",
+    "departure_station_code",
+    "arrival_station_code",
+    "seat_attribute_code",
+    "departure_run_order",
+    "arrival_run_order",
+)
+RESERVATION_REQUIRED = (
+    "train_no",
+    "train_class_code",
+    "service_code",
+    "run_date",
+    "departure_date",
+    "departure_time",
+    "departure_station_code",
+    "departure_run_order",
+    "arrival_station_code",
+    "arrival_run_order",
+)
+
+
+@pytest.mark.parametrize("value", [None, "", " "])
+@pytest.mark.parametrize(
+    "method,name",
+    [
+        *(("get_limousine_schedules", name) for name in SCHEDULE_QUERY_REQUIRED),
+        *(("get_limousine_seat_inventory", name) for name in SEAT_QUERY_REQUIRED),
+        *(("reserve_limousine", name) for name in RESERVATION_REQUIRED),
+    ],
+)
+def test_missing_required_identifier_never_sends(
+    api_factory, schedule_query, seat_query, schedule, method: str, name: str, value: Any
+) -> None:
+    """Report F7 bug 4: schedule identifiers were checked three ways (facade only, not at all, reservation only).
+    The query types and the reservation builder now all refuse None/blank values before anything is sent."""
+    client, requests = api_factory({"strResult": "SUCC"})
+    with pytest.raises(KorailInvalidInputError, match=name):
+        if method == "reserve_limousine":
+            client.reserve_limousine(replace(schedule, **{name: value}), ["SYNTHETIC-SEAT-A"])
+        else:
+            query = schedule_query if method == "get_limousine_schedules" else seat_query
+            getattr(client, method)(replace(query, **{name: value}))
+    assert requests == []
+
+
+@pytest.mark.parametrize("name", ["train_no", "reservation_sale_division_code"])
+def test_optional_schedule_filters_may_be_blank_but_not_none(schedule_query, name: str) -> None:
+    assert getattr(replace(schedule_query, **{name: ""}), name) == ""
+    with pytest.raises(KorailInvalidInputError, match=name):
+        replace(schedule_query, **{name: None})
+
+
+def test_seat_query_from_schedule(config, schedule, seat_query) -> None:
+    """from_schedule copies the eight schedule identifiers and adds the bus car, room class and seat attribute, so
+    the form is byte-identical to the hand-built query."""
+    query = LimousineSeatInventoryQuery.from_schedule(schedule, passenger_count=2)
+    assert query == seat_query
+    form = build_limousine_seat_inventory_form(config, query)
+    assert form == expected_seat_form() and list(form) == list(expected_seat_form())
+    assert LimousineSeatInventoryQuery.from_schedule(schedule).passenger_count == 1
+    with pytest.raises(KorailInvalidInputError, match="LimousineSchedule"):
+        LimousineSeatInventoryQuery.from_schedule({})  # type: ignore[arg-type]
+    with pytest.raises(KorailInvalidInputError, match="run_date"):
+        LimousineSeatInventoryQuery.from_schedule(replace(schedule, run_date=None))
 
 
 @pytest.fixture
@@ -1129,7 +1221,8 @@ def decoded_form(request: httpx.Request) -> dict[str, str]:
 
 
 def test_schedule_client_wire_and_parse_no_queue(api_factory, schedule_query) -> None:
-    """NetworkApi.java:654-656; AirportBusScheduleViewModel.java:248 directly calls the repository."""
+    """NetworkApi.java:654-656; AirportBusScheduleViewModel.java:248 directly calls the repository. Blank train_no
+    and reservation_sale_division_code are omitted."""
     raw = {"strResult": "SUCC", "trainList": [{"trnNo": "99001", "rcvdPrc": "00000000000100"}]}
     client, requests = api_factory(raw, authenticated=False)
     result = client.get_limousine_schedules(schedule_query)
