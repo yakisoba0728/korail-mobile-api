@@ -192,7 +192,8 @@ def test_f8_distribution_contents_and_metadata(
         assert F8_SENTINEL not in data
     # Runtime package includes source modules, the typing marker and the explicit message catalog.
     expected_runtime = {
-        "korail_mobile_api/" + path.name for path in (F8_ROOT / "src/korail_mobile_api").glob("*.py")
+        "korail_mobile_api/" + path.relative_to(F8_ROOT / "src/korail_mobile_api").as_posix()
+        for path in (F8_ROOT / "src/korail_mobile_api").rglob("*.py")
     }
     expected_runtime.add("korail_mobile_api/py.typed")
     expected_runtime.add("korail_mobile_api/error_messages.json")
