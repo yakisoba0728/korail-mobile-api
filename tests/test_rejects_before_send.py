@@ -58,6 +58,7 @@ SEATED_HOLD = replace(
     ),
 )
 LOGGED_OUT: dict[str, Any] = {"error": api.KorailAuthError, "logged_in": False}
+INVALID = api.KorailInvalidInputError
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,14 @@ def _refund(c: api.KorailClient, changes: dict[str, Any] | None = None, **overri
     arguments = _f8_arguments("refund")["refund"]
     arguments["ticket"] = replace(arguments["ticket"], **(changes or {}))
     return c.refund(**{**arguments, **overrides})
+
+
+def _refund_with_quote(c: api.KorailClient, **quote: Any) -> object:
+    """A bound quote edited through replace(), which keeps the binding, so only the amount types differ."""
+    arguments = _f8_arguments("refund")["refund"]
+    return c.refund(
+        **{**arguments, "commission": replace(arguments["commission"], **quote), "settle_mileage": True}
+    )
 
 
 def _station_refund(c: api.KorailClient, **verification: Any) -> object:
@@ -255,7 +264,9 @@ ROWS = [
     Row("cancel-journey-count-zero", lambda c: c.cancel_unpaid_hold(_hold(journey_count="0")), "unpaid hold"),
     Row("cancel-journey-count-none", lambda c: c.cancel_unpaid_hold(_hold(journey_count=None)), "unpaid hold"),
     # Card payment charges the hold's received_amount, and only a fresh payable hold.
-    Row("pay-card-type", lambda c: c.pay_with_card(HOLD, "card"), "requires a CardPayment"),
+    Row("pay-card-type", lambda c: c.pay_with_card(HOLD, "card"), "requires a CardPayment", INVALID),
+    Row("pay-hold-type", lambda c: c.pay_with_card({}, CARD), "exact reservation hold response", INVALID),
+    Row("pay-card-format-on-build", lambda c: replace(CARD, card_number="0" * 12), "13 to 16 digits", INVALID),
     Row("pay-standby-hold", lambda c: c.pay_with_card(_hold(payable=False), CARD), "refuses a standby"),
     Row("pay-zero-amount", lambda c: c.pay_with_card(_hold(received_amount="0"), CARD), "zero-amount"),
     Row(
@@ -276,6 +287,18 @@ ROWS = [
         "bound by get_refund_commission",
     ),
     Row("refund-other-ticket", lambda c: _refund(c, {"sale_sequence": "2"}), "does not match the original"),
+    Row("refund-integer-fee", lambda c: _refund_with_quote(c, refund_fee=400), "must be strings", INVALID),
+    Row(
+        "refund-integer-mileage",
+        lambda c: _refund_with_quote(c, usable_mileage=500),
+        "must be strings",
+        INVALID,
+    ),
+    Row(
+        "refund-ticket-blank-on-build",
+        lambda c: api.PaidTicket(" ", F8_DATE, "SYNTHETIC-WINDOW", "1", "SYNTHETIC-RETURN"),
+        "non-empty PaidTicket.pnr_no",
+    ),
     Row(
         "refund-detail-incomplete",
         lambda c: api.PaidTicket.from_refund_detail(replace(DETAIL, original_window_no=None)),
@@ -299,6 +322,13 @@ ROWS = [
             replace(F8["verify_station_ticket_refund"]["request"], customer_name=" ")
         ),
         "verification requires customer_name",
+        INVALID,
+    ),
+    Row(
+        "station-verify-type",
+        lambda c: c.verify_station_ticket_refund({}),
+        "exact verification request",
+        INVALID,
     ),
     # Discount cards, recalculation, cart, products, delivered tickets and self check-in.
     Row("n-card-purchase-type", lambda c: c.register_discount_card({}), "exact DiscountCardPurchaseRequest"),

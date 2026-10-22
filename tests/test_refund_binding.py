@@ -318,6 +318,8 @@ def test_direct_responses_cannot_forge_binding_from_server_raw(binding_client, s
 
 @pytest.mark.parametrize("original_date", ["1017", None], ids=["original-date", "missing-original-date"])
 def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion(binding_client, original_date):
+    """MyTicketDetailViewModel.java:277,1521 (7.0.6, field by field): the fee lookup uses the original return date,
+    the refund the current sale date; a reissued ticket's sale_date differs from the original's."""
     companion = RefundCompanion("SYNTH-COMPANION-A", "20991231")
     detail = RefundTicketDetailResponse(
         str_result="SUCC",

@@ -3,7 +3,7 @@
 Artifact: com.korail.talk, versionCode 70001000; base APK SHA256
 2847ceb54ba7f7e26edf3426ed606bb1f7e7dfabacf01011d6d164eb45dc993b.
 Evidence: NetworkApi.smali postDptnBank parameter @Field annotations (2039-2059)
-and write$Self's CommonIn-first call in RefundCommissionIn/RefundTicketIn.
+and write$Self's CommonIn-first call in RefundCommissionIn (140-168) and RefundTicketIn (184-226).
 Source SHA256 (local disassembly; source files need not ship with the tests):
 NetworkApi: 85532050c4637f8ce756720233862689795fd0208aa84c820ef066d40c975b5a
 RefundCommissionIn: 092952e234450d1d116da271a1f8488f4df5d75834cc5e836dadda5b325538d7
