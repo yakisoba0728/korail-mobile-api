@@ -1264,3 +1264,11 @@ def test_invalid_input_error_is_both_a_protocol_error_and_a_value_error():
     assert isinstance(error, E.KorailApiError) and error.request_sent is None
     with pytest.raises(ValueError):
         raise error
+
+
+def test_unbuildable_url_is_a_transport_error_that_sent_nothing(factory):
+    client, requests = factory()
+    with pytest.raises(E.KorailTransportError) as caught:
+        client.http.post_form("/classes/synthetic\x00path")
+    assert isinstance(caught.value.__cause__, httpx.InvalidURL)
+    assert caught.value.request_sent is None and not requests

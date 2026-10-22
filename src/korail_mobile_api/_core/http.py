@@ -255,10 +255,13 @@ class KorailHttpClient:
         if self._client.is_closed:
             raise KorailProtocolError(f"KORAIL client is closed; {method} {path} was not sent")
         try:
+            request = self._client.build_request(method, path, params=params, content=content, headers=headers)
+        except httpx.InvalidURL as exc:
+            # URL 을 만들지 못했으므로 아무것도 나가지 않았습니다(request_sent 는 None).
+            raise KorailTransportError(f"KORAIL transport failed for {method} {path}") from exc
+        try:
             try:
-                response = self._client.send(
-                    self._client.build_request(method, path, params=params, content=content, headers=headers)
-                )
+                response = self._client.send(request)
             except (httpx.HTTPError, httpx.InvalidURL) as exc:
                 redact_failed_request(exc)
                 raise KorailTransportError(f"KORAIL transport failed for {method} {path}") from exc
