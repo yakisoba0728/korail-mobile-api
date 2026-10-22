@@ -1112,10 +1112,11 @@ def test_reservation_wrong_types_and_fixed_car(config, schedule) -> None:
     assert form["txtSrcarNo1"] == LIMOUSINE_CAR_NO == "0001"
 
 
-@pytest.mark.parametrize("remaining", [None, "", "²", "１", "abc", "1"])
+@pytest.mark.parametrize("remaining", [None, "", "²", "１", "abc", "1", "0" * 9 + "1", "9" * 5000])
 def test_unknown_or_sufficient_remaining_seats_do_not_block(config, schedule, remaining: Any) -> None:
     """AirportBusScheduleViewModel.java:407-426: the app hides rows with fewer seats than passengers. A missing,
-    non-ASCII or non-numeric count is unknown and skips the check (2.6.2); an equal count passes."""
+    non-ASCII or non-numeric count is unknown and skips the check (2.6.2); an equal count passes. A count longer
+    than 9 digits is unknown too (it used to reach int() and raise a bare ValueError past 4300 digits)."""
     form = build_limousine_reservation_form(
         config, replace(schedule, general_remaining_seat_count=remaining), ["SYNTHETIC-SEAT-A"]
     )

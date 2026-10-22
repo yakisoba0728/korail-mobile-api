@@ -170,7 +170,7 @@ KorailClient.reserve_limousine(
 - `schedule`의 `train_no`, `train_class_code`, `service_code`가 비어 있지 않은지
 - `run_date`, `departure_date`가 숫자 8자리이고 `departure_time`이 숫자 6자리인지
 - 출발·도착 정류장 코드와 순서가 숫자인지
-- `general_remaining_seat_count`가 숫자일 때 인원 수보다 적지 않은지
+- `general_remaining_seat_count`가 9자리 이하 숫자일 때 인원 수보다 적지 않은지(더 길면 알 수 없는 값으로 봅니다)
 
 반환된 홀드는 [`pay_with_card`](payments.md#pay_with_card)로 결제하거나 [`cancel_unpaid_hold`](reservations.md#cancel_unpaid_hold)로 취소합니다. 실패해도 자동으로 다시 보내지 않습니다.
 

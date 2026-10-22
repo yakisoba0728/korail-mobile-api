@@ -1227,13 +1227,10 @@ class KorailClient:
         실제 환불은 하지 않습니다. 반환값에 조회한 원표·동반자를 로컬 연결하며, ``refund``는 이 입력이
         환불 대상과 일치해야 요청합니다. 직접 생성하거나 파싱한 수수료 응답에는 이 연결이 없습니다."""
         self._require_session()
-        form = build_refund_commission_form(ticket, companion)
-        # 생성자 인자 순서와 달리 write$Self는 CommonIn부터 직렬화합니다(7.0.10 RefundCommissionIn.java:140-168).
         response = self._post_read(
             "/classes/com.korail.mobile.refunds.CommissionView",
-            {**self.http.common_fields(), **form},
+            build_refund_commission_form(ticket, companion),
             parser=parse_refund_commission_response,
-            include_common=False,
         )
         return replace(
             response,
@@ -1360,18 +1357,11 @@ class KorailClient:
         timestamp_ms: int | None = None,
     ) -> AppDataResponse:
         """앱 메인 화면이 쓰는 캐시 파일을 받아 옵니다."""
-        form = self.http.common_fields()
-        form.update(build_cache_query(timestamp_ms))
-        form["srtCheckYn"] = "Y"
-        return self._run_read(
-            lambda: parse_app_data_response(
-                self.http.post_form(
-                    "/file/CACHE/prdMobilePlusMain.cache",
-                    form,
-                    include_common=False,
-                    require_envelope=False,
-                ).raw
-            )
+        return self._post_read(
+            "/file/CACHE/prdMobilePlusMain.cache",
+            {**build_cache_query(timestamp_ms), "srtCheckYn": "Y"},
+            parser=parse_app_data_response,
+            require_envelope=False,
         )
 
     def get_notice(

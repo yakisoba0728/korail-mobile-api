@@ -469,6 +469,12 @@ ROWS = [
         INVALID,
     ),
     Row("search-station-blank", lambda c: _search(c, departure_station_code=" "), "must not be empty", INVALID),
+    # A non-str station used to reach the station-name lookup as an AttributeError.
+    Row(
+        "search-station-int",
+        lambda c: _search(c, arrival_station_code=1),
+        "arrival_station_code must be a string",
+    ),
     Row("search-attribute-blank", lambda c: _search(c, seat_attribute_code=""), "seat_attribute_code", INVALID),
     Row("search-division-blank", lambda c: _search(c, query_division_code=""), "query_division_code", INVALID),
     Row(
@@ -575,6 +581,17 @@ ROWS = [
         "refund-detail-history-text",
         lambda c: c.get_refund_ticket_detail(TICKET, from_purchase_history="Y"),
         "bool",
+    ),
+    # Same txt_index rule as the receipt (the refund detail used to say "txt_index must not be empty").
+    Row(
+        "refund-detail-index-type",
+        lambda c: c.get_refund_ticket_detail(TICKET, txt_index=1),
+        "txt_index must be a non-empty string or None",
+    ),
+    Row(
+        "refund-detail-index-blank",
+        lambda c: c.get_refund_ticket_detail(TICKET, txt_index=" "),
+        "txt_index must be a non-empty string or None",
     ),
     # Common codes are a str or a sequence of str; bytes used to go out one code per byte (code=97&code=98).
     Row("common-code-bytes", lambda c: c.get_common_code(b"ab"), "sequence of strings", INVALID, False),

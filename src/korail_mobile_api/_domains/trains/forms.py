@@ -141,7 +141,13 @@ def build_seat_inventory_form(
 
 def validate_train_search_query(query: TrainSearchQuery) -> None:
     """역 이름 조회·대기열 같은 선행 요청 전에 부르는 검사입니다. 빈 날짜·시각·열차군은 기존처럼 생략 대상입니다."""
-    for name in ("departure_date", "departure_time", "train_group_code"):
+    for name in (
+        "departure_station_code",
+        "arrival_station_code",
+        "departure_date",
+        "departure_time",
+        "train_group_code",
+    ):
         if not isinstance(getattr(query, name), str):
             raise KorailInvalidInputError(f"{name} must be a string")
     counts = (

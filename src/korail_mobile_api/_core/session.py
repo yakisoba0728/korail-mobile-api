@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Literal
 
-from .._domains.common.forms import build_common_code_form
+from .._domains.common.forms import build_cache_query, build_common_code_form
 from .._domains.common.models import BaseKorailResponse, KorailSession, LoginCryptoInfo
 from ..constants import KorailLoginInputFlag
 from ..errors import (
@@ -24,7 +24,6 @@ from ..errors import (
     classify_app_error,
 )
 from .crypto import transform_login_password
-from .dynapath import _now_ms
 from .http import KorailHttpClient
 from .parsing import _optional_scalar_string
 
@@ -94,7 +93,7 @@ class KorailSessionClient:
         """예매 서비스 상태를 조회하고 운영 중이 아니면 오류를 냅니다."""
         self.http.post_form(
             "/file/CACHE/MobileService.cache",
-            {"timeStamp": _now_ms()},
+            build_cache_query(),
             include_common=False,
         )
 
@@ -250,7 +249,7 @@ class KorailSessionClient:
             if self.current is not None:
                 self.http.post_form(
                     "/classes/com.korail.mobile.login.Logout",
-                    {"timeStamp": _now_ms()},
+                    build_cache_query(),
                     raise_on_fail=False,
                 )
         finally:

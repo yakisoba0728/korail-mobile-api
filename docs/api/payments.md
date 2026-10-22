@@ -197,7 +197,7 @@ KorailClient.get_refund_ticket_detail(
 | 예외 | 발생 조건 |
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`이 [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]가 아니거나, `from_purchase_history`가 `bool`이 아니거나, `txt_index`가 문자열이 아니거나 비어 있을 때 |
+| [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError] | `ticket`이 [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]가 아니거나, `from_purchase_history`가 `bool`이 아니거나, `txt_index`가 문자열도 `None`도 아니거나 빈 문자열·공백뿐인 문자열일 때 |
 
 **정보**
 

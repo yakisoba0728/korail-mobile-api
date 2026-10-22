@@ -200,9 +200,9 @@ def build_limousine_reservation_form(
     # 앱은 좌석을 토글하므로 같은 좌석을 두 번 고를 수 없습니다.
     if len(set(seats)) != len(seats):
         raise KorailInvalidInputError("KORAIL airport bus reservation requires distinct seat numbers")
-    # 앱은 잔여석이 인원보다 적은 편을 고르지 못하게 합니다. 숫자가 아닌 잔여석은 알 수 없는 값으로 보고 넘어갑니다.
+    # 앱은 잔여석이 인원보다 적은 편을 고르지 못하게 합니다. 숫자가 아니거나 9자리를 넘는 잔여석은 알 수 없는 값으로 봅니다.
     remaining = schedule.general_remaining_seat_count
-    if _is_ascii_digits(remaining) and int(remaining) < passengers.total:
+    if _is_ascii_digits(remaining) and len(remaining) <= 9 and int(remaining) < passengers.total:
         raise KorailInvalidInputError("KORAIL airport bus schedule has fewer remaining seats than passengers")
     journey: dict[str, str] = {}
     for key, name, pattern in _RESERVATION_JOURNEY:

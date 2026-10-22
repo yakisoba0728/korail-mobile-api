@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, fields
 from datetime import datetime, timedelta, timezone
 from typing import Literal, NoReturn
 
-from ..._core.validation import _optional_text, _required_mutation_text, _required_text
+from ..._core.validation import _optional_text, _required_mutation_text, _txt_index
 from ..._core.wire import _device_version_key, _is_ascii_digits
 from ...config import KorailConfig
 from ...constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION, KorailReservationJobType
@@ -420,7 +420,7 @@ def build_refund_ticket_detail_form(
         "h_purchase_history": "Y" if from_purchase_history else "N",
     }
     if txt_index is not None:
-        form["txtIndex"] = _required_text(txt_index, "txt_index")
+        form["txtIndex"] = _txt_index(txt_index)
     return form
 
 
