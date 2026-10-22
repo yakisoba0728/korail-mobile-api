@@ -154,7 +154,7 @@ from korail_mobile_api import KorailClient
 client = KorailClient()
 try:
     client.login(input("회원번호·전화번호·이메일: "), getpass("비밀번호: "))
-    tickets = client.get_ticket_list()
+    tickets = client.list_tickets()
     print(sum(len(r.tickets) for r in tickets.reservations), "장")
 finally:
     try:
@@ -172,15 +172,15 @@ finally:
 
 | 하려는 것 | 메서드 | 알아둘 점 |
 |---|---|---|
-| 좌석 잡기 (결제 전) | `reserve`, `reserve_transfer`, `reserve_merge`, `reserve_limousine` | 승객 구성은 조회할 때와 같게 넣습니다. |
+| 좌석 잡기 (결제 전) | `reserve`, `reserve_transfer`, `reserve_merge`, `reserve_airport_bus` | 승객 구성은 조회할 때와 같게 넣습니다. |
 | 결제 전 취소 | `cancel_unpaid_hold` | 결제한 표에는 쓰지 않습니다. |
 | 기존 예약 가져오기 | `get_reservation_hold(pnr_no)` | 같은 계정의 예약 상세에서 결제용 홀드를 가져옵니다. 조회만 하며 새 예약이나 결제를 만들지 않습니다. |
 | 카드 결제 | `pay_with_card` | 카드 거절은 예외가 아니라 FAIL 응답으로 돌아옵니다. |
-| 환불 | `get_refund_commission` → `refund(..., commission=...)` | 승차권 한 장씩입니다. 실제 수수료 조회의 성공 응답과 원표 식별자·동반자 정보가 일치해야 하며, 직접 생성·파싱한 응답이나 원표 반환일이 없는 입력은 요청 전에 거절합니다. |
+| 환불 | `get_refund_fee` → `refund(..., commission=...)` | 승차권 한 장씩입니다. 실제 수수료 조회의 성공 응답과 원표 식별자·동반자 정보가 일치해야 하며, 직접 생성·파싱한 응답이나 원표 반환일이 없는 입력은 요청 전에 거절합니다. |
 | 할인 재계산 | `PriceRecalculationRequest.for_hold` → `recalculate_price` | 결제는 재계산된 홀드로 합니다. |
 
 변경 요청은 자동으로 다시 보내지 않습니다. 응답을 못 읽어서 예외가 나도 서버에서는 이미 처리됐을 수 있습니다.
-그럴 땐 다시 보내지 말고 예외의 `.raw`를 보고, 예약은 `get_reservation_history()`, 결제·환불은 `get_ticket_list()`로 먼저 확인하세요.
+그럴 땐 다시 보내지 말고 예외의 `.raw`를 보고, 예약은 `list_reservations()`, 결제·환불은 `list_tickets()`로 먼저 확인하세요.
 예약 응답을 읽지 못한 홀드는 `get_reservation_hold`도 같은 이유로 실패할 수 있습니다. 취소 방법은 [오류 처리 가이드](https://yaki.kr/korail-mobile-api/guide/errors/#unparsed-hold)에 있습니다.
 
 2.6.0부터 환불은 대상 연결을 확인할 수 없으면 거절하는 fail-closed 정책입니다. `PaidTicket.from_refund_detail()` 사용을 권하며, 수동 생성 시 현재 `sale_date`와 별도로 `return_sale_date`를 명시하세요. 수수료 조회 연결은 금액의 유효기간이나 서버 승인을 보장하지 않습니다. [환불 가이드](https://yaki.kr/korail-mobile-api/guide/payments/#commission)를 참고하세요.

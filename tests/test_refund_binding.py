@@ -115,7 +115,7 @@ def test_matching_lookup_and_refund_make_exactly_two_http_requests(binding_clien
     unchanged = deepcopy(raw)
     client, requests = binding_client(fee_raw=raw)
 
-    commission = client.get_refund_commission(_reference())
+    commission = client.get_refund_fee(_reference())
     assert commission.raw == unchanged
     assert commission.refund_fee == "400"
     assert commission.refund_amount == "19600"
@@ -137,7 +137,7 @@ def test_matching_lookup_and_refund_make_exactly_two_http_requests(binding_clien
 def test_oversized_mileage_is_zero_and_cannot_cover_the_fee(binding_client, limit):
     raw = {**_fee_raw(), "use_psb_mlg_num": "9" * 4301}
     client, requests = binding_client(fee_raw=raw)
-    commission = client.get_refund_commission(_reference())
+    commission = client.get_refund_fee(_reference())
     previous = sys.get_int_max_str_digits()
     try:
         sys.set_int_max_str_digits(limit)
@@ -191,7 +191,7 @@ def test_refund_mileage_comparison_follows_app_int32_rules(binding_client, usabl
     """Keep the SDK's ASCII gate and TextHelper.java:169-181 int32/zero fallback rules."""
     raw = {**_fee_raw(), "use_psb_mlg_num": usable, "ret_fee": fee}
     client, requests = binding_client(fee_raw=raw)
-    commission = client.get_refund_commission(_reference())
+    commission = client.get_refund_fee(_reference())
     if allowed:
         assert client.refund(_ticket(), commission=commission, settle_mileage=True).str_result == "SUCC"
         assert len(requests) == 2
@@ -231,7 +231,7 @@ def test_quote_for_a_cannot_refund_mismatching_ticket(binding_client, changes):
     unchanged = deepcopy(raw)
     client, requests = binding_client(fee_raw=raw)
     companion = RefundCompanion("SYNTH-COMPANION-A", "20991231")
-    commission = client.get_refund_commission(_reference(), companion=companion)
+    commission = client.get_refund_fee(_reference(), companion=companion)
     ticket = _ticket(companion_name=companion.name, companion_certificate_no=companion.certificate_no)
     changed = replace(ticket, **changes)
 
@@ -265,7 +265,7 @@ def test_bound_lookup_still_requires_original_date_and_success(
     binding_client, ticket_changes, commission_changes
 ):
     client, requests = binding_client()
-    commission = client.get_refund_commission(_reference())
+    commission = client.get_refund_fee(_reference())
     # Change public result data only; never manufacture or access private context.
     supplied = replace(commission, **commission_changes)
 
@@ -333,7 +333,7 @@ def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion
         companion_birth_date=companion.certificate_no,
     )
     client, requests = binding_client()
-    commission = client.get_refund_commission(_reference(), companion=companion)
+    commission = client.get_refund_fee(_reference(), companion=companion)
     if original_date is None:
         with pytest.raises(KorailProtocolError):
             ticket = PaidTicket.from_refund_detail(detail)
@@ -369,7 +369,7 @@ def test_new_ticket_identity_fields_are_keyword_only_and_hidden_from_repr(bindin
         assert secret not in repr(ticket)
 
     client, requests = binding_client()
-    commission = client.get_refund_commission(
+    commission = client.get_refund_fee(
         _reference(), companion=RefundCompanion(ticket.companion_name, ticket.companion_certificate_no)
     )
     # Quote raw has no request identity. Attaching local context must not expose it via repr.
@@ -388,7 +388,7 @@ def test_refund_failure_after_quote_is_never_retried(binding_client, failure):
         reply = {"strResult": "SUCC", "h_msg_cd": "IRZ000001", "stlList": [{"stl_mns_cd": []}]}
         expected_error = KorailProtocolError
     client, requests = binding_client(refund_reply=reply)
-    commission = client.get_refund_commission(_reference())
+    commission = client.get_refund_fee(_reference())
     unchanged = deepcopy(commission.raw)
 
     with pytest.raises(expected_error) as caught:
@@ -406,7 +406,7 @@ def test_ticket_facade_forwards_companion_and_preserves_binding_checks(binding_c
     client, requests = binding_client()
     tickets = TicketResource(client)
     companion = RefundCompanion("SYNTH-COMPANION-A", "20991231")
-    commission = tickets.refund_fee(_reference(), companion=companion)
+    commission = tickets.refund_quote(_reference(), companion=companion)
     ticket = _ticket(companion_name=companion.name, companion_certificate_no=companion.certificate_no)
 
     if mismatch:
@@ -426,7 +426,7 @@ def test_ticket_facade_forwards_companion_and_preserves_binding_checks(binding_c
 def test_ticket_facade_default_companion_retains_two_request_workflow(binding_client):
     client, requests = binding_client()
     tickets = TicketResource(client)
-    commission = tickets.refund_fee(_reference())
+    commission = tickets.refund_quote(_reference())
 
     assert tickets.refund(_ticket(), commission=commission).str_result == "SUCC"
     assert len(requests) == 2

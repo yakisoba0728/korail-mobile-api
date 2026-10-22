@@ -286,7 +286,7 @@ def read_with_relogin(read):
         return read()
 
 
-tickets = read_with_relogin(client.get_ticket_list)
+tickets = read_with_relogin(client.list_tickets)
 ```
 
 다 쓴 클라이언트는 `client.logout()`과 `client.close()`로 정리합니다.
@@ -308,7 +308,7 @@ tickets = read_with_relogin(client.get_ticket_list)
 | `KorailAppError`와 하위 예외 | 보냈고 서버가 실패로 응답했습니다. | `code`와 `message`로 사유를 확인합니다. |
 | `KorailSessionExpiredError` | 보냈고 서버가 세션 만료로 응답했습니다. | 다시 로그인한 뒤 결과를 확인하고 다시 호출할지 정합니다. |
 
-결과는 결제 전 홀드라면 [`get_reservation_history`](../api/reservations.md#get_reservation_history), 발권된 승차권이라면 [`get_ticket_list`](../api/account.md#get_ticket_list)로 확인합니다.
+결과는 결제 전 홀드라면 [`list_reservations`](../api/reservations.md#list_reservations), 발권된 승차권이라면 [`list_tickets`](../api/account.md#list_tickets)로 확인합니다.
 아래 예제는 예약 전에 살아 있는 홀드의 PNR을 기록해 두고, 예약이 불확실하게 끝나면 새 PNR이 생겼는지 비교합니다. 요청 전 입력 검사에서 난 `KorailProtocolError`는 `raw`가 `None`이므로 구분할 수 있습니다.
 
 !!! warning "실제로 처리됩니다"
@@ -319,7 +319,7 @@ from korail_mobile_api import KorailProtocolError, KorailTransportError
 
 
 def held_pnrs():
-    history = client.get_reservation_history()
+    history = client.list_reservations()
     return {row.pnr_no for row in history.trains if row.pnr_no}
 
 
@@ -357,7 +357,7 @@ except (KorailTransportError, KorailProtocolError) as error:
 값이 비었거나 형식이 맞지 않으면 `cancel_unpaid_hold`가 요청 전에 거절합니다. 결제용 홀드가 아니므로 `pay_with_card`에는 넘기지 마세요.
 
 !!! warning "실제로 처리됩니다"
-    `cancel_unpaid_hold`는 홀드를 실제로 취소합니다. 취소할 예약번호가 맞는지 [`get_reservation_history`](../api/reservations.md#get_reservation_history)로 먼저 확인하세요.
+    `cancel_unpaid_hold`는 홀드를 실제로 취소합니다. 취소할 예약번호가 맞는지 [`list_reservations`](../api/reservations.md#list_reservations)로 먼저 확인하세요.
 
 ```python
 from korail_mobile_api import KorailProtocolError, ReservationHoldResponse

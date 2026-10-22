@@ -62,7 +62,7 @@ class StationRefundExecutionRequest:
     """역에서 발권한 승차권의 환불 실행 입력을 구성합니다.
 
     보통 ``from_verification()``으로 환불 확인 결과에서 만듭니다. 만들기만 해서는 요청을 보내지 않으며, 실제 환불은
-    ``KorailClient.execute_station_ticket_refund()``를 호출해야 합니다. 모든 필드는 비어 있지 않은 문자열이어야 하며,
+    ``KorailClient.refund_station_ticket()``를 호출해야 합니다. 모든 필드는 비어 있지 않은 문자열이어야 하며,
     아니면 ``KorailInvalidInputError``가 발생합니다."""
 
     pnr_no: str
@@ -179,7 +179,7 @@ class PaidTicket:
     """환불할 발권 승차권 한 장의 PNR과 반환 식별자를 구성합니다.
 
     보통 ``from_refund_detail()``로 승차권 상세 응답에서 만드세요. 환불 요청은 상세 응답의 판매일(``sale_date``)을 쓰고,
-    수수료 조회는 원표 반환일을 쓰므로 두 값을 섞어 쓰지 마세요. ``refund()``에는 이 값과 함께 ``get_refund_commission()``의
+    수수료 조회는 원표 반환일을 쓰므로 두 값을 섞어 쓰지 마세요. ``refund()``에는 이 값과 함께 ``get_refund_fee()``의
     응답을 ``commission``으로 넘겨야 합니다. 앞의 다섯 필드가 비어 있으면 만들 때 ``KorailInvalidInputError``가 발생합니다."""
 
     pnr_no: str
@@ -518,7 +518,7 @@ def _app_integer(value: object) -> int:
         return 0
     if not isinstance(value, str):
         raise KorailInvalidInputError(
-            "KORAIL refund commission amounts must be strings read from get_refund_commission"
+            "KORAIL refund commission amounts must be strings read from get_refund_fee"
         )
     if re.fullmatch(r"[+-]?[0-9]+", value) is None:
         return 0
@@ -533,9 +533,7 @@ def _app_integer(value: object) -> int:
 def _validated_refund_commission(ticket: PaidTicket, commission: object) -> RefundCommissionResponse:
     """수수료 응답의 로컬 조회 입력을 대조합니다. 금액 유효기간·서버 승인은 검증하지 않습니다."""
     if not isinstance(commission, RefundCommissionResponse):
-        raise KorailInvalidInputError(
-            "KORAIL refund requires the get_refund_commission response as commission="
-        )
+        raise KorailInvalidInputError("KORAIL refund requires the get_refund_fee response as commission=")
 
     def reject(message: str) -> NoReturn:
         error = KorailInvalidInputError(message)
@@ -547,7 +545,7 @@ def _validated_refund_commission(ticket: PaidTicket, commission: object) -> Refu
     context = commission._request_context
     if not isinstance(context, _RefundCommissionContext):
         reject(
-            "KORAIL refund requires a response bound by get_refund_commission; direct construction or parsing is not sufficient"
+            "KORAIL refund requires a response bound by get_refund_fee; direct construction or parsing is not sufficient"
         )
     if not isinstance(ticket.return_sale_date, str) or not ticket.return_sale_date.strip():
         reject("KORAIL refund requires PaidTicket.return_sale_date from the original ticket")

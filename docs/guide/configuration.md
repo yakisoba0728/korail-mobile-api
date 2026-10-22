@@ -47,7 +47,7 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 | `device_width` | `int` | `1440` | 공통 코드 조회(로그인 포함)의 `deviceWidth` 값입니다. |
 | `device_height` | `int` | `3120` | 공통 코드 조회(로그인 포함)의 `deviceHeight` 값입니다. |
 | `android_sdk_int` | `int` | `37` | 공통 코드 조회(로그인 포함)의 `OSVersion` 값입니다. |
-| `advertising_id` | `str` | `""` | 승차권 목록 조회([`get_ticket_list`](../api/account.md#get_ticket_list))의 `txtDeviceId` 값입니다. 빈 문자열이면 보내지 않습니다. |
+| `advertising_id` | `str` | `""` | 승차권 목록 조회([`list_tickets`](../api/account.md#list_tickets))의 `txtDeviceId` 값입니다. 빈 문자열이면 보내지 않습니다. |
 | `netfunnel_url` | `str` | `"https://nf.letskorail.com"` | 대기열 서버 주소입니다. 검사하지 않고 그대로 씁니다. |
 | `netfunnel_timeout` | `float` | `3.0` | 대기열 요청 하나의 제한 시간(초)입니다. 0보다 큰 유한한 수여야 합니다. |
 | `netfunnel_user_agent` | `str` | `"Dalvik/2.1.0 (Linux; U; Android 17; SM-S948N Build/CP2A.260605.016)"` | 대기열 요청의 `User-Agent` 헤더입니다. |
@@ -190,7 +190,7 @@ config = dataclasses.replace(build_config_from_env(), disable_dynapath=True, dyn
 | `product_inquiry` | 열차 조회 세 메서드에 `use_special_schedule=True`를 넘겼을 때(`peak_season`보다 우선) | 같음 |
 | `reserve` | [`reserve`](../api/reservations.md#reserve), [`reserve_transfer`](../api/reservations.md#reserve_transfer), [`reserve_with_discount_card`](../api/passes.md#reserve_with_discount_card) | 요청을 보내지 않고 [`KorailNetFunnelError`][korail_mobile_api.KorailNetFunnelError]를 발생시킵니다. |
 | `pay` | [`pay_with_card`](../api/payments.md#pay_with_card) | 같음 |
-| `reservation_view` | [`get_reservation_history`](../api/reservations.md#get_reservation_history) | 같음 |
+| `reservation_view` | [`list_reservations`](../api/reservations.md#list_reservations) | 같음 |
 
 - 대기열 서버가 요청을 차단하면(`301`, `302`) 모든 관문에서 [`KorailQueueRejectedError`][korail_mobile_api.KorailQueueRejectedError]가 발생합니다.
 - 대기열 서버가 기다리라고(`201`, `202`) 답하면서 입장 키를 주지 않으면 모든 관문에서 요청을 보내지 않고 `KorailNetFunnelError`를 발생시킵니다.

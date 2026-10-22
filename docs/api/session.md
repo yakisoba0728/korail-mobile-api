@@ -126,7 +126,7 @@ KorailClient.logout() -> None
 
 ```python
 try:
-    tickets = client.get_ticket_list()
+    tickets = client.list_tickets()
 finally:
     try:
         client.logout()
@@ -173,7 +173,7 @@ from korail_mobile_api import KorailAuthError
 
 client.clear_session()
 try:
-    client.get_ticket_list()
+    client.list_tickets()
 except KorailAuthError:
     print("다시 로그인해야 합니다.")
 ```
@@ -355,12 +355,14 @@ if notice.post_title is not None:
     print(notice.post_content)
 ```
 
-## `get_common_code`
+<a id="get_common_code"></a>
+
+## `get_common_codes`
 
 공통 코드 이름으로 서버의 앱 설정값을 조회합니다.
 
 ```python
-KorailClient.get_common_code(code: str | Sequence[str] = '') -> BaseKorailResponse
+KorailClient.get_common_codes(code: str | Sequence[str] = '') -> BaseKorailResponse
 ```
 
 코드 이름 여러 개를 넘기면 한 요청에 `code` 필드를 여러 번 실어 한 번에 조회합니다.
@@ -392,7 +394,7 @@ KorailClient.get_common_code(code: str | Sequence[str] = '') -> BaseKorailRespon
 
 ```python
 codes = ["app.main.popup", "app.holiday.popup"]
-response = client.get_common_code(codes)
+response = client.get_common_codes(codes)
 for code in codes:
     print(code, response.raw.get(code))
 ```
@@ -436,17 +438,19 @@ uuid = client.get_uuid()
 print(uuid.verification_code)
 ```
 
-## `get_station_info`
+<a id="get_station_info"></a>
+
+## `get_station_list_version`
 
 역 데이터의 판본과 수록 역 수를 조회합니다.
 
 ```python
-KorailClient.get_station_info() -> StationInfoResponse
+KorailClient.get_station_list_version() -> StationInfoResponse
 ```
 
 본문이 없는 POST를 보냅니다. 응답에 봉투 필드가 없어도 정상 응답으로 읽습니다.
 `count`와 `map_version`은 반드시 있어야 합니다. JSON 정수로 오면 문자열로 바꿔 담고, 빈 문자열도 그대로 받습니다.
-`count`는 정수로 바꾸지 않은 문자열입니다. 역 목록 자체는 [`get_station_data`](#get_station_data)로 받습니다.
+`count`는 정수로 바꾸지 않은 문자열입니다. 역 목록 자체는 [`list_stations`](#list_stations)로 받습니다.
 
 **매개변수**
 
@@ -471,16 +475,18 @@ KorailClient.get_station_info() -> StationInfoResponse
 **예제**
 
 ```python
-info = client.get_station_info()
+info = client.get_station_list_version()
 print(info.map_version, info.count)
 ```
 
-## `get_station_data`
+<a id="get_station_data"></a>
+
+## `list_stations`
 
 전체 역 목록을 코드·이름·좌표와 함께 받아 옵니다.
 
 ```python
-KorailClient.get_station_data() -> StationDataResponse
+KorailClient.list_stations() -> StationDataResponse
 ```
 
 본문이 없는 POST를 보냅니다. 응답에 봉투 필드가 없어도 정상 응답으로 읽습니다.
@@ -513,7 +519,7 @@ KorailClient.get_station_data() -> StationDataResponse
 **예제**
 
 ```python
-stations = client.get_station_data().stations
+stations = client.list_stations().stations
 seoul = next(station for station in stations if station.name == "서울")
 print(seoul.code, seoul.latitude, seoul.longitude)
 ```
@@ -558,12 +564,14 @@ run_dates = [day.run_date for day in calendar.days if day.run_date]
 print(len(run_dates), run_dates[:3])
 ```
 
-## `get_crew_request_list`
+<a id="get_crew_request_list"></a>
+
+## `list_crew_request_reasons`
 
 승무원 호출 화면에 띄울 요청 사유 목록을 조회합니다.
 
 ```python
-KorailClient.get_crew_request_list(
+KorailClient.list_crew_request_reasons(
     *,
     timestamp_ms: int | None = None,
 ) -> CrewRequestListResponse
@@ -598,6 +606,6 @@ KorailClient.get_crew_request_list(
 **예제**
 
 ```python
-for option in client.get_crew_request_list().items:
+for option in client.list_crew_request_reasons().items:
     print(option.message_code, option.content)
 ```

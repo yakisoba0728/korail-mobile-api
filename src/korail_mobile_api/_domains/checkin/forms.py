@@ -115,9 +115,7 @@ def build_delivered_ticket_retrieval_form(
     """앱은 첫 여정의 pbpRsvNo 로 묶은 승차권마다 한 번, 그 묶음의 pbpRsvNo 와 첫 승차권의 pnrNo 를 보냅니다. pbpCnt 는 쌍의 수
     1 이고, 두 목록은 FieldMap 뒤의 @Field 반복 키입니다."""
     if not isinstance(ticket, PbpAcceptanceTicket):
-        raise KorailInvalidInputError(
-            "ticket must be a PbpAcceptanceTicket from get_pbp_acceptance_specifications"
-        )
+        raise KorailInvalidInputError("ticket must be a PbpAcceptanceTicket from list_pbp_acceptances")
     if not ticket.journeys:
         raise KorailInvalidInputError("KORAIL delivered ticket retrieval needs the ticket's first journey")
     context = "delivered ticket retrieval"

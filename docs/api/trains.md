@@ -7,8 +7,8 @@
 흐름:
 
 1. [`search_trains`](#search_trains)로 직통 열차를 찾습니다. 직통이 없으면 [`search_transfer_trains`](#search_transfer_trains)나 [`search_trains_with_transfer_fallback`](#search_trains_with_transfer_fallback)으로 환승 여정을 찾습니다.
-2. 조회 결과의 [`TrainSummary`][korail_mobile_api.TrainSummary]로 [`get_seat_cars`](#get_seat_cars), [`get_seat_inventory`](#get_seat_inventory) 순서로 호차와 좌석을 봅니다.
-3. [`get_price_fare_quote`](#get_price_fare_quote)로 예매 전 운임을 확인한 뒤 [예약](reservations.md)으로 넘어갑니다.
+2. 조회 결과의 [`TrainSummary`][korail_mobile_api.TrainSummary]로 [`list_seat_cars`](#list_seat_cars), [`get_seat_inventory`](#get_seat_inventory) 순서로 호차와 좌석을 봅니다.
+3. [`get_fare_quote`](#get_fare_quote)로 예매 전 운임을 확인한 뒤 [예약](reservations.md)으로 넘어갑니다.
 
 ## `search_trains`
 
@@ -26,7 +26,7 @@ KorailClient.search_trains(
 
 조회 조건은 [`TrainSearchQuery`][korail_mobile_api.TrainSearchQuery]로 넘깁니다.
 인접역 일정 표시가 필요하면 `query.include_nearby_stations=True`로 지정합니다. 기본값은 `False`입니다.
-출발역·도착역이 숫자로만 된 역 코드이면 처음 한 번 역 목록([`get_station_data`](session.md#get_station_data))을 조회해 역 이름으로 바꿔 보내고, 코드와 이름의 대응표는 클라이언트에 보관합니다.
+출발역·도착역이 숫자로만 된 역 코드이면 처음 한 번 역 목록([`list_stations`](session.md#list_stations))을 조회해 역 이름으로 바꿔 보내고, 코드와 이름의 대응표는 클라이언트에 보관합니다.
 숫자가 아닌 값은 역 이름으로 보고 앞뒤 공백만 뺀 뒤 그대로 보냅니다.
 로그인하지 않아도 조회할 수 있습니다. 로그인한 세션에 회원카드 번호(`member_card_no`)가 있으면 요청에 함께 싣습니다.
 
@@ -213,12 +213,14 @@ else:
     print("직통 열차", len(result.trains), "편")
 ```
 
-## `get_transfer_stations`
+<a id="get_transfer_stations"></a>
+
+## `list_transfer_stations`
 
 한 구간에서 환승할 수 있는 역 목록을 조회합니다.
 
 ```python
-KorailClient.get_transfer_stations(
+KorailClient.list_transfer_stations(
     departure_station_code: str,
     arrival_station_code: str,
 ) -> TransferStationListResponse
@@ -226,7 +228,7 @@ KorailClient.get_transfer_stations(
 
 출발역과 도착역을 역 코드로 넘깁니다. 넘긴 값을 바꾸지 않고 그대로 보내므로 역 이름이 아니라 역 코드를 넣으세요.
 [`search_trains`](#search_trains)와 달리 역 목록을 조회해 역 코드를 역 이름으로 바꾸는 처리는 하지 않습니다.
-역 코드는 [`get_station_data`](session.md#get_station_data) 결과의 `code`나 조회 결과 행의 `departure_station_code`, `arrival_station_code`에서 얻을 수 있습니다.
+역 코드는 [`list_stations`](session.md#list_stations) 결과의 `code`나 조회 결과 행의 `departure_station_code`, `arrival_station_code`에서 얻을 수 있습니다.
 응답에 환승역 목록이 없으면 빈 `stations`를 반환합니다.
 
 **매개변수**
@@ -253,8 +255,8 @@ KorailClient.get_transfer_stations(
 **예제**
 
 ```python
-codes = {station.name: station.code for station in client.get_station_data().stations}
-response = client.get_transfer_stations(codes["강릉"], codes["목포"])
+codes = {station.name: station.code for station in client.list_stations().stations}
+response = client.list_transfer_stations(codes["강릉"], codes["목포"])
 for station in response.stations:
     print(station.station_code, station.station_name)
 ```
@@ -302,12 +304,14 @@ for stop in schedule.stops:
     print(stop.station_name, stop.planned_departure_time, stop.actual_departure_time)
 ```
 
-## `get_seat_cars`
+<a id="get_seat_cars"></a>
+
+## `list_seat_cars`
 
 열차 한 편의 호차 목록과 호차별 잔여석·좌석 속성을 조회합니다.
 
 ```python
-KorailClient.get_seat_cars(
+KorailClient.list_seat_cars(
     train: TrainSummary,
     *,
     passenger_count: int = 1,
@@ -355,7 +359,7 @@ KorailClient.get_seat_cars(
 
 ```python
 train = result.trains[0]  # search_trains 결과의 첫 열차
-cars = client.get_seat_cars(train, passenger_count=2)
+cars = client.list_seat_cars(train, passenger_count=2)
 for car in cars.cars:
     codes = [attribute.code for attribute in car.attributes]
     print(car.car_no, car.room_class_name, car.remaining_seat_count, codes)
@@ -376,8 +380,8 @@ KorailClient.get_seat_inventory(
 ) -> SeatInventoryResponse
 ```
 
-같은 세션에서 [`get_seat_cars`](#get_seat_cars)를 먼저 호출한 뒤 사용하세요. 실서버에서는 호차 목록을 조회하지 않고 바로 호출하면 인증 정보 오류가 돌아올 수 있었습니다. 앱도 호차 목록, 좌석 배치도 순서로 조회합니다.
-열차 식별값과 좌석 속성 코드를 정하는 규칙은 [`get_seat_cars`](#get_seat_cars)와 같습니다.
+같은 세션에서 [`list_seat_cars`](#list_seat_cars)를 먼저 호출한 뒤 사용하세요. 실서버에서는 호차 목록을 조회하지 않고 바로 호출하면 인증 정보 오류가 돌아올 수 있었습니다. 앱도 호차 목록, 좌석 배치도 순서로 조회합니다.
+열차 식별값과 좌석 속성 코드를 정하는 규칙은 [`list_seat_cars`](#list_seat_cars)와 같습니다.
 
 좌석마다 [`PhysicalSeat`][korail_mobile_api.PhysicalSeat]가 있습니다. 예약할 때는 표시용 `specification`이 아니라 식별자 `seat_no`를 씁니다.
 `sale_possible`이 `"Y"`인 좌석은 [`KorailSeatAssignment`][korail_mobile_api.KorailSeatAssignment]의 `from_inventory()`로 좌석 지정 입력으로 바꿀 수 있습니다.
@@ -387,8 +391,8 @@ KorailClient.get_seat_inventory(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `train` | [`TrainSummary`][korail_mobile_api.TrainSummary] | 필수 | 조회할 열차입니다. [`get_seat_cars`](#get_seat_cars)에 넘긴 것과 같은 행을 넘깁니다. |
-| `car_no` | `int` | 필수 | 호차 번호입니다. [`get_seat_cars`](#get_seat_cars) 결과의 `car_no`를 넘깁니다. 1 이상의 정수여야 합니다. |
+| `train` | [`TrainSummary`][korail_mobile_api.TrainSummary] | 필수 | 조회할 열차입니다. [`list_seat_cars`](#list_seat_cars)에 넘긴 것과 같은 행을 넘깁니다. |
+| `car_no` | `int` | 필수 | 호차 번호입니다. [`list_seat_cars`](#list_seat_cars) 결과의 `car_no`를 넘깁니다. 1 이상의 정수여야 합니다. |
 | `passenger_count` | `int` | `1` | 총 승객 수입니다. 1~9의 정수여야 합니다. |
 | `room_class_code` | [`KorailRoomClassCode`][korail_mobile_api.KorailRoomClassCode] | `'1'` | 객실 등급입니다. `"1"`(일반실) 또는 `"2"`(특실)입니다. |
 | `seat_attribute_code` | `str` \| `None` | `None` | 숫자 세 자리의 좌석 속성 코드입니다. `None`이면 `train.seat_attribute_code`를 씁니다. |
@@ -403,8 +407,8 @@ KorailClient.get_seat_inventory(
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `car_no`가 1 이상의 정수가 아닐 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | [`get_seat_cars`](#get_seat_cars)와 같은 입력 검사(`train`, `passenger_count`, `room_class_code`, 좌석 속성 코드)에 실패했을 때 |
-| [`KorailAppError`][korail_mobile_api.KorailAppError] | 같은 세션에서 [`get_seat_cars`](#get_seat_cars)를 먼저 호출하지 않아 서버가 인증 정보 오류로 응답했을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | [`list_seat_cars`](#list_seat_cars)와 같은 입력 검사(`train`, `passenger_count`, `room_class_code`, 좌석 속성 코드)에 실패했을 때 |
+| [`KorailAppError`][korail_mobile_api.KorailAppError] | 같은 세션에서 [`list_seat_cars`](#list_seat_cars)를 먼저 호출하지 않아 서버가 인증 정보 오류로 응답했을 때 |
 
 **정보**
 
@@ -417,7 +421,7 @@ KorailClient.get_seat_inventory(
 ```python
 from korail_mobile_api import KorailSeatAssignment
 
-cars = client.get_seat_cars(train)
+cars = client.list_seat_cars(train)
 car = next(car for car in cars.cars if car.car_no is not None and car.remaining_seat_count)
 inventory = client.get_seat_inventory(train, car.car_no)
 sellable = [seat for seat in inventory.seats if seat.sale_possible == "Y"]
@@ -425,12 +429,14 @@ if sellable:
     assignment = KorailSeatAssignment.from_inventory(inventory, sellable[0])
 ```
 
-## `get_free_seat_car_info`
+<a id="get_free_seat_car_info"></a>
+
+## `get_free_seat_cars`
 
 열차 한 편의 자유석 호차 안내를 조회합니다.
 
 ```python
-KorailClient.get_free_seat_car_info(request: FreeSeatCarRequest) -> FreeSeatCarResponse
+KorailClient.get_free_seat_cars(request: FreeSeatCarRequest) -> FreeSeatCarResponse
 ```
 
 [`FreeSeatCarRequest`][korail_mobile_api.FreeSeatCarRequest]에 조회 결과 행의 운행일, 열차 번호, 출발·도착역 구성 순번과 운행 순번을 옮겨 넣습니다. 열차 번호는 다섯 자리가 되도록 앞에 0을 채워 보냅니다.
@@ -463,7 +469,7 @@ KorailClient.get_free_seat_car_info(request: FreeSeatCarRequest) -> FreeSeatCarR
 ```python
 from korail_mobile_api import FreeSeatCarRequest
 
-info = client.get_free_seat_car_info(
+info = client.get_free_seat_cars(
     FreeSeatCarRequest(
         run_date=train.run_date,
         train_no=train.train_no,
@@ -550,12 +556,14 @@ for item in schedule.trains:
     print(item.train_no, item.departure_time, item.general_reservation_name)
 ```
 
-## `get_merge_seats_inquiry`
+<a id="get_merge_seats_inquiry"></a>
+
+## `get_merge_seat_options`
 
 병합 예약으로 이어 붙일 수 있는 열차 구간과 좌석이 갈리는 중간역을 조회합니다.
 
 ```python
-KorailClient.get_merge_seats_inquiry(
+KorailClient.get_merge_seat_options(
     request: MergeSeatsInquiryRequest,
 ) -> MergeSeatsInquiryResponse
 ```
@@ -593,7 +601,7 @@ KorailClient.get_merge_seats_inquiry(
 from korail_mobile_api import MergeSeatsInquiryRequest
 
 departure = train.departure_date + train.departure_time  # 첫 홀드를 만든 열차
-merge = client.get_merge_seats_inquiry(
+merge = client.get_merge_seat_options(
     MergeSeatsInquiryRequest(
         boarding_datetime=departure,
         run_datetime=departure,
@@ -659,12 +667,14 @@ if guide.str_result == "FAIL":
     print(guide.h_msg_cd, guide.h_msg_txt)
 ```
 
-## `get_price_fare_quote`
+<a id="get_price_fare_quote"></a>
+
+## `get_fare_quote`
 
 열차 한두 편의 운임을 예매 전에 조회합니다.
 
 ```python
-KorailClient.get_price_fare_quote(
+KorailClient.get_fare_quote(
     request: PriceFareQuoteRequest,
 ) -> PriceFareQuoteResponse
 ```
@@ -714,7 +724,7 @@ leg = PriceFareLeg(
     train_group_code=train.train_group_code,
     train_class_code=train.train_class_code,
 )
-quote = client.get_price_fare_quote(PriceFareQuoteRequest(legs=(leg,)))
+quote = client.get_fare_quote(PriceFareQuoteRequest(legs=(leg,)))
 for fare in quote.fares:
     print(fare.room_class_name, fare.received_price, fare.total_amount)
 ```

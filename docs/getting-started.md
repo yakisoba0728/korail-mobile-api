@@ -156,7 +156,7 @@ from korail_mobile_api import KorailClient
 client = KorailClient()
 try:
     session = client.login(input("회원번호·전화번호·이메일: "), getpass("비밀번호: "))
-    tickets = client.get_ticket_list()
+    tickets = client.list_tickets()
     for reservation in tickets.reservations:
         print(len(reservation.tickets), "장")
 finally:

@@ -58,7 +58,7 @@ finally:
 ### 역 이름과 역 코드 {#stations}
 
 `departure_station_code`와 `arrival_station_code`에는 역 이름(`"서울"`)이나 숫자로만 된 역 코드를 넣습니다.
-역 코드를 넣으면 처음 한 번 [`get_station_data`](../api/session.md#get_station_data)로 역 목록을 받아 이름으로 바꿔 보내고, 대응표는 클라이언트에 보관합니다. 목록에 없는 코드는 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]입니다.
+역 코드를 넣으면 처음 한 번 [`list_stations`](../api/session.md#list_stations)로 역 목록을 받아 이름으로 바꿔 보내고, 대응표는 클라이언트에 보관합니다. 목록에 없는 코드는 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]입니다.
 역 이름은 앞뒤 공백만 뺀 뒤 그대로 보냅니다. 비어 있으면 요청 전에 거절합니다.
 
 다른 메서드는 역을 받는 방식이 다릅니다.
@@ -66,8 +66,8 @@ finally:
 | 메서드 | 역을 넘기는 방식 |
 |---|---|
 | [`search_trains`](../api/trains.md#search_trains), [`search_transfer_trains`](../api/trains.md#search_transfer_trains), [`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback) | 역 이름 또는 역 코드 |
-| [`get_transfer_stations`](../api/trains.md#get_transfer_stations), [`get_price_fare_quote`](../api/trains.md#get_price_fare_quote) | 역 코드 |
-| [`get_seat_assignment_schedule`](../api/trains.md#get_seat_assignment_schedule), [`get_merge_seats_inquiry`](../api/trains.md#get_merge_seats_inquiry) | 역 이름 |
+| [`list_transfer_stations`](../api/trains.md#list_transfer_stations), [`get_fare_quote`](../api/trains.md#get_fare_quote) | 역 코드 |
+| [`get_seat_assignment_schedule`](../api/trains.md#get_seat_assignment_schedule), [`get_merge_seat_options`](../api/trains.md#get_merge_seat_options) | 역 이름 |
 
 ### 날짜와 시각 {#date-time}
 
@@ -169,7 +169,7 @@ finally:
 - `transfer_station_code`와 `transfer_station_name`은 첫 구간의 도착역과 둘째 구간의 출발역이 같을 때만 값이 있습니다. 다르면 `None`입니다.
 - 여정은 `train_sequence`가 같은 행이 두 개일 때 그 두 행을 묶은 것입니다. 두 구간으로 묶이지 않은 열차 행은 `itineraries`에 없고 `trains`에만 남습니다.
 - `train_sequence`가 없는(`None`) 행끼리도 한 묶음으로 보므로, 서로 관계없는 두 행이 여정으로 묶일 수 있습니다. 예약에 넘기기 전에 두 구간의 `train_sequence`와 역을 확인하세요.
-- 환승할 수 있는 역 목록은 [`get_transfer_stations`](../api/trains.md#get_transfer_stations)에 역 코드를 넘겨 따로 조회할 수 있습니다.
+- 환승할 수 있는 역 목록은 [`list_transfer_stations`](../api/trains.md#list_transfer_stations)에 역 코드를 넘겨 따로 조회할 수 있습니다.
 
 여정의 `legs`는 [`reserve_transfer`](../api/reservations.md#reserve_transfer)에 넘겨 한 PNR로 예약합니다.
 
@@ -221,7 +221,7 @@ finally:
 
 ## 호차와 좌석 조회 {#seats}
 
-호차와 좌석 조회는 로그인이 필요합니다. [`get_seat_cars`](../api/trains.md#get_seat_cars)로 호차 목록을 먼저 받고, 같은 세션에서 [`get_seat_inventory`](../api/trains.md#get_seat_inventory)로 호차 하나의 좌석을 봅니다.
+호차와 좌석 조회는 로그인이 필요합니다. [`list_seat_cars`](../api/trains.md#list_seat_cars)로 호차 목록을 먼저 받고, 같은 세션에서 [`get_seat_inventory`](../api/trains.md#get_seat_inventory)로 호차 하나의 좌석을 봅니다.
 실서버에서는 호차 목록 없이 좌석 배치를 바로 조회하면 인증 정보 오류가 돌아올 수 있었습니다.
 
 ```python
@@ -238,7 +238,7 @@ try:
     client.login(input("회원번호·전화번호·이메일: "), getpass("비밀번호: "))
     train = client.search_trains(TrainSearchQuery("서울", "부산", departure_date, "090000")).trains[0]
 
-    cars = client.get_seat_cars(train, room_class_code=KorailSeatClass.GENERAL)
+    cars = client.list_seat_cars(train, room_class_code=KorailSeatClass.GENERAL)
     for car in cars.cars:
         names = [attribute.name for attribute in car.attributes]
         print(car.car_no, car.room_class_name, car.remaining_seat_count, names)
@@ -275,11 +275,11 @@ finally:
 
 `KorailSeatAssignment.from_inventory()`는 판매할 수 있는 좌석만 받아 좌석 지정 입력([`KorailSeatAssignment`][korail_mobile_api.KorailSeatAssignment])으로 바꿉니다.
 이 값은 좌석 지정 예약(`job_type=KorailReservationJobType.SEAT_DESIGNATED`)으로 [`reserve`](../api/reservations.md#reserve)를 호출할 때 `seats`에 승객 수만큼 넘깁니다.
-자유석 호차는 [`get_free_seat_car_info`](../api/trains.md#get_free_seat_car_info)로 따로 조회합니다. 호차가 숫자가 아니라 안내 문자열로 옵니다.
+자유석 호차는 [`get_free_seat_cars`](../api/trains.md#get_free_seat_cars)로 따로 조회합니다. 호차가 숫자가 아니라 안내 문자열로 옵니다.
 
 ## 예매 전 운임 조회 {#fare}
 
-[`get_price_fare_quote`](../api/trains.md#get_price_fare_quote)는 열차 한 편이나 환승 두 구간의 운임을 예매 전에 조회합니다.
+[`get_fare_quote`](../api/trains.md#get_fare_quote)는 열차 한 편이나 환승 두 구간의 운임을 예매 전에 조회합니다.
 2.6.1부터 [`PriceFareLeg.from_train()`][korail_mobile_api.PriceFareLeg.from_train]으로 조회 결과의 식별값을 옮길 수 있습니다. 이전 버전에서는 같은 필드를 직접 지정해야 합니다. 팩토리는 운행일·역·종별·좌석 속성을 추측하지 않고, 응답의 상품 번호도 보존합니다.
 
 ```python
@@ -294,7 +294,7 @@ try:
     query = TrainSearchQuery("강릉", "목포", departure_date, "080000")
     itinerary = client.search_transfer_trains(query).itineraries[0]
     request = PriceFareQuoteRequest(legs=tuple(PriceFareLeg.from_train(train) for train in itinerary.legs))
-    for fare in client.get_price_fare_quote(request).fares:
+    for fare in client.get_fare_quote(request).fares:
         print(fare.journey_sequence, fare.room_class_name, fare.received_price, fare.total_amount)
 finally:
     client.close()

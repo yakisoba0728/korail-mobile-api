@@ -58,7 +58,7 @@ class _RefundCommissionContext:
 class RefundCommissionResponse(BaseKorailResponse):
     """환불 전 예상 환불액과 수수료를 담습니다.
 
-    ``get_refund_commission``이 돌려줍니다. 환불하려면 이 응답을 ``refund``의 ``commission``에 넘기세요. ``refund``는
+    ``get_refund_fee``가 돌려줍니다. 환불하려면 이 응답을 ``refund``의 ``commission``에 넘기세요. ``refund``는
     ``commission``이 실제 조회 결과가 아니거나(``None``·직접 생성·직접 파싱 포함), 조회한 원표·동반자가
     환불 대상과 다르면 요청 전에 ``KorailProtocolError``를 발생시킵니다. 로컬 연결 검사는 수수료의
     유효기간이나 서버의 환불 승인을 보장하지 않습니다."""
@@ -129,7 +129,7 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     ticket_kind_code: str | None = wire("h_tk_knd_cd")
     ticket_kind_name: str | None = wire("h_tk_knd_nm")
     # 실서버에서 Y 인 상세도 수수료 조회는 WRT200022·WRT200399 로 거절됐습니다(docs/status.md).
-    #: 환불 가능 여부 플래그(``retPsbFlg``)입니다. ``"Y"``여도 환불할 수 있다는 보장은 없으므로 ``get_refund_commission``의 결과로
+    #: 환불 가능 여부 플래그(``retPsbFlg``)입니다. ``"Y"``여도 환불할 수 있다는 보장은 없으므로 ``get_refund_fee``의 결과로
     #: 확인하세요.
     refund_possible_flag: str | None = wire("retPsbFlg")
     return_flag: str | None = wire("h_ret_flg")
@@ -147,7 +147,7 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     companion_birth_date: str | None = wire("h_compa_brth")
     # 보호된 전송 키 대신 속성명으로 읽는 후보이며 실서버 상세 응답에는 없었습니다.
     #: 대리수령 대상 여부 플래그입니다. 응답에 ``pbpAcepTgtFlg`` 키가 있을 때만 채우며 보통은 ``None``입니다. 앱처럼 환불하려면
-    #: ``get_ticket_list`` 승차권의 ``pbp_acceptance_target_flag``를 ``refund``에 넘기세요.
+    #: ``list_tickets`` 승차권의 ``pbp_acceptance_target_flag``를 ``refund``에 넘기세요.
     pbp_acceptance_target_flag: str | None = wire("pbpAcepTgtFlg")
     delay_flag: str | None = wire("h_dlay_flg")
     delay_ticket_flag: str | None = wire("h_dlay_tk_flg")

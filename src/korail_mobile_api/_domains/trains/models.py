@@ -623,7 +623,7 @@ class GuideSeatConditionResponse(BaseKorailResponse):
 class TrainScheduleItem:
     """좌석배정·병합 조회에 사용하는 열차 정보를 담습니다.
 
-    ``get_seat_assignment_schedule``과 ``get_merge_seats_inquiry``는 응답 모양이 달라 채우는 필드가 다릅니다. 한쪽 응답에 없는
+    ``get_seat_assignment_schedule``과 ``get_merge_seat_options``는 응답 모양이 달라 채우는 필드가 다릅니다. 한쪽 응답에 없는
     필드는 ``None``입니다."""
 
     # 두 조회는 같은 키를 쓰지만 선언 집합이 달라 parsers.py 가 상대 조회에만 있는 키를 읽지 않습니다.

@@ -258,7 +258,7 @@ CASES = [
         False,
     ),
     (
-        "get_transfer_stations",
+        "list_transfer_stations",
         ("0001", "0099"),
         {},
         P + "qry.chtnStn.do",
@@ -278,7 +278,7 @@ CASES = [
         False,
     ),
     (
-        "get_seat_cars",
+        "list_seat_cars",
         (TRAIN,),
         {"passenger_count": 2},
         P + "research.TrainResearch",
@@ -298,7 +298,7 @@ CASES = [
         True,
     ),
     (
-        "get_free_seat_car_info",
+        "get_free_seat_cars",
         (FREE_REQUEST,),
         {},
         P + "trn.fresScar.do",
@@ -327,7 +327,7 @@ CASES = [
         False,
     ),
     (
-        "get_merge_seats_inquiry",
+        "get_merge_seat_options",
         (MERGE_REQUEST,),
         {},
         P + "research.mergeSeatsC.do",
@@ -357,7 +357,7 @@ CASES = [
         False,
     ),
     (
-        "get_price_fare_quote",
+        "get_fare_quote",
         (FARE_REQUEST,),
         {},
         P + "trn.prcFare.do",
@@ -379,7 +379,7 @@ CASES = [
         False,
     ),
     (
-        "get_station_info",
+        "get_station_list_version",
         (),
         {},
         P + "common.stationinfo",
@@ -389,7 +389,7 @@ CASES = [
         False,
     ),
     (
-        "get_station_data",
+        "list_stations",
         (),
         {},
         P + "common.stationdata",
@@ -399,7 +399,7 @@ CASES = [
         False,
     ),
     (
-        "get_common_code",
+        "get_common_codes",
         (["SYNTH_A", "SYNTH_B"],),
         {},
         P + "common.code.do",
@@ -460,7 +460,7 @@ CASES = [
         False,
     ),
     (
-        "get_maas_menu_list",
+        "list_maas_menus",
         (),
         {},
         P + "copt.gdMenuLt.do",
@@ -482,7 +482,7 @@ CASES = [
         False,
     ),
     (
-        "get_maas_station_data",
+        "list_maas_stations",
         ("SYNTH_SERVICE",),
         {},
         "/ebizmaas/EbizMaasStationList.do",
@@ -492,7 +492,7 @@ CASES = [
         False,
     ),
     (
-        "get_maas_service_details",
+        "list_maas_services",
         (),
         {},
         P + "copt.gdReqQry.do",
@@ -585,7 +585,7 @@ def test_public_method_form_and_representative_parse(case, rig):
     client, calls, pending = rig([raw], auth=auth)
     result = getattr(client, name)(*args, **kwargs)
     assert len(calls) == 1 and not pending
-    exact_request(calls[0], route, form, dynapath=name == "get_price_fare_quote")
+    exact_request(calls[0], route, form, dynapath=name == "get_fare_quote")
     for path, value in fields.items():
         assert lookup(result, path) == value
     assert result.raw == raw
@@ -596,19 +596,19 @@ OPTIONAL = [
     ("search_transfer_trains", "trn_infos.trn_info.0.h_arv_tm", "trains.0.arrival_time"),
     ("search_trains_with_transfer_fallback", "trn_infos.trn_info.0.h_arv_tm", "trains.0.arrival_time"),
     ("get_train_schedule", "dlayList.0.stopStnNm", "stops.0.station_name"),
-    ("get_transfer_stations", "chtnList.0.chtnRsStnCd", "stations.0.station_code"),
+    ("list_transfer_stations", "chtnList.0.chtnRsStnCd", "stations.0.station_code"),
     ("get_train_calendar", "runningCalendar.0.runDt", "days.0.run_date"),
-    ("get_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttCd", "cars.0.attributes.0.code"),
+    ("list_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttCd", "cars.0.attributes.0.code"),
     ("get_seat_inventory", "seatList.0.etc_seat_att_cd", "seats.0.other_attribute_code"),
-    ("get_free_seat_car_info", "fresScarNo", "car_no"),
-    ("get_merge_seats_inquiry", "midStnList.0.runOrdr", "intermediate_stations.0.run_order"),
-    ("get_price_fare_quote", "prcList.0.sumAmt", "fares.0.total_amount"),
-    ("get_station_data", "stns.stn.0.latitude", "stations.0.latitude"),
-    ("get_maas_station_data", "stns.stn.0.longitude", "stations.0.longitude"),
+    ("get_free_seat_cars", "fresScarNo", "car_no"),
+    ("get_merge_seat_options", "midStnList.0.runOrdr", "intermediate_stations.0.run_order"),
+    ("get_fare_quote", "prcList.0.sumAmt", "fares.0.total_amount"),
+    ("list_stations", "stns.stn.0.latitude", "stations.0.latitude"),
+    ("list_maas_stations", "stns.stn.0.longitude", "stations.0.longitude"),
     ("get_app_data", "version.NEWDVERSION", "version.new_version"),
     ("get_notice", "notice.PtwtTtl", "post_title"),
-    ("get_maas_menu_list", "menuList.0.addSrvDvCd", "items.0.additional_service_code"),
-    ("get_maas_service_details", "addSrvList.0.reqQnty", "details.0.request_quantity"),
+    ("list_maas_menus", "menuList.0.addSrvDvCd", "items.0.additional_service_code"),
+    ("list_maas_services", "addSrvList.0.reqQnty", "details.0.request_quantity"),
 ]
 
 
@@ -657,7 +657,7 @@ def test_station_info_serializer_required_mask(key, value, rig):
     put(raw, key, value)
     client, calls, _ = rig([raw])
     with pytest.raises(KorailProtocolError) as error:
-        client.get_station_info()
+        client.get_station_list_version()
     assert error.value.raw == raw
     assert len(calls) == 1
 
@@ -666,13 +666,13 @@ def test_station_info_serializer_required_mask(key, value, rig):
 def test_station_info_required_string_accepts_integers_and_empty(raw, rig):
     """StationInfoOut.java:47-53 required presence; checks/BEHAVIOR.md allows integers."""
     client, _, _ = rig([raw])
-    result = client.get_station_info()
+    result = client.get_station_list_version()
     assert result.count == str(raw["count"])
     assert result.map_version == str(raw["map_version"])
     assert result.raw == raw
 
 
-@pytest.mark.parametrize("name", ["get_station_data", "get_maas_station_data"])
+@pytest.mark.parametrize("name", ["list_stations", "list_maas_stations"])
 @pytest.mark.parametrize(
     "raw", [{}, {"stns": None}, {"stns": {}}, {"stns": {"stn": None}}, {"stns": {"stn": {}}}]
 )
@@ -690,8 +690,8 @@ def test_station_container_required_masks(name, raw, rig):
     [
         ("get_seat_inventory", "seatList.0.sqr_no", "seats.0.sequence_no"),
         ("get_seat_inventory", "seat_ary_cd", "arrangement_code"),
-        ("get_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name"),
-        ("get_station_data", "stns.stn.0.stn_cd", "stations.0.code"),
+        ("list_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name"),
+        ("list_stations", "stns.stn.0.stn_cd", "stations.0.code"),
         ("get_uuid", "mutMrkVrfCd", "verification_code"),
     ],
 )
@@ -719,12 +719,12 @@ DEFAULTED_FIELDS = [
     ("get_seat_inventory", "seatList.0.intg_msg", "seats.0.message", ""),
     ("get_seat_inventory", "windowList.0.st_loc_rt", "windows.0.start_location_ratio", None),
     ("get_seat_inventory", "windowList.0.cls_loc_rt", "windows.0.close_location_ratio", None),
-    ("get_seat_cars", "srcar_infos.srcar_info.0.h_srcar_no", "cars.0.car_no", None),
-    ("get_seat_cars", "srcar_infos.srcar_info.0.h_rest_seat_cnt", "cars.0.remaining_seat_count", None),
-    ("get_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name", ""),
-    ("get_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttNm", "cars.0.attributes.0.name", ""),
-    ("get_station_data", "stns.stn.0.stn_cd", "stations.0.code", ""),
-    ("get_station_data", "stns.stn.0.stn_nm", "stations.0.name", ""),
+    ("list_seat_cars", "srcar_infos.srcar_info.0.h_srcar_no", "cars.0.car_no", None),
+    ("list_seat_cars", "srcar_infos.srcar_info.0.h_rest_seat_cnt", "cars.0.remaining_seat_count", None),
+    ("list_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name", ""),
+    ("list_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttNm", "cars.0.attributes.0.name", ""),
+    ("list_stations", "stns.stn.0.stn_cd", "stations.0.code", ""),
+    ("list_stations", "stns.stn.0.stn_nm", "stations.0.name", ""),
 ]
 
 
@@ -1044,7 +1044,7 @@ def test_failure_no_automatic_read_retry_and_raw_preserved(case, raw, error_type
 
 
 @pytest.mark.parametrize(
-    "name", ["search_trains", "get_guide_seat_condition", "get_seat_inventory", "get_maas_service_details"]
+    "name", ["search_trains", "get_guide_seat_condition", "get_seat_inventory", "list_maas_services"]
 )
 def test_p058_clears_session_even_on_guidance_path(name, rig):
     """CommonOut.java:426-438 has protected code; P058 mapping is supplied library policy."""
@@ -1059,7 +1059,7 @@ def test_p058_clears_session_even_on_guidance_path(name, rig):
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize("name", ["get_seat_cars", "get_seat_inventory", "get_maas_service_details"])
+@pytest.mark.parametrize("name", ["list_seat_cars", "get_seat_inventory", "list_maas_services"])
 def test_local_auth_guard_is_retained_not_app_equivalence(name, rig):
     """Retained library-only check; app DTOs do not imply this preflight restriction."""
     case = BY_NAME[name]
@@ -1072,7 +1072,7 @@ def test_local_auth_guard_is_retained_not_app_equivalence(name, rig):
 def test_ticket_maas_repeated_return_numbers_and_history_dates(rig):
     """NetworkApi.java:402-404 @Field(tkRetNo) List; MaasDetailIn.java:51-63 dates."""
     client, calls, _ = rig([ENVELOPE, ENVELOPE], auth=True)
-    client.get_maas_menu_list(pnr_no="SYNTH-PNR", ticket_return_numbers=["SYNTH-RETURN-A", "SYNTH-RETURN-B"])
+    client.list_maas_menus(pnr_no="SYNTH-PNR", ticket_return_numbers=["SYNTH-RETURN-A", "SYNTH-RETURN-B"])
     exact_request(
         calls[0],
         P + "copt.gdMenuLt.do",
@@ -1088,7 +1088,7 @@ def test_ticket_maas_repeated_return_numbers_and_history_dates(rig):
         "tkRetNo",
         "tkRetNo",
     ]
-    client.get_maas_service_details(MaasServiceDetailQuery.history("20290101", "20291231"))
+    client.list_maas_services(MaasServiceDetailQuery.history("20290101", "20291231"))
     exact_request(calls[1], P + "copt.gdReqQry.do", {**DEVICE, "qryDtFrom": "20290101", "qryDtTo": "20291231"})
     assert len(calls) == 2
 
@@ -1111,14 +1111,14 @@ def test_ticket_maas_repeated_return_numbers_and_history_dates(rig):
 def test_ticket_maas_invalid_fields_do_not_send(pnr_no, numbers, message, rig):
     client, calls, _ = rig([], auth=True)
     with pytest.raises(KorailProtocolError, match=message):
-        client.get_maas_menu_list(pnr_no=pnr_no, ticket_return_numbers=numbers)
+        client.list_maas_menus(pnr_no=pnr_no, ticket_return_numbers=numbers)
     assert calls == []
 
 
 def test_ticket_maas_authentication_precedes_field_validation(rig):
     client, calls, _ = rig([])
     with pytest.raises(KorailAuthError):
-        client.get_maas_menu_list(pnr_no="", ticket_return_numbers=[])
+        client.list_maas_menus(pnr_no="", ticket_return_numbers=[])
     assert calls == []
 
 
@@ -1129,7 +1129,7 @@ def test_two_leg_fare_and_goods_column_order(rig):
     first = replace(FARE_LEG, goods_no="SYNTH-G1")
     second = PriceFareLeg("0099", "0100", DATE, "00008", "031", "102", "01", "SYNTH-G2")
     client, calls, _ = rig([ENVELOPE])
-    client.get_price_fare_quote(PriceFareQuoteRequest((first, second)))
+    client.get_fare_quote(PriceFareQuoteRequest((first, second)))
     form = {
         **COMMON,
         "txtMenuId": "11",
@@ -1155,8 +1155,8 @@ def test_price_fare_quote_sends_empty_goods_numbers_like_the_app(rig):
     hold's received_amount."""
     second = PriceFareLeg("0099", "0100", DATE, "00008", "031", "102", "01")
     client, calls, _ = rig([ENVELOPE, ENVELOPE])
-    client.get_price_fare_quote(PriceFareQuoteRequest((FARE_LEG,)))
-    client.get_price_fare_quote(PriceFareQuoteRequest((FARE_LEG, second)))
+    client.get_fare_quote(PriceFareQuoteRequest((FARE_LEG,)))
+    client.get_fare_quote(PriceFareQuoteRequest((FARE_LEG, second)))
     sent = [dict(parse_qsl(call.content.decode(), keep_blank_values=True)) for call in calls]
     assert sent[0]["gdNo"] == "" and sent[1]["gdNo"] == ","
 
@@ -1169,29 +1169,29 @@ def test_fare_quote_rejects_goods_numbers_on_one_leg_at_construction():
         PriceFareQuoteRequest((FARE_LEG, replace(FARE_LEG, goods_no="SYNTH-G2")))
 
 
-@pytest.mark.parametrize("method", ["get_seat_cars", "get_seat_inventory"])
+@pytest.mark.parametrize("method", ["list_seat_cars", "get_seat_inventory"])
 def test_optional_goods_and_seat_attribute_are_not_invented(method, rig):
     """TrainResearchIn.java:68-110; TResidualSeatsResearchIn.java:107-110,127-130.
     Empty primitives omitted by NetworkService.java:15335-15343; null encoding protected.
     """
     train = replace(TRAIN, goods_no=None, seat_attribute_code=None)
-    response = CARS if method == "get_seat_cars" else INVENTORY
+    response = CARS if method == "list_seat_cars" else INVENTORY
     client, calls, _ = rig([response], auth=True)
-    args = (train,) if method == "get_seat_cars" else (train, 2)
+    args = (train,) if method == "list_seat_cars" else (train, 2)
     getattr(client, method)(*args, passenger_count=2)
-    expected = dict(CAR_FORM if method == "get_seat_cars" else INVENTORY_FORM)
+    expected = dict(CAR_FORM if method == "list_seat_cars" else INVENTORY_FORM)
     for key in ("txtGdNo", "txtSeatAttCd", "gdNo", "seatAttCd"):
         expected.pop(key, None)
     exact_request(calls[0], BY_NAME[method][3], expected)
 
 
-@pytest.mark.parametrize("method", ["get_seat_cars", "get_seat_inventory"])
+@pytest.mark.parametrize("method", ["list_seat_cars", "get_seat_inventory"])
 def test_seat_attribute_override_follows_one_rule_for_both_seat_reads(method, rig):
     """An explicit value replaces the row value (even an unusable one); "" and None both fall back to the
     row. The app copies the selected segment's attribute (TrainSeatMapViewModel.java:2527,2546,2573-2577;
     TrainResearchIn.java:39,43,68)."""
-    response = CARS if method == "get_seat_cars" else INVENTORY
-    key = "txtSeatAttCd" if method == "get_seat_cars" else "seatAttCd"
+    response = CARS if method == "list_seat_cars" else INVENTORY
+    key = "txtSeatAttCd" if method == "list_seat_cars" else "seatAttCd"
     args = (1,) if method == "get_seat_inventory" else ()
     client, calls, _ = rig([response, response], auth=True)
     getattr(client, method)(
@@ -1215,7 +1215,7 @@ def test_notice_missing_and_optional_lists_empty(rig):
     assert notice.post_title is None and notice.raw == {}
     assert client.get_train_calendar().days == ()
     assert client.get_train_schedule(DATE, "7").stops == ()
-    assert client.get_price_fare_quote(FARE_REQUEST).fares == ()
+    assert client.get_fare_quote(FARE_REQUEST).fares == ()
 
 
 @pytest.mark.parametrize("value", [ABSENT, None, True, [], {}, 1.5])
@@ -1269,7 +1269,7 @@ def test_all_public_methods_have_contract_cases():
     "name,expected",
     [
         (
-            "get_seat_cars",
+            "list_seat_cars",
             "Device Version AppVersion Key lang txtMenuId txtRunDt txtDptDt txtTrnNo txtDptTm txtTrnClsfCd txtTrnGpCd "
             "txtDptRsStnCd txtArvRsStnCd txtPsrmClCd txtSeatAttCd txtDptStnRunOrdr txtArvStnRunOrdr "
             "txtTotPsgCnt txtGdNo",
@@ -1281,12 +1281,12 @@ def test_all_public_methods_have_contract_cases():
             "dptStnRunOrdr arvStnRunOrdr totPsgCnt gdNo isArrow",
         ),
         (
-            "get_merge_seats_inquiry",
+            "get_merge_seat_options",
             "Device Version AppVersion Key lang abrdDt runDt trnNo dptRsStnNm arvRsStnNm selRsStnNm psrmClCd seatAttCd "
             "totPsgNum",
         ),
-        ("get_common_code", "Device Version AppVersion Key lang code code deviceWidth deviceHeight OSVersion"),
-        ("get_maas_menu_list", "Device Version AppVersion Key lang timeStamp"),
+        ("get_common_codes", "Device Version AppVersion Key lang code code deviceWidth deviceHeight OSVersion"),
+        ("list_maas_menus", "Device Version AppVersion Key lang timeStamp"),
     ],
 )
 def test_read_forms_follow_the_app_dto_order(name, expected, rig):
@@ -1325,7 +1325,7 @@ def test_optional_merge_flag_is_lenient_and_raw_survives(bad, rig):
     declares only trn_info, so seat assignment never reads it."""
     raw = {**ENVELOPE, "trn_infos": {"h_merge_rsv_psb_flg": bad, "trn_info": []}}
     client, _, _ = rig([raw])
-    result = client.get_merge_seats_inquiry(MERGE_REQUEST)
+    result = client.get_merge_seat_options(MERGE_REQUEST)
     assert result.merge_reservation_possible_flag is None and result.raw == raw
 
 
@@ -1333,7 +1333,7 @@ def test_zero_merge_flag_and_numeric_metadata(rig):
     """MergeSeatsCOutTrnInfos.java:54-61; TrainScheduleOut.java:67-109 optional Strings."""
     raw = {**ENVELOPE, "trn_infos": {"h_merge_rsv_psb_flg": 0, "trn_info": []}}
     client, _, _ = rig([raw, {**SEARCH, "h_rslt_cnt": 0, "h_rest_seat_cnt": 0}])
-    assert client.get_merge_seats_inquiry(MERGE_REQUEST).merge_reservation_possible_flag == "0"
+    assert client.get_merge_seat_options(MERGE_REQUEST).merge_reservation_possible_flag == "0"
     result = client.search_trains(QUERY)
     assert result.metadata.result_count == "0" and result.metadata.remaining_seat_count == "0"
 
@@ -1343,10 +1343,10 @@ def test_zero_merge_flag_and_numeric_metadata(rig):
     [
         ("get_train_schedule", "dlayList", "stops"),
         ("get_train_calendar", "runningCalendar", "days"),
-        ("get_maas_menu_list", "menuList", "items"),
-        ("get_maas_service_details", "addSrvList", "details"),
-        ("get_price_fare_quote", "prcList", "fares"),
-        ("get_merge_seats_inquiry", "midStnList", "intermediate_stations"),
+        ("list_maas_menus", "menuList", "items"),
+        ("list_maas_services", "addSrvList", "details"),
+        ("get_fare_quote", "prcList", "fares"),
+        ("get_merge_seat_options", "midStnList", "intermediate_stations"),
     ],
 )
 @pytest.mark.parametrize("bad", [None, "not-a-list", 3, {}, ["bad-row", None, 5]])
@@ -1378,7 +1378,7 @@ def test_common_code_and_status_unmodeled_values_remain_raw(rig):
     """CommonCodeOut.java:88-164; MobileServiceOut.java:49-56: raw-only data stays available."""
     raw = {**ENVELOPE, "timeStamp": {"malformed": True}, "SYNTH_CODE": [None, {"x": 1}]}
     client, calls, _ = rig([raw, raw])
-    assert client.get_common_code("SYNTH_CODE").raw == raw
+    assert client.get_common_codes("SYNTH_CODE").raw == raw
     assert client.get_service_status().raw == raw
     exact_request(
         calls[0],
@@ -1390,8 +1390,8 @@ def test_common_code_and_status_unmodeled_values_remain_raw(rig):
 def test_common_code_default_sends_one_blank_code_and_empty_list_none(rig):
     """The default "" is one blank code field; an empty sequence leaves the repeated field out."""
     client, calls, _ = rig([ENVELOPE, ENVELOPE])
-    client.get_common_code()
-    client.get_common_code([])
+    client.get_common_codes()
+    client.get_common_codes([])
     form = {**COMMON, "deviceWidth": "101", "deviceHeight": "202", "OSVersion": "33"}
     exact_request(calls[0], P + "common.code.do", {**form, "code": ""})
     exact_request(calls[1], P + "common.code.do", form)
@@ -1430,7 +1430,7 @@ def test_search_queue_gate_wraps_request_without_extra_posts(peak, special, expe
 def test_cars_then_inventory_stays_two_read_posts(rig):
     """TrainSeatMapViewModel.java:1974-1976,2527-2577; no implicit reservation/payment."""
     client, calls, _ = rig([CARS, INVENTORY], auth=True)
-    cars = client.get_seat_cars(TRAIN, passenger_count=2)
+    cars = client.list_seat_cars(TRAIN, passenger_count=2)
     client.get_seat_inventory(TRAIN, cars.cars[0].car_no, passenger_count=2)
     assert [r.url.path for r in calls] == [
         P + "research.TrainResearch",

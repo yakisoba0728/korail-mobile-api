@@ -289,7 +289,7 @@ class KorailPointSummaryResponse(BaseKorailResponse):
     대응하는지도 확인하지 못했으므로, 필드 이름의 서비스 대응을 확정된 것으로 보지 마세요."""
 
     korail_point: str | None = wire("h_korail_point")
-    #: 서버가 알려 준 할인쿠폰 개수(``h_disc_coup_cnt``)입니다. ``get_discount_coupons`` 결과의 개수와 항상 같다는 보장은 없습니다.
+    #: 서버가 알려 준 할인쿠폰 개수(``h_disc_coup_cnt``)입니다. ``list_discount_coupons`` 결과의 개수와 항상 같다는 보장은 없습니다.
     discount_coupon_count: str | None = wire("h_disc_coup_cnt")
     delay_discount_count: str | None = wire("h_delay_cnt")
     disability_flag: str | None = wire("h_hdcp_flg")

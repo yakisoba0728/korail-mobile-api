@@ -64,7 +64,7 @@ def test_observed_app_contract_subset(f8_client_factory, app_version, lang):
             lang=lang,
         ),
     )
-    client.get_deposit_banks()
+    client.list_deposit_banks()
     expected_bank = list(APP_CONTRACT["bank"]["fields"])
     if app_version is None:
         expected_bank.remove("AppVersion")
@@ -76,7 +76,7 @@ def test_observed_app_contract_subset(f8_client_factory, app_version, lang):
 
     original = OriginalTicketReference("SYNTH-WINDOW", "0102", "1", "SYNTH-PASSWORD")
     companion = RefundCompanion("SYNTH-NAME", "20990101")
-    commission = client.get_refund_commission(original, companion)
+    commission = client.get_refund_fee(original, companion)
     ticket = PaidTicket(
         "SYNTH-PNR",
         "20990103",  # Current sale date is deliberately not the original MMDD.

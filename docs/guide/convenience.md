@@ -6,7 +6,7 @@
     `trains.iter_search`, `PriceFareLeg.from_train`, `membership`, `airport_bus`는 2.6.1부터 제공합니다. 이 흐름의 검증은 소켓을 차단한 합성 응답 기준이며 실서버 성공 기록은 추가하지 않았습니다.
 
 !!! note "2.5.0의 추가 기능"
-    검색 필터, 좌석 상태·소요 시간·요약 헬퍼, `KorailReserveOption`, `stations.names()`, `reservations.find()`와 청소년 예약 사전 거절은 2.5.0부터 제공합니다.
+    검색 필터, 좌석 상태·소요 시간·요약 헬퍼, `KorailReserveOption`, `stations.names()`, `reservations.find()`(3.0부터 `reservations.get()`)와 청소년 예약 사전 거절은 2.5.0부터 제공합니다.
 
 ## 로그인 없이 열차 찾기
 
@@ -115,9 +115,9 @@ with Korail.logged_in(input("회원번호·전화번호·이메일: "), getpass(
 아래 예약 예제는 위 로그인 예제의 `with` 블록 안에서 `korail.logout()` 전에 실행합니다.
 `train`은 그 블록에서 조회해 고른 열차이고, `card`는 준비한 `CardPayment`입니다.
 
-`korail.reservations.create(train)`은 실제 미결제 홀드를 만듭니다. 예약 상세가 필요하면 `korail.reservations.detail(hold)`을 별도로 호출하세요. 예약 성공 직후 자동 상세 조회는 하지 않습니다. `korail.reservations.cancel(hold)`은 실제 취소이고, `korail.reservations.pay(hold, card)`는 실제 카드 청구입니다. `korail.tickets.refund_fee(ticket)`는 수수료 조회이며, `korail.tickets.refund(ticket, commission=fee)`는 실제 환불입니다. 각 메서드는 기존 클라이언트의 입력 검증과 응답 모델을 그대로 사용합니다. 자세한 주의사항은 [예약](reservations.md)과 [결제·환불](payments.md)에 있습니다.
+`korail.reservations.create(train)`은 실제 미결제 홀드를 만듭니다. 예약 상세가 필요하면 `korail.reservations.detail(hold)`을 별도로 호출하세요. 예약 성공 직후 자동 상세 조회는 하지 않습니다. `korail.reservations.cancel(hold)`은 실제 취소이고, `korail.reservations.pay(hold, card)`는 실제 카드 청구입니다. `korail.tickets.refund_quote(ticket)`는 수수료 조회이며, `korail.tickets.refund(ticket, commission=fee)`는 실제 환불입니다. 각 메서드는 기존 클라이언트의 입력 검증과 응답 모델을 그대로 사용합니다. 자세한 주의사항은 [예약](reservations.md)과 [결제·환불](payments.md)에 있습니다.
 
-2.6.0부터 `korail.tickets.refund_fee(ticket, *, companion=RefundCompanion())`는 동반자 정보도 받습니다.
+`korail.tickets.refund_quote(ticket, *, companion=RefundCompanion())`는 동반자 정보도 받습니다(2.6.0부터, 3.0 전 이름은 `refund_fee`).
 조회의 `ticket`은 `OriginalTicketReference`이고 환불 입력은 `PaidTicket.from_refund_detail(detail)`로 만듭니다.
 동반자가 있으면 `RefundCompanion(name=paid.companion_name, certificate_no=paid.companion_certificate_no)`를
 키워드 `companion=`으로 넘기세요. 실제 수수료 조회 응답과 환불 입력의 원표·동반자가 일치해야 하며,
@@ -162,11 +162,11 @@ hold = korail.reservations.create(
 
 조회 결과의 객실 가용 코드로 요청 전에 선택하며, 허용한 객실에 좌석이 없으면 `KorailProtocolError`가 발생합니다. `option`과 `seat_class`를 함께 지정하거나 즉시 예약 이외의 `job_type`과 함께 지정하면 거절합니다. 예약대기는 기존처럼 `job_type=KorailReservationJobType.STANDBY`로 명시해야 합니다. 실제 요청 후 매진·실패가 발생해도 다른 객실로 재시도하지 않습니다.
 
-앱이나 다른 도구에서 만든 예약은 `korail.reservations.find(pnr)`로 가져올 수 있습니다. 기존 `korail.client.get_reservation_hold(pnr)`와 같은 검증을 거치며 직접 상세 조회를 한 번 실행합니다. 조회 실패나 결제에 사용할 수 없는 예약은 예외로 전달합니다.
+앱이나 다른 도구에서 만든 예약은 `korail.reservations.get(pnr)`으로 가져올 수 있습니다. 기존 `korail.client.get_reservation_hold(pnr)`와 같은 검증을 거치며 직접 상세 조회를 한 번 실행합니다. 조회 실패나 결제에 사용할 수 없는 예약은 예외로 전달합니다.
 금액을 확인하고 준비한 `CardPayment`를 넘기면 간편 API에서도 이어서 결제할 수 있습니다.
 
 ```python
-hold = korail.reservations.find(input("결제할 예약번호(PNR): ").strip())
+hold = korail.reservations.get(input("결제할 예약번호(PNR): ").strip())
 print(hold.pnr_no, hold.received_amount)
 payment = korail.reservations.pay(hold, card)  # 실제 카드 청구
 print(payment.str_result, payment.h_msg_cd, payment.h_msg_txt)

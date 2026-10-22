@@ -26,9 +26,9 @@
 - 열차 조회: [`search_trains`](../api/trains.md#search_trains), [`search_transfer_trains`](../api/trains.md#search_transfer_trains), [`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback), [`get_seat_assignment_schedule`](../api/trains.md#get_seat_assignment_schedule)
 - 예약: [`reserve`](../api/reservations.md#reserve), [`reserve_transfer`](../api/reservations.md#reserve_transfer), [`reserve_with_discount_card`](../api/passes.md#reserve_with_discount_card)
 - 카드 결제: [`pay_with_card`](../api/payments.md#pay_with_card)
-- 예약 내역 조회: [`get_reservation_history`](../api/reservations.md#get_reservation_history)
+- 예약 내역 조회: [`list_reservations`](../api/reservations.md#list_reservations)
 
-[`reserve_merge`](../api/reservations.md#reserve_merge), [`reserve_limousine`](../api/airport-bus.md#reserve_limousine)을 비롯한 그 밖의 메서드는 대기열을 거치지 않습니다.
+[`reserve_merge`](../api/reservations.md#reserve_merge), [`reserve_airport_bus`](../api/airport-bus.md#reserve_airport_bus)를 비롯한 그 밖의 메서드는 대기열을 거치지 않습니다.
 대기열은 앱과 같은 순서로 진행합니다.
 
 1. 대기열 서버에 입장 키를 요청합니다(`5101`).
@@ -98,7 +98,7 @@
 - 응답을 읽지 못하면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] 등의 예외를 발생시킵니다.
   예외의 `raw`에는 서버가 보낸 응답 전체가, `parser_raw`에는 읽다가 멈춘 부분이 들어 있습니다.
 - 예약·결제·환불 같은 변경 요청은 자동으로 다시 보내지 않습니다. 응답을 읽지 못했어도 서버에서는 이미 처리됐을 수 있기 때문입니다.
-  이때는 예외의 `raw`를 먼저 확인하고, 예약은 [`get_reservation_history()`](../api/reservations.md#get_reservation_history), 결제·환불은 [`get_ticket_list()`](../api/account.md#get_ticket_list)로 결과를 확인한 뒤에 다시 호출할지 정하세요.
+  이때는 예외의 `raw`를 먼저 확인하고, 예약은 [`list_reservations()`](../api/reservations.md#list_reservations), 결제·환불은 [`list_tickets()`](../api/account.md#list_tickets)로 결과를 확인한 뒤에 다시 호출할지 정하세요.
 
 ## 앱과 다르게 처리한 부분
 

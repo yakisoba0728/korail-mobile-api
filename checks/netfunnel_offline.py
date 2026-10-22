@@ -113,7 +113,7 @@ def search(client: Any) -> object:
 def case_immediate_pass() -> None:
     world = World([f"200:key=K1&nwait=0&{NODE}"])
     client, sleeps = make_client(world)
-    client.get_reservation_history()
+    client.list_reservations()
     check("a", world.opcodes() == ["5101", "KORAIL", "5004"], f"순서 {world.opcodes()}")
     check("a", world.completes() == [("rnf12.letskorail.com", "K1")], f"반납 {world.completes()}")
     check("a", sleeps == [], f"잠 {sleeps}")
@@ -132,7 +132,7 @@ def case_wait_then_pass() -> None:
         ]
     )
     client, sleeps = make_client(world)
-    client.get_reservation_history()
+    client.list_reservations()
     check("b", world.opcodes() == ["5101", "5002", "5002", "5002", "KORAIL", "5004"], f"순서 {world.opcodes()}")
     keys = [q.get("key") for kind, _h, q in world.log if q.get("opcode") == "5002"]
     check("b", keys == ["K0", "K1", "K2"], f"5002 키 {keys}")
@@ -150,7 +150,7 @@ def case_wait_then_pass() -> None:
 def case_blocked() -> None:
     from korail_mobile_api import KorailQueueRejectedError
 
-    for label, call in (("reservation_view", lambda c: c.get_reservation_history()), ("inquiry", search)):
+    for label, call in (("reservation_view", lambda c: c.list_reservations()), ("inquiry", search)):
         world = World([f"301:key=KB&{NODE}"], korail=KORAIL_SEARCH)
         client, _ = make_client(world)
         error = raises(lambda: call(client))
@@ -164,7 +164,7 @@ def case_korail_raises() -> None:
 
     world = World([f"200:key=K1&{NODE}"], korail=RuntimeError("synthetic down"))
     client, _ = make_client(world)
-    error = raises(client.get_reservation_history)
+    error = raises(client.list_reservations)
     check("d", isinstance(error, KorailTransportError), f"{type(error).__name__}")
     check("d", world.opcodes() == ["5101", "KORAIL", "5004"], f"순서 {world.opcodes()}")
     check("d", world.completes() == [("rnf12.letskorail.com", "K1")], f"반납 {world.completes()}")
@@ -173,7 +173,7 @@ def case_korail_raises() -> None:
 def case_disabled() -> None:
     world = World([])
     client, _ = make_client(world, netfunnel_enabled=False)
-    client.get_reservation_history()
+    client.list_reservations()
     check("e", client.netfunnel is None, "대기열 클라이언트가 만들어짐")
     check("e", world.opcodes() == ["KORAIL"], f"순서 {world.opcodes()}")
 
@@ -184,7 +184,7 @@ def case_queue_down() -> None:
 
     world = World([RuntimeError("down"), RuntimeError("down")])
     client, sleeps = make_client(world)
-    error = raises(client.get_reservation_history)
+    error = raises(client.list_reservations)
     check("f", isinstance(error, KorailNetFunnelError), f"mode=0: {type(error).__name__}")
     check("f", world.opcodes() == ["5101", "5101"], f"mode=0 순서 {world.opcodes()}")
     check("f", sleeps == [3.0, 3.0], f"마지막 실패도 timeout 대기 {sleeps}")
@@ -202,7 +202,7 @@ def case_mode0_non_200() -> None:
 
     world = World(["300:key=&nwait=0"])
     client, _ = make_client(world)
-    error = raises(client.get_reservation_history)
+    error = raises(client.list_reservations)
     check("g", isinstance(error, KorailNetFunnelError), f"mode=0: {type(error).__name__}")
     check("g", world.opcodes() == ["5101"], f"mode=0 순서 {world.opcodes()}")
 
@@ -221,7 +221,7 @@ def case_wait_limit_and_override() -> None:
     client, sleeps = make_client(
         world, netfunnel_wait_limit=30.0, netfunnel_actions={"reservation_view": "act_99"}
     )
-    error = raises(client.get_reservation_history)
+    error = raises(client.list_reservations)
     check("h", isinstance(error, KorailNetFunnelError), f"{type(error).__name__}")
     check("h", "KORAIL" not in world.opcodes(), f"순서 {world.opcodes()}")
     check("h", sleeps == [20], f"대기 {sleeps}")
@@ -233,7 +233,7 @@ def case_bad_node() -> None:
     """허용 범위 밖 노드는 무시하고 정문으로 반납합니다. 그 호스트로는 아무것도 보내지 않습니다."""
     world = World(["200:key=K1&ip=evil.example.com&port=443"])
     client, _ = make_client(world)
-    error = raises(client.get_reservation_history)
+    error = raises(client.list_reservations)
     check("i", error is None, f"{type(error).__name__}: {error}")
     check("i", world.opcodes() == ["5101", "KORAIL", "5004"], f"순서 {world.opcodes()}")
     check("i", world.completes() == [("nf.letskorail.com", "K1")], f"반납 {world.completes()}")

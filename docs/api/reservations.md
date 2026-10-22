@@ -9,7 +9,7 @@
 
 1. 열차를 조회합니다([`search_trains`](trains.md#search_trains), [`search_transfer_trains`](trains.md#search_transfer_trains)).
 2. [`reserve`](#reserve), [`reserve_transfer`](#reserve_transfer), [`reserve_merge`](#reserve_merge) 중 하나로 홀드를 만듭니다.
-3. [`get_reservation_history`](#get_reservation_history)나 [`get_ticket_reservation_detail`](#get_ticket_reservation_detail)로 홀드를 확인합니다.
+3. [`list_reservations`](#list_reservations)나 [`get_ticket_reservation_detail`](#get_ticket_reservation_detail)로 홀드를 확인합니다.
 4. 결제하거나 [`cancel_unpaid_hold`](#cancel_unpaid_hold)로 취소합니다.
 
 처음부터 따라 하려면 [예약 가이드](../guide/reservations.md)를 참고하세요.
@@ -49,7 +49,7 @@ KorailClient.reserve(
 | `MERGE_STANDING` (병합 예약의 첫 홀드) | 열차의 `merge_seat_application_flag`가 일반실은 `"A"`·`"G"`, 특실은 `"A"`·`"S"` 중 하나여야 합니다. |
 
 `strResult`가 `FAIL`인 응답은 예외로 바뀝니다. 그 밖의 응답은 그대로 반환하므로 `str_result`가 `SUCC`인지 확인하세요.
-`STANDBY`로 만든 홀드는 `payable`이 `False`이며 결제할 수 없습니다. 예약대기 옵션은 [`confirm_standby_hold`](#confirm_standby_hold)로 저장합니다.
+`STANDBY`로 만든 홀드는 `payable`이 `False`이며 결제할 수 없습니다. 예약대기 옵션은 [`set_standby_options`](#set_standby_options)로 저장합니다.
 
 **매개변수**
 
@@ -198,7 +198,7 @@ KorailClient.reserve_merge(
 병합 예약은 앱과 같은 순서로 네 단계를 거칩니다. 이 메서드는 마지막 단계의 요청 하나만 보냅니다.
 
 1. [`reserve`](#reserve)에 `job_type=KorailReservationJobType.MERGE_STANDING`을 넣어 첫 홀드를 만듭니다.
-2. [`get_merge_seats_inquiry`](trains.md#get_merge_seats_inquiry)로 병합할 열차 행을 조회합니다.
+2. [`get_merge_seat_options`](trains.md#get_merge_seat_options)로 병합할 열차 행을 조회합니다.
 3. [`cancel_unpaid_hold`](#cancel_unpaid_hold)로 첫 홀드를 취소합니다.
 4. 이 메서드로 후속 홀드를 만듭니다.
 
@@ -213,7 +213,7 @@ KorailClient.reserve_merge(
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
 | `standing_hold_train` | [`TrainSummary`][korail_mobile_api.TrainSummary] | 필수 | 첫 홀드를 만들 때 넘긴 열차입니다. |
-| `merge_rows` | `Sequence[`[`TrainScheduleItem`][korail_mobile_api.TrainScheduleItem]`]` | 필수 | [`get_merge_seats_inquiry`](trains.md#get_merge_seats_inquiry)가 반환한 `trains`입니다. 모든 행의 열차 번호가 `standing_hold_train`과 같아야 하고, 행에 운행일이 있으면 운행일도 같아야 합니다. 첫 행에는 도착역 코드와 도착역 순서 값이 있어야 합니다. |
+| `merge_rows` | `Sequence[`[`TrainScheduleItem`][korail_mobile_api.TrainScheduleItem]`]` | 필수 | [`get_merge_seat_options`](trains.md#get_merge_seat_options)가 반환한 `trains`입니다. 모든 행의 열차 번호가 `standing_hold_train`과 같아야 하고, 행에 운행일이 있으면 운행일도 같아야 합니다. 첫 행에는 도착역 코드와 도착역 순서 값이 있어야 합니다. |
 | `passengers` | [`KorailPassengerCounts`][korail_mobile_api.KorailPassengerCounts] \| `None` | `None` | 첫 홀드와 같은 승객 구성입니다. `None`이면 어른 1명입니다. `teenager > 0`이면 요청 전에 `KorailProtocolError`로 거절합니다. |
 | `seat_class` | [`KorailSeatClass`][korail_mobile_api.KorailSeatClass] | `KorailSeatClass.GENERAL` | 첫 홀드와 같은 객실 등급입니다. |
 | `job_type` | [`KorailReservationJobType`][korail_mobile_api.KorailReservationJobType] | `KorailReservationJobType.MERGE_STANDING` | 첫 홀드와 같은 예약 종류입니다. 2.6.2부터 `MERGE_STANDING`만 받으며 다른 값은 요청 전에 거절합니다. 이전에는 `STANDBY`·`IMMEDIATE`도 그대로 보내 결제 가능한 홀드가 반환될 수 있었습니다. |
@@ -250,18 +250,20 @@ from korail_mobile_api import KorailReservationJobType
 
 # train: 병합 대상 열차, merge_request: 이 열차의 MergeSeatsInquiryRequest
 first = client.reserve(train, job_type=KorailReservationJobType.MERGE_STANDING)
-merge = client.get_merge_seats_inquiry(merge_request)
+merge = client.get_merge_seat_options(merge_request)
 client.cancel_unpaid_hold(first)
 hold = client.reserve_merge(train, merge.trains)
 print(hold.pnr_no, hold.received_amount)
 ```
 
-## `confirm_standby_hold`
+<a id="confirm_standby_hold"></a>
+
+## `set_standby_options`
 
 예약대기 홀드에 문자 알림과 객실 등급 변경 옵션을 저장합니다.
 
 ```python
-KorailClient.confirm_standby_hold(
+KorailClient.set_standby_options(
     hold: ReservationHoldResponse,
     *,
     allow_seat_class_change: bool = False,
@@ -313,7 +315,7 @@ from korail_mobile_api import KorailReservationJobType
 # result: search_trains 결과
 train = next(t for t in result.trains if t.wait_reservation_flag == " 9")
 standby = client.reserve(train, job_type=KorailReservationJobType.STANDBY)
-response = client.confirm_standby_hold(
+response = client.set_standby_options(
     standby,
     sms_notify=True,
     phone_no=input("휴대전화 번호(숫자 11자리): "),
@@ -379,12 +381,14 @@ response = client.cancel_unpaid_hold(hold)
 print(response.str_result, response.h_msg_cd)
 ```
 
-## `get_reservation_history`
+<a id="get_reservation_history"></a>
+
+## `list_reservations`
 
 로그인 계정에 남아 있는 예약(결제 전 홀드 포함)을 조회합니다.
 
 ```python
-KorailClient.get_reservation_history() -> ReservationHistoryResponse
+KorailClient.list_reservations() -> ReservationHistoryResponse
 ```
 
 예약 메서드가 예외로 끝났을 때 홀드가 실제로 만들어졌는지 확인하는 데 씁니다.
@@ -419,7 +423,7 @@ KorailClient.get_reservation_history() -> ReservationHistoryResponse
 **예제**
 
 ```python
-history = client.get_reservation_history()
+history = client.list_reservations()
 if history.h_msg_cd == "P100":
     print("남아 있는 예약이 없습니다.")
 for row in history.trains:
@@ -589,12 +593,14 @@ result = client.check_ticket_duplication(TicketDuplicationCheckRequest(pnr_no=ho
 print(result.reservation_count)
 ```
 
-## `get_cart_list`
+<a id="get_cart_list"></a>
+
+## `list_cart_items`
 
 로그인 계정의 장바구니를 조회합니다.
 
 ```python
-KorailClient.get_cart_list(
+KorailClient.list_cart_items(
     pnr_no: str = '',
     additional_service_request_no: str = '',
 ) -> CartListResponse
@@ -632,7 +638,7 @@ KorailClient.get_cart_list(
 **예제**
 
 ```python
-cart = client.get_cart_list()
+cart = client.list_cart_items()
 for item in cart.items:
     print(item.pnr_no, item.product_name, item.received_amount)
 ```
@@ -683,5 +689,5 @@ from korail_mobile_api import CartAddRequest
 # hold: reserve가 반환한 홀드
 added = client.add_to_cart(CartAddRequest(pnr_no=hold.pnr_no))
 print(added.h_msg_cd, len(added.discount_additions))
-cart = client.get_cart_list()
+cart = client.list_cart_items()
 ```

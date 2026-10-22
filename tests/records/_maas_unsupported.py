@@ -54,10 +54,10 @@ class MaasCancelResponse(BaseKorailResponse):
 
 
 def build_maas_cancel_fee_form(item: MaasServiceDetail) -> dict[str, str]:
-    """지원하지 않는 부가서비스 환불 수수료 조회 폼을 구성합니다. MaasCancelFeeIn.java 의 세 속성이며 값은 get_maas_service_details 행에서 옵니다
+    """지원하지 않는 부가서비스 환불 수수료 조회 폼을 구성합니다. MaasCancelFeeIn.java 의 세 속성이며 값은 list_maas_services 행에서 옵니다
     (MyTicketDetailViewModel.java:840-860)."""
     if not isinstance(item, MaasServiceDetail):
-        raise KorailProtocolError("item must be a MaasServiceDetail from get_maas_service_details")
+        raise KorailProtocolError("item must be a MaasServiceDetail from list_maas_services")
     return {
         "addSrvReqNo": _required_text(item.request_no, "request_no"),
         "addSrvDvCd": _required_text(item.additional_service_division_code, "additional_service_division_code"),
@@ -69,7 +69,7 @@ def _maas_cart_item(item: CartItem) -> CartItem:
     """앱은 h_pnr_no 가 빈 행을 부가서비스로 다루고(BasketTicketViewModel.java:3080-3160,3757-3780), 열차·공항버스 행은
     cancel_unpaid_hold 로 취소합니다."""
     if not isinstance(item, CartItem):
-        raise KorailProtocolError("item must be a CartItem from get_cart_list")
+        raise KorailProtocolError("item must be a CartItem from list_cart_items")
     if item.pnr_no:
         raise KorailProtocolError(
             "KORAIL cart row with a PNR is a train or bus hold; use cancel_unpaid_hold for it"
@@ -92,7 +92,7 @@ def build_maas_cart_status_form(item: CartItem) -> dict[str, str]:
 def build_maas_cancel_form(config: KorailConfig, item: CartItem, *, customer_no: str) -> dict[str, str]:
     """PNR이 빈 미결제 부가서비스 해제용이며 결제 후 환불과 다릅니다(BasketTicketViewModel.java:3080-3160,5692-5723)."""
     if not isinstance(item, CartItem):
-        raise KorailProtocolError("item must be a CartItem from get_cart_list")
+        raise KorailProtocolError("item must be a CartItem from list_cart_items")
     if item.pnr_no:
         raise KorailProtocolError(
             "KORAIL cart row with a PNR is a train or bus hold; use cancel_unpaid_hold for it"
@@ -126,7 +126,7 @@ def parse_maas_cancel_response(raw: Mapping[str, Any]) -> MaasCancelResponse:
 
 
 def get_maas_cancel_fee(client: KorailClient, item: MaasServiceDetail) -> MaasCancelFeeResponse:
-    """결제된 부가서비스의 환불 수수료를 조회하는 미지원 호출을 기록합니다. item은 get_maas_service_details의
+    """결제된 부가서비스의 환불 수수료를 조회하는 미지원 호출을 기록합니다. item은 list_maas_services의
     행입니다(MyTicketDetailViewModel.java:840-860)."""
     client._require_session()
     return client._post_read(

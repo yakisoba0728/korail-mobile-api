@@ -194,7 +194,7 @@ def bound_commission(**changes: Any) -> RefundCommissionResponse:
         )
     ) as client:
         client.session.current = KorailSession(jsessionid="SYNTH-SESSION")
-        result = client.get_refund_commission(
+        result = client.get_refund_fee(
             OriginalTicketReference("SYNTH-ORIGINAL-WINDOW", "1229", "SYNTH-ORIGINAL-SEQ", "SYNTH-RETURN-PWD")
         )
     return replace(result, **changes)
@@ -597,8 +597,8 @@ def cases() -> list[Case]:
         # ReservationWaitApplyUiData.java:85; ReservationWaitViewModel.java:503-513: SMS joins the three phone parts
         # and checks 11 digits. ReservationWaitViewModel.java:68-80: only the existing standby hold's options are saved.
         Case(
-            "confirm_standby_hold",
-            lambda c: c.confirm_standby_hold(
+            "set_standby_options",
+            lambda c: c.set_standby_options(
                 hold(), allow_seat_class_change=True, sms_notify=True, phone_no="00000000000"
             ),
             "POST",
@@ -657,8 +657,8 @@ def cases() -> list[Case]:
             {"settlement_method_codes": ("02", "SYNTH-SECOND"), "settlement_list_is_null": False},
         ),
         Case(
-            "verify_station_ticket_refund",
-            lambda c: c.verify_station_ticket_refund(verification_request()),
+            "check_station_ticket_refund",
+            lambda c: c.check_station_ticket_refund(verification_request()),
             "POST",
             ("refunds.verifyOnlineRefunds",),
             {
@@ -675,8 +675,8 @@ def cases() -> list[Case]:
         ),
         # ExecuteOnlineRefundsIn.java:60: the twelve keys in this order.
         Case(
-            "execute_station_ticket_refund",
-            lambda c: c.execute_station_ticket_refund(execution_request()),
+            "refund_station_ticket",
+            lambda c: c.refund_station_ticket(execution_request()),
             "POST",
             ("refunds.executeOnlineRefunds",),
             execution_form(),
@@ -800,8 +800,8 @@ def cases() -> list[Case]:
             {"message_id": None},
         ),
         Case(
-            "retrieve_delivered_ticket",
-            lambda c: c.retrieve_delivered_ticket(DELIVERED_TICKET),
+            "recall_delivered_ticket",
+            lambda c: c.recall_delivered_ticket(DELIVERED_TICKET),
             "POST",
             ("tk.pbpWdrw.do",),
             {**COMMON, "pbpCnt": "1", "pbpRsvNo": ["SYNTH-PBP"], "pnrNo": [PNR]},
@@ -914,7 +914,7 @@ def test_each_public_method_entire_wire_form_and_parse(mutation_client, case: Ca
         assert result.tickets[0].raw == case.response["tk_infos"]["tk_info"][0]
         # Do not collapse partial results into success.
         assert result.settlements[0].raw["h_stl_rlt"] == "SYNTH-DECLINED-LEG"
-    if case.name == "verify_station_ticket_refund":
+    if case.name == "check_station_ticket_refund":
         assert result.original_tickets[0].pnr_no == PNR
         assert result.original_tickets[0].original_sale_window_no == "SYNTH-ORIGINAL-WINDOW"
     assert len(requests) == len(case.routes)
@@ -951,7 +951,7 @@ def test_parser_failure_retains_whole_response_and_never_retries(
     # 3.0: the response arrived, so the failure is marked as sent; only state-changing calls get the note.
     assert caught.value.request_sent is True
     notes = getattr(caught.value, "__notes__", [])
-    assert any("may have processed" in note for note in notes) is (case.name != "verify_station_ticket_refund")
+    assert any("may have processed" in note for note in notes) is (case.name != "check_station_ticket_refund")
 
 
 @pytest.mark.parametrize(
@@ -1054,11 +1054,11 @@ def test_refund_requires_the_commission_lookup(mutation_client) -> None:
         client.refund(ticket())  # type: ignore[call-arg]
     # 빈 값을 명시해도 수수료 조회를 건너뛸 수 없습니다.
     for missing in (None, {"strResult": "SUCC"}):
-        with pytest.raises(KorailInvalidInputError, match="get_refund_commission"):
+        with pytest.raises(KorailInvalidInputError, match="get_refund_fee"):
             client.refund(ticket(), commission=missing)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="commission"):
         payload_module.build_refund_form(KorailConfig(), ticket(), settle_mileage=True)  # type: ignore[call-arg]
-    with pytest.raises(KorailInvalidInputError, match="commission response"):
+    with pytest.raises(KorailInvalidInputError, match="get_refund_fee response"):
         payload_module.build_refund_form(KorailConfig(), ticket(), settle_mileage=True, commission=None)  # type: ignore[arg-type]
     assert requests == []
 
@@ -1215,7 +1215,7 @@ def test_received_amount_never_becomes_partial_sum(mutation_client, variant: str
 
 
 def test_station_actual_parse_failure_retains_full_raw(mutation_client) -> None:
-    case = next(c for c in CASES if c.name == "verify_station_ticket_refund")
+    case = next(c for c in CASES if c.name == "check_station_ticket_refund")
     raw = verification_raw()
     raw["orgtkinfo_list"][0]["pnr_no"] = []
     client, requests = mutation_client([raw], "POST", case.routes, case.form)
@@ -1227,7 +1227,7 @@ def test_station_actual_parse_failure_retains_full_raw(mutation_client) -> None:
 
 def test_station_verification_no_commonout_envelope_and_conversion(mutation_client) -> None:
     """VerifyOnlineRefundsOut.java:29,64; StationTicketRefundResultViewModel.java:151-164."""
-    case = next(c for c in CASES if c.name == "verify_station_ticket_refund")
+    case = next(c for c in CASES if c.name == "check_station_ticket_refund")
     raw = verification_raw()
     raw.pop("strResult")
     client, _ = mutation_client([raw, verification_raw()], "POST", case.routes * 2, case.form)
@@ -1438,7 +1438,7 @@ def test_standby_no_sms_omits_phone(mutation_client) -> None:
     """ReservationWaitViewModel.java:520-527: no phone when SMS is not selected."""
     expected = {**COMMON, "txtPnrNo": PNR, "txtPsrmClChgFlg": "N", "txtSmsSndFlg": "N"}
     client, _ = mutation_client([BASE], "POST", ("reservationWait.ReservationWait",), expected)
-    client.confirm_standby_hold(hold(), phone_no="IGNORED-SYNTHETIC")
+    client.set_standby_options(hold(), phone_no="IGNORED-SYNTHETIC")
 
 
 PAYMENT_SCALARS = {
@@ -1798,13 +1798,13 @@ def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order
 def test_retrieval_sends_the_pair_after_the_count_and_needs_a_journey(mutation_client) -> None:
     """NetworkApi.java:642-644: FieldMap (common, pbpCnt) then @Field pbpRsvNo, pnrNo;
     DeliveredTicketViewModel.java:185-205,283: one call per ticket grouped by the first journey's pbpRsvNo."""
-    case = next(c for c in CASES if c.name == "retrieve_delivered_ticket")
+    case = next(c for c in CASES if c.name == "recall_delivered_ticket")
     client, requests = mutation_client([case.response], case.method, case.routes, case.form)
     case.invoke(client)
     keys = [key for key, _ in parse_qsl(requests[0].content.decode(), keep_blank_values=True)]
     assert keys[-3:] == ["pbpCnt", "pbpRsvNo", "pnrNo"]
     with pytest.raises(KorailProtocolError, match="first journey"):
-        client.retrieve_delivered_ticket(replace(DELIVERED_TICKET, journeys=()))
+        client.recall_delivered_ticket(replace(DELIVERED_TICKET, journeys=()))
     with pytest.raises(KorailProtocolError):
         client.register_self_checkin(CHECKIN_DETAIL, object())  # type: ignore[arg-type]
     assert len(requests) == 1
@@ -1813,8 +1813,8 @@ def test_retrieval_sends_the_pair_after_the_count_and_needs_a_journey(mutation_c
 @pytest.mark.parametrize(
     "name,response",
     [
-        ("retrieve_delivered_ticket", BASE),
-        ("retrieve_delivered_ticket", {**BASE, "prsList": [{}]}),
+        ("recall_delivered_ticket", BASE),
+        ("recall_delivered_ticket", {**BASE, "prsList": [{}]}),
         ("register_self_checkin", BASE),
     ],
 )
@@ -1928,7 +1928,7 @@ def test_standing_only_row_is_not_booked_as_immediate(mutation_client) -> None:
             id="wait",
         ),
         pytest.param(lambda c: c.cancel_unpaid_hold(hold(journey_count="0000")), "unpaid hold", id="cancel"),
-        pytest.param(lambda c: c.confirm_standby_hold(hold(), sms_notify=True), "11-digit", id="standby-sms"),
+        pytest.param(lambda c: c.set_standby_options(hold(), sms_notify=True), "11-digit", id="standby-sms"),
     ],
 )
 def test_reservation_input_faults_raise_invalid_input_before_http(mutation_client, call, match: str) -> None:

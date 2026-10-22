@@ -36,6 +36,50 @@ CONFIG_VARIANTS: dict[str, dict[str, Any]] = {
     "app-version-7010": {"app_version": "7.0.10", "version": "250722001"},
     "key-empty": {"key": ""},
 }
+# 3.0 renamed these methods; the pin keeps the v2.6.1 scenario names.
+RENAMED = {
+    "retrieve_delivered_ticket": "recall_delivered_ticket",
+    "confirm_standby_hold": "set_standby_options",
+    "get_reservation_history": "list_reservations",
+    "verify_station_ticket_refund": "check_station_ticket_refund",
+    "execute_station_ticket_refund": "refund_station_ticket",
+    "get_common_code": "get_common_codes",
+    "get_cart_list": "list_cart_items",
+    "get_ticket_list": "list_tickets",
+    "get_maas_menu_list": "list_maas_menus",
+    "get_crew_request_list": "list_crew_request_reasons",
+    "get_discount_coupons": "list_discount_coupons",
+    "get_deposit_banks": "list_deposit_banks",
+    "get_delay_discount_tickets": "list_delay_discount_tickets",
+    "get_product_reservations": "list_product_reservations",
+    "get_trip_change_dates": "list_trip_change_dates",
+    "get_transfer_stations": "list_transfer_stations",
+    "get_seat_cars": "list_seat_cars",
+    "get_multi_child_discount_targets": "list_multi_child_discount_targets",
+    "get_maas_service_details": "list_maas_services",
+    "get_maas_station_data": "list_maas_stations",
+    "get_station_data": "list_stations",
+    "get_station_info": "get_station_list_version",
+    "get_pbp_acceptance_specifications": "list_pbp_acceptances",
+    "get_recent_delivery_history": "list_recent_delivery_recipients",
+    "get_discount_card_usage_history": "list_discount_card_usages",
+    "get_limousine_schedules": "list_airport_bus_schedules",
+    "get_limousine_seat_inventory": "get_airport_bus_seat_inventory",
+    "reserve_limousine": "reserve_airport_bus",
+    "get_free_seat_car_info": "get_free_seat_cars",
+    "get_self_seat_change_info": "get_self_seat_change_options",
+    "get_merge_seats_inquiry": "get_merge_seat_options",
+    "get_original_ticket_inquiry": "get_original_tickets",
+    "get_customer_trip_info": "get_trip_preferences",
+    "get_korail_point_summary": "get_point_summary",
+    "get_price_fare_quote": "get_fare_quote",
+    "get_pass_available_dates": "get_pass_availability",
+    "get_refund_commission": "get_refund_fee",
+    "get_self_checkin_info": "get_self_checkin",
+}
+# 3.0 removed these methods; their pinned requests stay as a record and are not run.
+REMOVED: frozenset[str] = frozenset()
+# Pin scenario names (v2.6.1 method names).
 VARIANT_METHODS = (
     "login",
     "search_trains",
@@ -117,11 +161,12 @@ def run_scenario(method_name: str, overrides: dict[str, Any] | None = None) -> l
 
 
 def scenarios() -> Iterator[tuple[str, str, dict[str, Any] | None]]:
+    old_names = {new: old for old, new in RENAMED.items()}
     for method_name in F8_CASE_DATA:
-        yield method_name, method_name, None
+        yield old_names.get(method_name, method_name), method_name, None
     for variant, overrides in CONFIG_VARIANTS.items():
-        for method_name in VARIANT_METHODS:
-            yield f"{method_name}[{variant}]", method_name, overrides
+        for scenario_name in VARIANT_METHODS:
+            yield f"{scenario_name}[{variant}]", RENAMED.get(scenario_name, scenario_name), overrides
 
 
 def _load_pin() -> dict[str, list[dict[str, Any]]]:
@@ -139,7 +184,7 @@ def test_requests_match_the_v261_wire(
 
 
 def test_pin_covers_every_scenario() -> None:
-    assert set(_load_pin()) == {scenario for scenario, _, _ in scenarios()}
+    assert set(_load_pin()) == {scenario for scenario, _, _ in scenarios()} | REMOVED
 
 
 if __name__ == "__main__":

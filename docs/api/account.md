@@ -2,19 +2,19 @@
 
 이 페이지의 메서드는 로그인한 계정의 승차권 목록과 영수증, 포인트·마일리지·쿠폰, 여정 변경에 필요한 정보, 지연확인증을 조회합니다.
 모두 서버 상태를 바꾸지 않는 조회 메서드이며, 호출하기 전에 [`login`](session.md#login)이 필요합니다.
-승차권 한 장을 대상으로 하는 메서드는 [`get_ticket_list`](#get_ticket_list)가 돌려준 반환 식별자를 이어 받습니다.
+승차권 한 장을 대상으로 하는 메서드는 [`list_tickets`](#list_tickets)가 돌려준 반환 식별자를 이어 받습니다.
 여정 변경과 자율 좌석 변경은 필요한 정보를 조회하는 메서드만 있고, 변경 요청을 보내는 메서드는 없습니다.
 
 **승차권 식별자 이어 쓰기**{#ticket-identifiers}
 
-[`get_ticket_list`](#get_ticket_list)가 돌려주는 승차권([`TicketListTicket`][korail_mobile_api.TicketListTicket])에는 반환 식별자가 들어 있습니다.
+[`list_tickets`](#list_tickets)가 돌려주는 승차권([`TicketListTicket`][korail_mobile_api.TicketListTicket])에는 반환 식별자가 들어 있습니다.
 판매 창구번호(`sale_window_no`), 일련번호(`sale_sequence`), 반환 비밀번호(`return_password`)는 그대로 옮깁니다.
 판매일은 두 필드가 있고, 메서드마다 받는 형식이 다릅니다.
 
 | `TicketListTicket` 필드 | 형식 | 이 값을 판매일로 받는 메서드 |
 |---|---|---|
-| `return_sale_date` | `MMDD` (4자리) | [`get_ticket_receipt`](#get_ticket_receipt), [`get_original_ticket_inquiry`](#get_original_ticket_inquiry), [`get_delay_certificate`](#get_delay_certificate), [`get_delay_return_receipt`](#get_delay_return_receipt), [`get_refund_commission`](payments.md#get_refund_commission), [`get_refund_ticket_detail`](payments.md#get_refund_ticket_detail) |
-| `sale_date` | `YYYYMMDD` (8자리) | [`get_delivery_recipient`](delivery-checkin.md#get_delivery_recipient), [`get_pbp_acceptance_specifications`](delivery-checkin.md#get_pbp_acceptance_specifications) |
+| `return_sale_date` | `MMDD` (4자리) | [`get_ticket_receipt`](#get_ticket_receipt), [`get_original_tickets`](#get_original_tickets), [`get_delay_certificate`](#get_delay_certificate), [`get_delay_return_receipt`](#get_delay_return_receipt), [`get_refund_fee`](payments.md#get_refund_fee), [`get_refund_ticket_detail`](payments.md#get_refund_ticket_detail) |
+| `sale_date` | `YYYYMMDD` (8자리) | [`get_delivery_recipient`](delivery-checkin.md#get_delivery_recipient), [`list_pbp_acceptances`](delivery-checkin.md#list_pbp_acceptances) |
 
 [`get_ticket_receipt`](#get_ticket_receipt)는 네 값을 키워드 인자로 따로 받고, 나머지 메서드는 [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]에 담아 받습니다.
 [`get_commuter_info`](passes.md#get_commuter_info)는 [`CommuterTicketInquiryRequest`][korail_mobile_api.CommuterTicketInquiryRequest]의 `original_ticket`에 담아 받습니다. 이 단계에 `sale_date`와 `return_sale_date` 중 어느 값을 넣어야 하는지는 확인하지 못했습니다. 라이브러리는 넣은 값을 그대로 보냅니다.
@@ -25,7 +25,7 @@
 ```python
 from korail_mobile_api import OriginalTicketReference
 
-tickets = client.get_ticket_list()
+tickets = client.list_tickets()
 ticket = tickets.reservations[0].tickets[0]
 reference = OriginalTicketReference(
     sale_window_no=ticket.sale_window_no,
@@ -35,12 +35,14 @@ reference = OriginalTicketReference(
 )
 ```
 
-## `get_ticket_list`
+<a id="get_ticket_list"></a>
+
+## `list_tickets`
 
 로그인 계정의 승차권 목록 한 페이지를 예약별로 묶어 조회합니다.
 
 ```python
-KorailClient.get_ticket_list(
+KorailClient.list_tickets(
     page_no: int = 1,
     *,
     mode: Literal['1', '2'] = '1',
@@ -92,14 +94,14 @@ KorailClient.get_ticket_list(
 ```python
 from datetime import datetime, timedelta, timezone
 
-tickets = client.get_ticket_list()
+tickets = client.list_tickets()
 for reservation in tickets.reservations:
     for ticket in reservation.tickets:
         for train in ticket.trains:
             print(ticket.pnr_no, train.train_no, train.departure_date, train.departure_time)
 
 today = datetime.now(timezone(timedelta(hours=9))).date()
-history = client.get_ticket_list(
+history = client.list_tickets(
     mode="2",
     boarding_date_from=(today - timedelta(days=89)).strftime("%Y%m%d"),
     boarding_date_to=today.strftime("%Y%m%d"),
@@ -122,7 +124,7 @@ KorailClient.get_ticket_receipt(
 ) -> TicketReceiptResponse
 ```
 
-네 식별값은 [`get_ticket_list`](#get_ticket_list)가 돌려준 승차권에서 가져옵니다.
+네 식별값은 [`list_tickets`](#list_tickets)가 돌려준 승차권에서 가져옵니다.
 `sale_date`에는 4자리 `return_sale_date`(`MMDD`)를 넣습니다. 8자리인 `sale_date`(`YYYYMMDD`)를 넣으면 요청을 보내기 전에 거절합니다.
 
 식별값은 키워드 인자로만 받습니다. [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]와 인자 순서가 달라, 위치 인자로 넘기면 창구번호와 판매일이 뒤바뀔 수 있기 때문입니다.
@@ -163,7 +165,7 @@ KorailClient.get_ticket_receipt(
 from datetime import datetime, timedelta, timezone
 
 today = datetime.now(timezone(timedelta(hours=9))).date()
-history = client.get_ticket_list(
+history = client.list_tickets(
     mode="2",
     boarding_date_from=(today - timedelta(days=89)).strftime("%Y%m%d"),
     boarding_date_to=today.strftime("%Y%m%d"),
@@ -181,16 +183,18 @@ for item in receipt.items:
         print(payment.payment_method, payment.amount)
 ```
 
-## `get_korail_point_summary`
+<a id="get_korail_point_summary"></a>
+
+## `get_point_summary`
 
 계정의 포인트, 쿠폰·지연할인권 개수, 복지 할인 자격 같은 요약 정보를 조회합니다.
 
 ```python
-KorailClient.get_korail_point_summary() -> KorailPointSummaryResponse
+KorailClient.get_point_summary() -> KorailPointSummaryResponse
 ```
 
 응답의 모든 필드는 문자열이며, 응답에 없으면 `None`입니다.
-`discount_coupon_count`는 서버가 알려 준 개수이며 [`get_discount_coupons`](#get_discount_coupons) 결과의 개수와 항상 같다고 보장하지 않습니다.
+`discount_coupon_count`는 서버가 알려 준 개수이며 [`list_discount_coupons`](#list_discount_coupons) 결과의 개수와 항상 같다고 보장하지 않습니다.
 소셜 로그인 연동 플래그 네 개(`naver_linked_flag`, `kakao_linked_flag`, `google_linked_flag`, `apple_linked_flag`)는 필드와 서비스의 대응을 확인하지 못했습니다. 필드 이름을 확정된 대응으로 믿지 마세요.
 
 **매개변수**
@@ -216,7 +220,7 @@ KorailClient.get_korail_point_summary() -> KorailPointSummaryResponse
 **예제**
 
 ```python
-summary = client.get_korail_point_summary()
+summary = client.get_point_summary()
 print(summary.korail_point, summary.discount_coupon_count, summary.delay_discount_count)
 ```
 
@@ -278,12 +282,14 @@ earned = client.get_mileage_history(
 )
 ```
 
-## `get_discount_coupons`
+<a id="get_discount_coupons"></a>
+
+## `list_discount_coupons`
 
 계정이 가진 할인쿠폰 목록 한 페이지를 조회합니다.
 
 ```python
-KorailClient.get_discount_coupons(
+KorailClient.list_discount_coupons(
     page_no: int = 1,
     pnr_no: str = '',
 ) -> DiscountCouponListResponse
@@ -322,19 +328,21 @@ KorailClient.get_discount_coupons(
 **예제**
 
 ```python
-coupons = client.get_discount_coupons()
+coupons = client.list_discount_coupons()
 if not coupons.items:
     print(coupons.h_msg_cd, coupons.h_msg_txt)
 for coupon in coupons.items:
     print(coupon.coupon_no, coupon.start_date, coupon.expiration_date)
 ```
 
-## `get_delay_discount_tickets`
+<a id="get_delay_discount_tickets"></a>
+
+## `list_delay_discount_tickets`
 
 계정이 가진 지연할인권 목록을 조회합니다.
 
 ```python
-KorailClient.get_delay_discount_tickets(
+KorailClient.list_delay_discount_tickets(
     departure_date_to: str,
 ) -> DelayDiscountTicketListResponse
 ```
@@ -370,17 +378,19 @@ KorailClient.get_delay_discount_tickets(
 **예제**
 
 ```python
-tickets = client.get_delay_discount_tickets("20261231")
+tickets = client.list_delay_discount_tickets("20261231")
 for item in tickets.items:
     print(item.train_no, item.departure_date, item.ticket_status_name)
 ```
 
-## `get_deposit_banks`
+<a id="get_deposit_banks"></a>
+
+## `list_deposit_banks`
 
 입금 가능한 은행의 코드와 이름 목록을 조회합니다.
 
 ```python
-KorailClient.get_deposit_banks() -> DepositBankListResponse
+KorailClient.list_deposit_banks() -> DepositBankListResponse
 ```
 
 직접 `@Field` 경로로 `Device`, `Version`, `Key`, `AppVersion` 순서의 네 필드를 싣습니다.
@@ -411,17 +421,19 @@ KorailClient.get_deposit_banks() -> DepositBankListResponse
 **예제**
 
 ```python
-banks = client.get_deposit_banks()
+banks = client.list_deposit_banks()
 for bank in banks.items:
     print(bank.code, bank.display_name)
 ```
 
-## `get_customer_trip_info`
+<a id="get_customer_trip_info"></a>
+
+## `get_trip_preferences`
 
 로그인 계정에 저장된 여행 편의설정을 조회합니다.
 
 ```python
-KorailClient.get_customer_trip_info() -> CustomerTripInfoResponse
+KorailClient.get_trip_preferences() -> CustomerTripInfoResponse
 ```
 
 편의설정에는 출발역·도착역, 승객 종류별 인원, 열차 종류, 객실 등급, 좌석 속성 같은 값이 들어 있습니다.
@@ -451,17 +463,19 @@ KorailClient.get_customer_trip_info() -> CustomerTripInfoResponse
 **예제**
 
 ```python
-info = client.get_customer_trip_info()
+info = client.get_trip_preferences()
 for trip in info.trips:
     print(trip.departure_station_name, trip.arrival_station_name, trip.adult_count)
 ```
 
-## `get_multi_child_discount_targets`
+<a id="get_multi_child_discount_targets"></a>
+
+## `list_multi_child_discount_targets`
 
 다자녀 할인 대상으로 등록된 가족 구성원을 조회합니다.
 
 ```python
-KorailClient.get_multi_child_discount_targets(
+KorailClient.list_multi_child_discount_targets(
     departure_date: str,
 ) -> MultiChildDiscountTargetResponse
 ```
@@ -498,17 +512,19 @@ from datetime import datetime, timedelta, timezone
 
 
 departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
-result = client.get_multi_child_discount_targets(departure_date)
+result = client.list_multi_child_discount_targets(departure_date)
 for target in result.targets:
     print(target.customer_family_name, target.passenger_type_name)
 ```
 
-## `get_trip_change_dates`
+<a id="get_trip_change_dates"></a>
+
+## `list_trip_change_dates`
 
 여정 변경으로 옮겨 갈 수 있는 날짜 목록을 조회합니다.
 
 ```python
-KorailClient.get_trip_change_dates(departure_date: str) -> TripChangeDateResponse
+KorailClient.list_trip_change_dates(departure_date: str) -> TripChangeDateResponse
 ```
 
 `departure_date`는 달력에 있는 날짜여야 하며, 요청을 보내기 전에 검사합니다.
@@ -545,18 +561,20 @@ from datetime import datetime, timedelta, timezone
 
 
 departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
-dates = client.get_trip_change_dates(departure_date)
+dates = client.list_trip_change_dates(departure_date)
 for date in dates.trip_change_dates:
     print(date)
 print(dates.last_run_date)
 ```
 
-## `get_original_ticket_inquiry`
+<a id="get_original_ticket_inquiry"></a>
+
+## `get_original_tickets`
 
 여정 변경의 기준이 되는 원표를 조회합니다.
 
 ```python
-KorailClient.get_original_ticket_inquiry(
+KorailClient.get_original_tickets(
     tickets: Sequence[OriginalTicketReference],
     *,
     ticket_count: int | None = None,
@@ -600,27 +618,29 @@ KorailClient.get_original_ticket_inquiry(
 ```python
 from korail_mobile_api import OriginalTicketReference
 
-reservation = client.get_ticket_list().reservations[0]
+reservation = client.list_tickets().reservations[0]
 references = [  # 판매일은 return_sale_date(MMDD)
     OriginalTicketReference(t.sale_window_no, t.return_sale_date, t.sale_sequence, t.return_password)
     for t in reservation.tickets
 ]
-result = client.get_original_ticket_inquiry(references)
+result = client.get_original_tickets(references)
 for original in result.tickets:
     print(original.pnr_no, [journey.train_no for journey in original.journeys])
 ```
 
-## `get_self_seat_change_info`
+<a id="get_self_seat_change_info"></a>
+
+## `get_self_seat_change_options`
 
 자율 좌석·열차 변경으로 옮겨 갈 수 있는 승차역과 변경 사유를 조회합니다.
 
 ```python
-KorailClient.get_self_seat_change_info(
+KorailClient.get_self_seat_change_options(
     request: SelfSeatChangeInfoRequest,
 ) -> SelfSeatChangeInfoResponse
 ```
 
-요청에는 승차권 식별자가 들어가지 않고 열차 정보만 들어갑니다. 값은 [`get_ticket_list`](#get_ticket_list)의 열차 구간([`TicketListTrain`][korail_mobile_api.TicketListTrain])에서 가져올 수 있습니다.
+요청에는 승차권 식별자가 들어가지 않고 열차 정보만 들어갑니다. 값은 [`list_tickets`](#list_tickets)의 열차 구간([`TicketListTrain`][korail_mobile_api.TicketListTrain])에서 가져올 수 있습니다.
 조회 조건은 [`SelfSeatChangeInfoRequest`][korail_mobile_api.SelfSeatChangeInfoRequest]로 만들며, 값은 객체를 만들 때 검사해 잘못되면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
 7.0.8에서 조회한 과거 승차권은 운행 시간 밖이라 서버가 `WRT800176`으로 거절했습니다. 운행 중 열차의 정상 응답은 7.0.6 시기 기록입니다.
 
@@ -659,14 +679,14 @@ KorailClient.get_self_seat_change_info(
 ```python
 from korail_mobile_api import SelfSeatChangeInfoRequest
 
-train = client.get_ticket_list().reservations[0].tickets[0].trains[0]
+train = client.list_tickets().reservations[0].tickets[0].trains[0]
 request = SelfSeatChangeInfoRequest(
     run_date=train.run_date,
     train_no=train.train_no,
     departure_station_code=train.departure_station_code,
     arrival_station_code=train.arrival_station_code,
 )
-info = client.get_self_seat_change_info(request)
+info = client.get_self_seat_change_options(request)
 for station in info.stations:
     print(station.departure_station_name, station.general_remaining_seats)
 ```
@@ -682,7 +702,7 @@ KorailClient.get_delay_certificate(
 ```
 
 지연된 승차권만 대상입니다. 지연되지 않은 승차권은 서버가 실패(결과 코드 `WRT400456`)로 응답하므로 [`KorailAppError`][korail_mobile_api.KorailAppError]가 발생합니다. `ticket`의 `sale_date`에는 승차권의 `return_sale_date`(`MMDD`)를 넣습니다.
-지난 승차권은 [`get_ticket_list`](#get_ticket_list)를 `mode="2"`와 3개월 이내의 승차일 범위로 호출해 찾습니다.
+지난 승차권은 [`list_tickets`](#list_tickets)를 `mode="2"`와 3개월 이내의 승차일 범위로 호출해 찾습니다.
 
 앱은 `delay_arrival_flag`가 특정 값인 행만 화면에 보여 줍니다. 그 값은 공개돼 있지 않아 확인하지 못했으므로, 라이브러리는 행을 거르지 않고 모두 돌려줍니다.
 `run_date`는 응답에 없을 수 있으며 없으면 `None`입니다. 운행일은 `run_day`에도 들어 있습니다.
@@ -718,7 +738,7 @@ from datetime import datetime, timedelta, timezone
 from korail_mobile_api import OriginalTicketReference
 
 today = datetime.now(timezone(timedelta(hours=9))).date()
-history = client.get_ticket_list(
+history = client.list_tickets(
     mode="2",
     boarding_date_from=(today - timedelta(days=89)).strftime("%Y%m%d"),
     boarding_date_to=today.strftime("%Y%m%d"),

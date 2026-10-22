@@ -35,13 +35,13 @@ MERGE_TRAIN: api.TrainSummary = F8["reserve_merge"]["standing_hold_train"]
 MERGE_ROWS: tuple[api.TrainScheduleItem, ...] = F8["reserve_merge"]["merge_rows"]
 HOLD: api.ReservationHoldResponse = F8["pay_with_card"]["hold"]
 CARD: api.CardPayment = F8["pay_with_card"]["card"]
-TICKET: api.OriginalTicketReference = F8["get_refund_commission"]["ticket"]
+TICKET: api.OriginalTicketReference = F8["get_refund_fee"]["ticket"]
 DETAIL: api.RefundTicketDetailResponse = F8["register_self_checkin"]["detail"]
-EXECUTION: api.StationRefundExecutionRequest = F8["execute_station_ticket_refund"]["request"]
+EXECUTION: api.StationRefundExecutionRequest = F8["refund_station_ticket"]["request"]
 PURCHASE: api.DiscountCardPurchaseRequest = F8["register_discount_card"]["request"]
 USER = api.DiscountCardAdditionalUser("SYNTHETIC-CUSTOMER", "SYNTHETIC-NAME", "SYNTHETIC-PHONE")
 RECALC: api.PriceRecalculationRequest = F8["recalculate_price"]["request"]
-FARE_LEG: api.PriceFareLeg = F8["get_price_fare_quote"]["request"].legs[0]
+FARE_LEG: api.PriceFareLeg = F8["get_fare_quote"]["request"].legs[0]
 QUERY: api.TrainSearchQuery = F8["search_trains"]["query"]
 SEAT = api.KorailSeatAssignment(1, "1A")
 SEAT_ROW = api.PhysicalSeat("1A", "Y", "0", None, "015", None, "1A", "1", "", "", None)
@@ -94,7 +94,7 @@ def _merge(c: api.KorailClient, first: dict[str, Any], **options: Any) -> object
 
 
 def _refund(c: api.KorailClient, changes: dict[str, Any] | None = None, **overrides: Any) -> object:
-    """Refund with a commission genuinely bound by an offline get_refund_commission."""
+    """Refund with a commission genuinely bound by an offline get_refund_fee."""
     arguments = _f8_arguments("refund")["refund"]
     arguments["ticket"] = replace(arguments["ticket"], **(changes or {}))
     return c.refund(**{**arguments, **overrides})
@@ -114,7 +114,7 @@ def _station_refund(c: api.KorailClient, **verification: Any) -> object:
     )
     values = {"str_result": "SUCC", "refund_amount": "1000", "refund_fee": "0", "original_tickets": (original,)}
     response = api.StationRefundVerificationResponse(**{**values, **verification})
-    return c.execute_station_ticket_refund(
+    return c.refund_station_ticket(
         api.StationRefundExecutionRequest.from_verification(
             response, customer_phone="00000000000", customer_name="SYNTHETIC-NAME"
         )
@@ -132,11 +132,11 @@ def _recalc(c: api.KorailClient, row: dict[str, Any] | None = None, **changes: A
 
 
 def _free(**changes: Any) -> api.FreeSeatCarRequest:
-    return replace(F8["get_free_seat_car_info"]["request"], **changes)
+    return replace(F8["get_free_seat_cars"]["request"], **changes)
 
 
 def _merge_inquiry(**changes: Any) -> api.MergeSeatsInquiryRequest:
-    return replace(F8["get_merge_seats_inquiry"]["request"], **changes)
+    return replace(F8["get_merge_seat_options"]["request"], **changes)
 
 
 def _search(c: api.KorailClient, **changes: Any) -> object:
@@ -260,12 +260,12 @@ ROWS = [
     Row("facade-bus-seats-type", lambda c: api.AirportBusResource(c).seats("bus"), "schedule must", TypeError),
     # Standby options and unpaid-hold cancellation.
     Row(
-        "standby-class-flag-text", lambda c: c.confirm_standby_hold(HOLD, allow_seat_class_change="N"), "a bool"
+        "standby-class-flag-text", lambda c: c.set_standby_options(HOLD, allow_seat_class_change="N"), "a bool"
     ),
-    Row("standby-sms-flag-text", lambda c: c.confirm_standby_hold(HOLD, sms_notify="Y"), "sms_notify must be"),
+    Row("standby-sms-flag-text", lambda c: c.set_standby_options(HOLD, sms_notify="Y"), "sms_notify must be"),
     Row(
         "standby-sms-phone-shape",
-        lambda c: c.confirm_standby_hold(HOLD, sms_notify=True, phone_no="000-0000-0000"),
+        lambda c: c.set_standby_options(HOLD, sms_notify=True, phone_no="000-0000-0000"),
         "11-digit phone number",
     ),
     Row("cancel-hold-type", lambda c: c.cancel_unpaid_hold({}), "exact reservation hold response"),
@@ -293,7 +293,7 @@ ROWS = [
     Row(
         "refund-unbound-commission",
         lambda c: _refund(c, commission=api.RefundCommissionResponse(str_result="SUCC")),
-        "bound by get_refund_commission",
+        "bound by get_refund_fee",
     ),
     Row("refund-other-ticket", lambda c: _refund(c, {"sale_sequence": "2"}), "does not match the original"),
     Row("refund-integer-fee", lambda c: _refund_with_quote(c, refund_fee=400), "must be strings", INVALID),
@@ -313,10 +313,10 @@ ROWS = [
         lambda c: api.PaidTicket.from_refund_detail(replace(DETAIL, original_window_no=None)),
         "identity is incomplete",
     ),
-    Row("station-refund-type", lambda c: c.execute_station_ticket_refund({}), "exact execution request"),
+    Row("station-refund-type", lambda c: c.refund_station_ticket({}), "exact execution request"),
     Row(
         "station-refund-blank-amount",
-        lambda c: c.execute_station_ticket_refund(replace(EXECUTION, refund_amount="")),
+        lambda c: c.refund_station_ticket(replace(EXECUTION, refund_amount="")),
         "requires refund_amount",
     ),
     Row(
@@ -327,15 +327,15 @@ ROWS = [
     Row("station-refund-no-fee", lambda c: _station_refund(c, refund_fee=None), "missing refund_fee"),
     Row(
         "station-verify-blank-name",
-        lambda c: c.verify_station_ticket_refund(
-            replace(F8["verify_station_ticket_refund"]["request"], customer_name=" ")
+        lambda c: c.check_station_ticket_refund(
+            replace(F8["check_station_ticket_refund"]["request"], customer_name=" ")
         ),
         "verification requires customer_name",
         INVALID,
     ),
     Row(
         "station-verify-type",
-        lambda c: c.verify_station_ticket_refund({}),
+        lambda c: c.check_station_ticket_refund({}),
         "exact verification request",
         INVALID,
     ),
@@ -358,10 +358,10 @@ ROWS = [
     Row("recalc-cabin-blank", lambda c: _recalc(c, cabin_class_code=""), "cabin_class_code must be"),
     Row("cart-add-type", lambda c: c.add_to_cart({}), "exact CartAddRequest"),
     Row("product-cancel-type", lambda c: c.cancel_product_reservation({}), "ProductDetailResponse"),
-    Row("delivered-ticket-type", lambda c: c.retrieve_delivered_ticket({}), "PbpAcceptanceTicket"),
+    Row("delivered-ticket-type", lambda c: c.recall_delivered_ticket({}), "PbpAcceptanceTicket"),
     Row(
         "delivered-no-journeys",
-        lambda c: c.retrieve_delivered_ticket(replace(F8["retrieve_delivered_ticket"]["ticket"], journeys=())),
+        lambda c: c.recall_delivered_ticket(replace(F8["recall_delivered_ticket"]["ticket"], journeys=())),
         "first journey",
     ),
     Row(
@@ -381,13 +381,13 @@ ROWS = [
     Row("refund-logged-out", lambda c: _refund(c), "authenticated session", **LOGGED_OUT),
     Row(
         "trip-info-no-customer-no",
-        lambda c: _without_customer_no(c).get_customer_trip_info(),
+        lambda c: _without_customer_no(c).get_trip_preferences(),
         "login customer number",
         api.KorailAuthError,
     ),
     # Reads: seat maps, train search, lists, ticket references and fares.
-    Row("seat-cars-train-type", lambda c: c.get_seat_cars("90001"), "train must be a TrainSummary", INVALID),
-    Row("seat-cars-no-passengers", lambda c: c.get_seat_cars(TRAIN, passenger_count=0), "passenger_count"),
+    Row("seat-cars-train-type", lambda c: c.list_seat_cars("90001"), "train must be a TrainSummary", INVALID),
+    Row("seat-cars-no-passengers", lambda c: c.list_seat_cars(TRAIN, passenger_count=0), "passenger_count"),
     Row(
         "seat-inventory-car-zero",
         lambda c: c.get_seat_inventory(TRAIN, 0),
@@ -396,23 +396,26 @@ ROWS = [
     ),
     Row(
         "seat-cars-goods-no-space",
-        lambda c: c.get_seat_cars(_train(goods_no="A B")),
+        lambda c: c.list_seat_cars(_train(goods_no="A B")),
         "printable ASCII",
         INVALID,
     ),
     Row(
         "seat-cars-room-class",
-        lambda c: c.get_seat_cars(TRAIN, room_class_code="3"),
+        lambda c: c.list_seat_cars(TRAIN, room_class_code="3"),
         "room_class_code",
         INVALID,
     ),
     # Per-train reads send the row's identifiers; a missing one used to go out blank (or as 00000).
     Row(
-        "seat-cars-train-no-blank", lambda c: c.get_seat_cars(_train(train_no="")), "train_no must not", INVALID
+        "seat-cars-train-no-blank",
+        lambda c: c.list_seat_cars(_train(train_no="")),
+        "train_no must not",
+        INVALID,
     ),
     Row(
         "seat-cars-run-date-none",
-        lambda c: c.get_seat_cars(_train(run_date=None)),
+        lambda c: c.list_seat_cars(_train(run_date=None)),
         "run_date must not",
         INVALID,
     ),
@@ -434,31 +437,31 @@ ROWS = [
     Row("train-schedule-run-date-blank", lambda c: c.get_train_schedule("", "90001"), "run_date", INVALID),
     Row(
         "free-seat-car-train-no-blank",
-        lambda c: c.get_free_seat_car_info(_free(train_no="")),
+        lambda c: c.get_free_seat_cars(_free(train_no="")),
         "train_no",
         INVALID,
     ),
     Row(
         "free-seat-car-construction-order-none",
-        lambda c: c.get_free_seat_car_info(_free(departure_construction_order=None)),
+        lambda c: c.get_free_seat_cars(_free(departure_construction_order=None)),
         "departure_construction_order",
         INVALID,
     ),
     Row(
         "merge-inquiry-train-no-none",
-        lambda c: c.get_merge_seats_inquiry(_merge_inquiry(train_no=None)),
+        lambda c: c.get_merge_seat_options(_merge_inquiry(train_no=None)),
         "train_no",
         INVALID,
     ),
     Row(
         "merge-inquiry-station-blank",
-        lambda c: c.get_merge_seats_inquiry(_merge_inquiry(departure_station_name="")),
+        lambda c: c.get_merge_seat_options(_merge_inquiry(departure_station_name="")),
         "departure_station_name",
         INVALID,
     ),
     Row(
         "merge-inquiry-run-date-blank",
-        lambda c: c.get_merge_seats_inquiry(_merge_inquiry(run_datetime=" ")),
+        lambda c: c.get_merge_seat_options(_merge_inquiry(run_datetime=" ")),
         "run_datetime",
         INVALID,
     ),
@@ -489,35 +492,37 @@ ROWS = [
         "connection_train_group",
         INVALID,
     ),
-    Row("ticket-list-page-text", lambda c: c.get_ticket_list("1"), "page_no must be an integer", error=INVALID),
-    Row("ticket-list-mode-blank", lambda c: c.get_ticket_list(mode=""), "ticket list mode", error=INVALID),
+    Row("ticket-list-page-text", lambda c: c.list_tickets("1"), "page_no must be an integer", error=INVALID),
+    Row("ticket-list-mode-blank", lambda c: c.list_tickets(mode=""), "ticket list mode", error=INVALID),
     # Boarding dates are "" (omitted) or YYYYMMDD; a date object used to go out as 2026-07-01.
     Row(
         "ticket-list-date-object",
-        lambda c: c.get_ticket_list(mode="2", boarding_date_from=date(2026, 7, 1), boarding_date_to="20260928"),
+        lambda c: c.list_tickets(mode="2", boarding_date_from=date(2026, 7, 1), boarding_date_to="20260928"),
         "boarding_date_from must be empty or exactly 8 ASCII digits",
         error=INVALID,
     ),
     Row(
         "ticket-list-date-dashed",
-        lambda c: c.get_ticket_list(mode="2", boarding_date_from="20260701", boarding_date_to="2026-09-28"),
+        lambda c: c.list_tickets(mode="2", boarding_date_from="20260701", boarding_date_to="2026-09-28"),
         "boarding_date_to must be empty or exactly 8 ASCII digits",
         error=INVALID,
     ),
     Row(
         "ticket-list-date-none",
-        lambda c: c.get_ticket_list(boarding_date_to=None),
+        lambda c: c.list_tickets(boarding_date_to=None),
         "boarding_date_to",
         error=INVALID,
     ),
-    Row("maas-stations-blank", lambda c: c.get_maas_station_data(" "), "additional_service_code must be"),
-    Row("delay-discount-date-length", lambda c: c.get_delay_discount_tickets("2099010"), "exactly 8 ASCII"),
+    Row("maas-stations-blank", lambda c: c.list_maas_stations(" "), "additional_service_code must be"),
+    Row("delay-discount-date-length", lambda c: c.list_delay_discount_tickets("2099010"), "exactly 8 ASCII"),
     Row(
         "self-seat-change-train-no",
-        lambda c: c.get_self_seat_change_info(api.SelfSeatChangeInfoRequest(F8_DATE, "900001", "9901", "9903")),
+        lambda c: c.get_self_seat_change_options(
+            api.SelfSeatChangeInfoRequest(F8_DATE, "900001", "9901", "9903")
+        ),
         "at most 5 digits",
     ),
-    Row("multi-child-date-invalid", lambda c: c.get_multi_child_discount_targets("20990230"), "calendar date"),
+    Row("multi-child-date-invalid", lambda c: c.list_multi_child_discount_targets("20990230"), "calendar date"),
     Row(
         "receipt-index-type",
         lambda c: c.get_ticket_receipt(**{**F8["get_ticket_receipt"], "txt_index": 1}),
@@ -532,11 +537,11 @@ ROWS = [
         error=INVALID,
     ),
     Row("recipient-ticket-type", lambda c: c.get_delivery_recipient({}), "OriginalTicketReference"),
-    Row("pbp-specifications-empty", lambda c: c.get_pbp_acceptance_specifications(()), "at least one"),
+    Row("pbp-specifications-empty", lambda c: c.list_pbp_acceptances(()), "at least one"),
     Row("duplication-type", lambda c: c.check_ticket_duplication({}), "TicketDuplicationCheckRequest"),
     Row(
         "original-count-text",
-        lambda c: c.get_original_ticket_inquiry((TICKET,), ticket_count="1"),
+        lambda c: c.get_original_tickets((TICKET,), ticket_count="1"),
         "ticket_count",
         error=INVALID,
     ),
@@ -553,30 +558,26 @@ ROWS = [
     Row("commuter-request-type", lambda c: c.get_commuter_info({}), "commuter request variant"),
     Row(
         "fare-legs-text",
-        lambda c: c.get_price_fare_quote(api.PriceFareQuoteRequest("x")),
+        lambda c: c.get_fare_quote(api.PriceFareQuoteRequest("x")),
         "one or two",
         INVALID,
     ),
-    Row("fare-no-legs", lambda c: c.get_price_fare_quote(api.PriceFareQuoteRequest(())), "one or two", INVALID),
+    Row("fare-no-legs", lambda c: c.get_fare_quote(api.PriceFareQuoteRequest(())), "one or two", INVALID),
     Row(
         "fare-leg-type",
-        lambda c: c.get_price_fare_quote(api.PriceFareQuoteRequest(("x",))),
+        lambda c: c.get_fare_quote(api.PriceFareQuoteRequest(("x",))),
         "PriceFareLeg",
         INVALID,
     ),
-    Row("fare-request-type", lambda c: c.get_price_fare_quote({}), "must be a PriceFareQuoteRequest", INVALID),
+    Row("fare-request-type", lambda c: c.get_fare_quote({}), "must be a PriceFareQuoteRequest", INVALID),
     Row(
         "fare-goods-no-on-one-leg",
-        lambda c: c.get_price_fare_quote(
-            api.PriceFareQuoteRequest((replace(FARE_LEG, goods_no="G1"), FARE_LEG))
-        ),
+        lambda c: c.get_fare_quote(api.PriceFareQuoteRequest((replace(FARE_LEG, goods_no="G1"), FARE_LEG))),
         "every leg or on none",
         INVALID,
     ),
     Row("reservation-detail-type", lambda c: c.get_ticket_reservation_detail({}), "TicketReservationDetail"),
-    Row(
-        "commission-companion-type", lambda c: c.get_refund_commission(TICKET, companion={}), "RefundCompanion"
-    ),
+    Row("commission-companion-type", lambda c: c.get_refund_fee(TICKET, companion={}), "RefundCompanion"),
     Row(
         "refund-detail-history-text",
         lambda c: c.get_refund_ticket_detail(TICKET, from_purchase_history="Y"),
@@ -594,12 +595,16 @@ ROWS = [
         "txt_index must be a non-empty string or None",
     ),
     # Common codes are a str or a sequence of str; bytes used to go out one code per byte (code=97&code=98).
-    Row("common-code-bytes", lambda c: c.get_common_code(b"ab"), "sequence of strings", INVALID, False),
-    Row("common-code-empty-bytes", lambda c: c.get_common_code(b""), "sequence of strings", INVALID, False),
+    Row("common-code-bytes", lambda c: c.get_common_codes(b"ab"), "sequence of strings", INVALID, False),
+    Row("common-code-empty-bytes", lambda c: c.get_common_codes(b""), "sequence of strings", INVALID, False),
     Row(
-        "common-code-int-item", lambda c: c.get_common_code(["SYNTH", 1]), "sequence of strings", INVALID, False
+        "common-code-int-item",
+        lambda c: c.get_common_codes(["SYNTH", 1]),
+        "sequence of strings",
+        INVALID,
+        False,
     ),
-    Row("common-code-int", lambda c: c.get_common_code(1), "sequence of strings", INVALID, False),
+    Row("common-code-int", lambda c: c.get_common_codes(1), "sequence of strings", INVALID, False),
 ]
 
 # Desired behavior of defects fixed in parallel for 2.6.2. No match=, so a reworded fix still flips them.
@@ -622,8 +627,8 @@ FIXES = [
     Row("train-schedule-run-date-none", lambda c: c.get_train_schedule(None, "90001")),
     Row(
         "bus-schedule-departure-date-none",
-        lambda c: c.get_limousine_schedules(
-            replace(F8["get_limousine_schedules"]["query"], departure_date=None)
+        lambda c: c.list_airport_bus_schedules(
+            replace(F8["list_airport_bus_schedules"]["query"], departure_date=None)
         ),
     ),
     Row(
@@ -632,7 +637,7 @@ FIXES = [
     ),
     Row(
         "free-seat-car-run-date-none",
-        lambda c: c.get_free_seat_car_info(replace(F8["get_free_seat_car_info"]["request"], run_date=None)),
+        lambda c: c.get_free_seat_cars(replace(F8["get_free_seat_cars"]["request"], run_date=None)),
     ),
     # D1: only MERGE_STANDING belongs to a merge follow-up; a standby hold is not recalculated.
     Row(

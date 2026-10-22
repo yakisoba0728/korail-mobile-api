@@ -104,7 +104,7 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 `close`는 연결만 닫습니다. `clear_session`은 로컬 상태만 폐기합니다.
 `logout`은 서버 요청이 실패해도 로컬 상태를 정리하며 서버 무효화 성공을 보장하지 않습니다.
 
-예약대기는 좌석 확보와 다르고 `payable=False`입니다. `confirm_standby_hold`는 기존 대기 홀드에 옵션만 저장합니다.
+예약대기는 좌석 확보와 다르고 `payable=False`입니다. `set_standby_options`는 기존 대기 홀드에 옵션만 저장합니다.
 일반 열차 예약의 승객 종류는 `PassengerType.basicList()`의 일곱 종류입니다. `teenager > 0`은 직통·좌석 지정·
 예약대기·환승·병합 예약과 간편 API에서 대기열·예약 요청 전에 `KorailProtocolError`로 거절합니다.
 검색에서는 기존처럼 청소년을 어른 인원에 합산하지만 예약 인원을 자동으로 어른으로 바꾸지 않습니다.
@@ -121,7 +121,7 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 
 카드 결제액은 홀드 `received_amount`이며 기준 운임이나 `total_price`로 대체하지 않습니다.
 카드 거절은 FAIL 모델입니다. 환불은 성공한 수수료 응답을 명시적으로 받아 승차권 한 장씩 수행합니다.
-`get_refund_commission` 반환 시 응답에 비공개 조회 문맥을 연결하고 `repr`에서 숨깁니다.
+`get_refund_fee` 반환 시 응답에 비공개 조회 문맥을 연결하고 `repr`에서 숨깁니다.
 `refund`는 그 문맥과 환불 대상의 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호 일치를 요구합니다.
 직접 생성·직접 파싱한 수수료 응답, 다른 대상의 응답, 원표 반환일이 없는 입력은 요청 전에
 `KorailProtocolError`로 거절하는 fail-closed 동작 변경입니다. 자동 조회·재시도는 하지 않습니다.
@@ -148,8 +148,8 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 `original_sale_date`→`return_sale_date`, `companion_name`→동명 필드,
 `companion_birth_date`→`companion_certificate_no`를 복사하고 현재 `sale_date`는 별도로 유지합니다.
 수동 생성한 `PaidTicket`으로 환불하려면 원표 반환일을 명시해야 하며 현재 판매일로 대신하지 않습니다.
-기존 `get_refund_commission(ticket, companion=RefundCompanion())` 시그니처는 유지하고,
-간편 API는 `TicketResource.refund_fee(ticket, *, companion=RefundCompanion())`로 같은 동반자 정보를 받습니다.
+기존 `get_refund_fee(ticket, companion=RefundCompanion())` 시그니처는 유지하고,
+간편 API는 `TicketResource.refund_quote(ticket, *, companion=RefundCompanion())`로 같은 동반자 정보를 받습니다.
 
 재계산의 승객별 여섯 목록은 동일 인덱스를 유지하도록 빈 문자열도 보존합니다.
 `for_hold`는 첫 여정의 좌석 정보를 복사하며 요청 할인 수가 좌석 수와 같아야 합니다. `payable=False`(예약대기) 홀드는 `KorailProtocolError`로 거절합니다.

@@ -128,7 +128,7 @@ def test_invalid_filter_is_rejected_before_search(
         raise AssertionError("invalid filters must not send requests")
 
     with Korail(KorailConfig(netfunnel_enabled=False)) as korail:
-        monkeypatch.setattr(korail.client, "get_station_data", unexpected)
+        monkeypatch.setattr(korail.client, "list_stations", unexpected)
         monkeypatch.setattr(korail.client, "search_trains", unexpected)
         with pytest.raises(TypeError, match="must be bool"):
             korail.trains.search("출발", "도착", **{field: value})
@@ -302,5 +302,5 @@ def test_find_delegates_to_one_direct_hold_lookup(monkeypatch: pytest.MonkeyPatc
     hold = ReservationHoldResponse(str_result="SUCC", pnr_no="SYNTHETIC-PNR")
     find = Mock(return_value=hold)
     monkeypatch.setattr(korail.client, "get_reservation_hold", find)
-    assert korail.reservations.find("SYNTHETIC-PNR") is hold
+    assert korail.reservations.get("SYNTHETIC-PNR") is hold
     find.assert_called_once_with("SYNTHETIC-PNR")

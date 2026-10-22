@@ -308,7 +308,7 @@ class MembershipResource:
 
     def coupons(self, *, page_no: int = 1, pnr_no: str = "") -> DiscountCouponListResponse:
         """쿠폰 한 페이지를 조회합니다. 목록·페이지 정보·원문을 그대로 반환합니다."""
-        return self._client.get_discount_coupons(page_no=page_no, pnr_no=pnr_no)
+        return self._client.list_discount_coupons(page_no=page_no, pnr_no=pnr_no)
 
 
 class AirportBusResource:
@@ -321,7 +321,7 @@ class AirportBusResource:
     def stops(self, *, refresh: bool = False) -> tuple[LimousineStop, ...]:
         """정류장 이름·코드 목록을 한 번 조회해 캐시합니다. 잘못된 응답은 캐시하지 않습니다."""
         if self._stops is None or refresh:
-            response = self._client.get_common_code(["app.limousine.stationNm", "app.limousine.stationCd"])
+            response = self._client.get_common_codes(["app.limousine.stationNm", "app.limousine.stationCd"])
             self._stops = parse_limousine_stops(response.raw)
         return self._stops
 
@@ -351,7 +351,7 @@ class AirportBusResource:
             if len(matches) != 1:
                 raise KorailInvalidInputError(f"공항버스 정류장 이름·코드를 구분할 수 없습니다: {reference!r}")
             codes.append(matches[0].code)
-        return self._client.get_limousine_schedules(
+        return self._client.list_airport_bus_schedules(
             LimousineScheduleQuery(
                 moment.strftime("%Y%m%d"),
                 codes[0],
@@ -370,7 +370,7 @@ class AirportBusResource:
         if not isinstance(schedule, LimousineSchedule):
             raise TypeError("schedule must be a LimousineSchedule")
         _passenger_count(passenger_count, "passenger_count")
-        return self._client.get_limousine_seat_inventory(
+        return self._client.get_airport_bus_seat_inventory(
             LimousineSeatInventoryQuery.from_schedule(schedule, passenger_count=passenger_count)
         )
 
@@ -423,7 +423,7 @@ class ReservationResource:
         selected = KorailSeatClass.GENERAL if seat_class is None else seat_class
         return self._client.reserve(train, passengers=passengers, seat_class=selected, job_type=job_type)
 
-    def find(self, pnr_no: str) -> ReservationHoldResponse:
+    def get(self, pnr_no: str) -> ReservationHoldResponse:
         """PNR로 기존 예약을 한 번 조회해 결제용 홀드를 반환합니다."""
         return self._client.get_reservation_hold(pnr_no)
 
@@ -436,7 +436,7 @@ class ReservationResource:
 
     def all(self) -> ReservationHistoryResponse:
         """기존 예약 이력 응답을 보존합니다."""
-        return self._client.get_reservation_history()
+        return self._client.list_reservations()
 
     def cancel(self, hold: ReservationHoldResponse) -> BaseKorailResponse:
         """미결제 홀드의 가능 여부를 확인한 뒤 취소합니다."""
@@ -454,16 +454,16 @@ class TicketResource:
         self._client = client
 
     def all(self, *, page_no: int = 1) -> TicketListResponse:
-        return self._client.get_ticket_list(page_no)
+        return self._client.list_tickets(page_no)
 
-    def refund_fee(
+    def refund_quote(
         self,
         ticket: OriginalTicketReference,
         *,
         companion: RefundCompanion = RefundCompanion(),
     ) -> RefundCommissionResponse:
         """실제 환불 없이 원표·동반자의 수수료를 조회하고 결과에 로컬 연결합니다."""
-        return self._client.get_refund_commission(ticket, companion)
+        return self._client.get_refund_fee(ticket, companion)
 
     def refund(
         self,

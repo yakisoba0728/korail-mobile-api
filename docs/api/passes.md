@@ -3,11 +3,11 @@
 이 페이지의 메서드는 정기권·패스, N카드, 여행상품의 세 묶음으로 나뉩니다.
 묶음마다 앞 메서드가 돌려준 값을 다음 메서드의 입력으로 씁니다.
 
-**정기권·패스**는 조회만 합니다. [`get_pass_menu`](#get_pass_menu)로 메뉴 항목을 읽고, 항목의 `pass_data`([`PassMenuData`][korail_mobile_api.PassMenuData])에 든 종류·기간·연령 코드로 사용 가능일([`get_pass_available_dates`](#get_pass_available_dates)), 탈 수 있는 열차([`get_pass_schedule`](#get_pass_schedule)), 예매 조건([`get_commuter_info`](#get_commuter_info))을 조회합니다. 정기권·패스를 구매하는 메서드는 없습니다.
+**정기권·패스**는 조회만 합니다. [`get_pass_menu`](#get_pass_menu)로 메뉴 항목을 읽고, 항목의 `pass_data`([`PassMenuData`][korail_mobile_api.PassMenuData])에 든 종류·기간·연령 코드로 사용 가능일([`get_pass_availability`](#get_pass_availability)), 탈 수 있는 열차([`get_pass_schedule`](#get_pass_schedule)), 예매 조건([`get_commuter_info`](#get_commuter_info))을 조회합니다. 정기권·패스를 구매하는 메서드는 없습니다.
 
 **N카드**는 사용 내역과 이용 가능 열차 조회, 결제 전 구매, 기간 연장, N카드 예약을 제공합니다. N카드 결제는 지원하지 않습니다. [`register_discount_card`](#register_discount_card)는 결제 전 구매까지만 만들고, 그 구매를 결제하거나 취소하는 메서드는 없습니다. 7.0.8에서 스케줄 조회는 서버 오류 `EAZ000028`까지 확인했고, 보유 N카드가 없어 정상 조회와 다른 N카드 메서드는 확인하지 못했습니다.
 
-**여행상품**은 검색·예약·결제를 지원하지 않습니다. 다른 경로로 만든 여행상품 예약을 목록([`get_product_reservations`](#get_product_reservations))과 상세([`get_product_detail`](#get_product_detail))로 조회하고, [`cancel_product_reservation`](#cancel_product_reservation)으로 취소합니다. [`get_trip_menu`](#get_trip_menu)는 여행상품 메뉴 화면의 항목을 읽습니다.
+**여행상품**은 검색·예약·결제를 지원하지 않습니다. 다른 경로로 만든 여행상품 예약을 목록([`list_product_reservations`](#list_product_reservations))과 상세([`get_product_detail`](#get_product_detail))로 조회하고, [`cancel_product_reservation`](#cancel_product_reservation)으로 취소합니다. [`get_trip_menu`](#get_trip_menu)는 여행상품 메뉴 화면의 항목을 읽습니다.
 
 ## `get_pass_menu`
 
@@ -54,12 +54,14 @@ for item in menu.items:
 pass_data = next(item.pass_data for item in menu.items if item.pass_data is not None)
 ```
 
-## `get_pass_available_dates`
+<a id="get_pass_available_dates"></a>
+
+## `get_pass_availability`
 
 정기권 상품 하나의 사용 개시 가능일과 발권 가능일을 조회합니다.
 
 ```python
-KorailClient.get_pass_available_dates(
+KorailClient.get_pass_availability(
     kind_code: str,
     period_code: str,
     age_code: str,
@@ -99,7 +101,7 @@ KorailClient.get_pass_available_dates(
 **예제**
 
 ```python
-dates = client.get_pass_available_dates(
+dates = client.get_pass_availability(
     pass_data.commuter_kind_code,
     pass_data.period_options[0].commuter_period_code,
     pass_data.age_options[0].commuter_age_code,
@@ -118,7 +120,7 @@ KorailClient.get_pass_schedule(request: PassScheduleRequest) -> PassScheduleResp
 
 구매나 예약은 하지 않습니다.
 조회 조건은 [`PassScheduleRequest`][korail_mobile_api.PassScheduleRequest]로 만듭니다. 열두 필드가 모두 필수이며 문자열입니다.
-정기권 코드 세 개(`pass_kind_code`, `pass_period_code`, `pass_age_code`)는 [`get_pass_available_dates`](#get_pass_available_dates)와 같이 `pass_data`에서 가져옵니다.
+정기권 코드 세 개(`pass_kind_code`, `pass_period_code`, `pass_age_code`)는 [`get_pass_availability`](#get_pass_availability)와 같이 `pass_data`에서 가져옵니다.
 `selected_train_code`에는 열차 그룹 코드를 넣습니다. [`search_trains`](trains.md#search_trains)가 [`TrainSearchQuery`][korail_mobile_api.TrainSearchQuery]의 `train_group_code`(기본값 `"109"`)를 싣는 요청 필드와 같은 필드입니다.
 `departure_station_name`과 `arrival_station_name`에는 역 코드가 아니라 역 이름을 넣습니다.
 `transfer_type_code`와 `weekend_use_flag`의 뜻과 허용 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
@@ -314,12 +316,14 @@ for item in trip_menu.items:
             print("  ", content.title, content.commuter_kind_code)
 ```
 
-## `get_discount_card_usage_history`
+<a id="get_discount_card_usage_history"></a>
+
+## `list_discount_card_usages`
 
 N카드 한 장을 이미 사용한 여행 내역을 조회합니다.
 
 ```python
-KorailClient.get_discount_card_usage_history(
+KorailClient.list_discount_card_usages(
     card_no: str,
 ) -> DiscountCardUsageListResponse
 ```
@@ -357,7 +361,7 @@ N카드 번호 하나를 넘기면 그 카드로 이용한 여행이 한 행씩 
 
 ```python
 card_no = input("N카드 번호: ")
-history = client.get_discount_card_usage_history(card_no)
+history = client.list_discount_card_usages(card_no)
 for usage in history.items:
     print(usage.run_date, usage.departure_station_name, usage.arrival_station_name)
 ```
@@ -544,7 +548,7 @@ KorailClient.extend_discount_card(ticket: DiscountCardTicket) -> BaseKorailRespo
 ```python
 from korail_mobile_api import DiscountCardTicket
 
-tickets = client.get_ticket_list()
+tickets = client.list_tickets()
 card_ticket = tickets.reservations[0].tickets[0]  # 기간을 연장할 N카드 승차권
 result = client.extend_discount_card(
     DiscountCardTicket(
@@ -630,12 +634,14 @@ hold = client.reserve_with_discount_card(train, card_no=input("N카드 번호: "
 print(hold.pnr_no, hold.payment_deadline_date, hold.payment_deadline_time)
 ```
 
-## `get_product_reservations`
+<a id="get_product_reservations"></a>
+
+## `list_product_reservations`
 
 로그인 계정이 예약한 여행상품 목록 한 페이지를 조회합니다.
 
 ```python
-KorailClient.get_product_reservations(
+KorailClient.list_product_reservations(
     page_no: int = 1,
     page_size: int = 20,
     *,
@@ -678,7 +684,7 @@ KorailClient.get_product_reservations(
 **예제**
 
 ```python
-page = client.get_product_reservations()
+page = client.list_product_reservations()
 print(page.total_count, "건")
 for reservation in page.items:
     print(reservation.product_name, reservation.reservation_status, reservation.payment_deadline)
@@ -695,7 +701,7 @@ KorailClient.get_product_detail(
 ) -> ProductDetailResponse
 ```
 
-[`get_product_reservations`](#get_product_reservations)가 돌려준 행의 `virtual_reservation_no`와 `reservation_sequence`를 넘깁니다. `reservation_sequence`가 `None`이면 보내지 않습니다.
+[`list_product_reservations`](#list_product_reservations)가 돌려준 행의 `virtual_reservation_no`와 `reservation_sequence`를 넘깁니다. `reservation_sequence`가 `None`이면 보내지 않습니다.
 
 응답에는 금액과 취소 조건(취소 기한, 취소 시 돌려받는 금액, 취소 수수료), 포함된 구성 항목 이름이 들어 있습니다.
 이 응답을 그대로 [`cancel_product_reservation`](#cancel_product_reservation)에 넘겨 취소합니다.
@@ -727,7 +733,7 @@ KorailClient.get_product_detail(
 **예제**
 
 ```python
-reservation = client.get_product_reservations().items[0]
+reservation = client.list_product_reservations().items[0]
 detail = client.get_product_detail(
     reservation.virtual_reservation_no,
     reservation.reservation_sequence,

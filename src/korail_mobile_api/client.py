@@ -542,7 +542,7 @@ class KorailClient:
             wrapped.request_sent = True
             raise wrapped from error
 
-    def get_seat_cars(
+    def list_seat_cars(
         self,
         train: TrainSummary,
         *,
@@ -575,7 +575,7 @@ class KorailClient:
         room_class_code: KorailRoomClassCode = "1",
         seat_attribute_code: str | None = None,
     ) -> SeatInventoryResponse:
-        """한 호차의 좌석 배치와 판매 가능 여부를 조회합니다(같은 세션에서 get_seat_cars 를 먼저 부르십시오)."""
+        """한 호차의 좌석 배치와 판매 가능 여부를 조회합니다(같은 세션에서 list_seat_cars 를 먼저 부르십시오)."""
         self._require_session()
         form = build_seat_inventory_form(
             self.config,
@@ -592,7 +592,7 @@ class KorailClient:
             include_common=False,
         )
 
-    def get_limousine_schedules(
+    def list_airport_bus_schedules(
         self,
         query: LimousineScheduleQuery,
     ) -> LimousineScheduleResponse:
@@ -604,7 +604,7 @@ class KorailClient:
             include_common=False,
         )
 
-    def get_limousine_seat_inventory(
+    def get_airport_bus_seat_inventory(
         self,
         query: LimousineSeatInventoryQuery,
     ) -> LimousineSeatInventoryResponse:
@@ -628,7 +628,7 @@ class KorailClient:
             include_common=False,
         )
 
-    def get_cart_list(
+    def list_cart_items(
         self,
         pnr_no: str = "",
         additional_service_request_no: str = "",
@@ -646,7 +646,7 @@ class KorailClient:
             require_envelope=False,
         )
 
-    def get_deposit_banks(self) -> DepositBankListResponse:
+    def list_deposit_banks(self) -> DepositBankListResponse:
         """입금 가능한 은행의 코드와 이름 목록을 조회합니다."""
         self._require_session()
         # 공통 DTO 가 아닌 개별 필드라 Device·Version·Key·AppVersion 순서이고 lang 이 없습니다.
@@ -661,7 +661,7 @@ class KorailClient:
             omit_empty_fields=False,
         )
 
-    def get_delay_discount_tickets(
+    def list_delay_discount_tickets(
         self,
         departure_date_to: str,
     ) -> DelayDiscountTicketListResponse:
@@ -678,7 +678,7 @@ class KorailClient:
             )
         )
 
-    def get_discount_coupons(
+    def list_discount_coupons(
         self,
         page_no: int = 1,
         pnr_no: str = "",
@@ -692,7 +692,7 @@ class KorailClient:
             raise_on_fail=False,
         )
 
-    def get_korail_point_summary(self) -> KorailPointSummaryResponse:
+    def get_point_summary(self) -> KorailPointSummaryResponse:
         """계정의 포인트·쿠폰·복지 자격 요약을 조회합니다."""
         self._require_session()
         return self._post_read(
@@ -713,7 +713,7 @@ class KorailClient:
             parser=parse_mileage_history_response,
         )
 
-    def get_discount_card_usage_history(
+    def list_discount_card_usages(
         self,
         card_no: str,
     ) -> DiscountCardUsageListResponse:
@@ -739,7 +739,7 @@ class KorailClient:
             parser=parse_discount_card_schedule_response,
         )
 
-    def get_pass_available_dates(
+    def get_pass_availability(
         self,
         kind_code: str,
         period_code: str,
@@ -790,7 +790,7 @@ class KorailClient:
             require_envelope=False,
         )
 
-    def get_crew_request_list(
+    def list_crew_request_reasons(
         self,
         *,
         timestamp_ms: int | None = None,
@@ -820,7 +820,7 @@ class KorailClient:
             include_common=False,
         )
 
-    def get_product_reservations(
+    def list_product_reservations(
         self,
         page_no: int = 1,
         page_size: int = 20,
@@ -901,7 +901,7 @@ class KorailClient:
             parser=parse_ticket_receipt_response,
         )
 
-    def get_reservation_history(self) -> ReservationHistoryResponse:
+    def list_reservations(self) -> ReservationHistoryResponse:
         """로그인 계정에 아직 살아 있는 예약(미결제 홀드 포함)을 조회합니다."""
         self._require_session()
         return self._queued(
@@ -914,7 +914,7 @@ class KorailClient:
             ),
         )
 
-    def get_free_seat_car_info(
+    def get_free_seat_cars(
         self,
         request: FreeSeatCarRequest,
     ) -> FreeSeatCarResponse:
@@ -953,7 +953,7 @@ class KorailClient:
             ),
         )
 
-    def get_merge_seats_inquiry(
+    def get_merge_seat_options(
         self,
         request: MergeSeatsInquiryRequest,
     ) -> MergeSeatsInquiryResponse:
@@ -964,7 +964,7 @@ class KorailClient:
             parser=parse_merge_seats_inquiry_response,
         )
 
-    def get_multi_child_discount_targets(
+    def list_multi_child_discount_targets(
         self,
         departure_date: str,
     ) -> MultiChildDiscountTargetResponse:
@@ -976,7 +976,7 @@ class KorailClient:
             parser=parse_multi_child_discount_target_response,
         )
 
-    def get_customer_trip_info(self) -> CustomerTripInfoResponse:
+    def get_trip_preferences(self) -> CustomerTripInfoResponse:
         """로그인 계정에 저장된 여행 편의설정을 조회합니다."""
         customer_no = self._require_customer_no("customer trip read")
         return self._post_read(
@@ -985,7 +985,7 @@ class KorailClient:
             parser=parse_customer_trip_info_response,
         )
 
-    def get_maas_service_details(
+    def list_maas_services(
         self,
         query: MaasServiceDetailQuery | None = None,
     ) -> MaasServiceDetailListResponse:
@@ -999,7 +999,7 @@ class KorailClient:
             include_common=False,
         )
 
-    def get_trip_change_dates(
+    def list_trip_change_dates(
         self,
         departure_date: str,
     ) -> TripChangeDateResponse:
@@ -1024,7 +1024,7 @@ class KorailClient:
             parser=parse_commuter_info_response,
         )
 
-    def get_price_fare_quote(
+    def get_fare_quote(
         self,
         request: PriceFareQuoteRequest,
     ) -> PriceFareQuoteResponse:
@@ -1062,7 +1062,7 @@ class KorailClient:
             parser=parse_ticket_duplication_check_response,
         )
 
-    def get_pbp_acceptance_specifications(
+    def list_pbp_acceptances(
         self,
         tickets: Sequence[OriginalTicketReference],
     ) -> PbpAcceptanceSpecificationResponse:
@@ -1074,7 +1074,7 @@ class KorailClient:
             parser=parse_pbp_acceptance_specification_response,
         )
 
-    def retrieve_delivered_ticket(self, ticket: PbpAcceptanceTicket) -> DeliveredTicketRetrievalResponse:
+    def recall_delivered_ticket(self, ticket: PbpAcceptanceTicket) -> DeliveredTicketRetrievalResponse:
         """다른 회원에게 전달한 승차권을 회수합니다.
 
         상태를 바꾸므로 실패해도 다시 보내지 말고 승차권 상태를 확인하십시오(실서버 검증 못 함)."""
@@ -1085,7 +1085,7 @@ class KorailClient:
             parser=parse_delivered_ticket_retrieval_response,
         )
 
-    def get_original_ticket_inquiry(
+    def get_original_tickets(
         self,
         tickets: Sequence[OriginalTicketReference],
         *,
@@ -1103,7 +1103,7 @@ class KorailClient:
             parser=parse_original_ticket_inquiry_response,
         )
 
-    def get_self_seat_change_info(
+    def get_self_seat_change_options(
         self,
         request: SelfSeatChangeInfoRequest,
     ) -> SelfSeatChangeInfoResponse:
@@ -1115,7 +1115,7 @@ class KorailClient:
             parser=parse_self_seat_change_info_response,
         )
 
-    def get_recent_delivery_history(self) -> RecentDeliveryHistoryResponse:
+    def list_recent_delivery_recipients(self) -> RecentDeliveryHistoryResponse:
         """최근에 승차권을 전달했던 수령자 목록을 조회합니다."""
         customer_no = self._require_customer_no("delivery history read")
         return self._post_read(
@@ -1142,7 +1142,7 @@ class KorailClient:
         detail = self.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no))
         return parse_existing_reservation_hold_response(detail.raw, pnr_no=pnr_no)
 
-    def get_refund_commission(
+    def get_refund_fee(
         self,
         ticket: OriginalTicketReference,
         companion: RefundCompanion = RefundCompanion(),
@@ -1204,7 +1204,7 @@ class KorailClient:
             parser=parse_delay_return_receipt_response,
         )
 
-    def get_self_checkin_info(self, detail: RefundTicketDetailResponse) -> SelfCheckInInfoResponse:
+    def get_self_checkin(self, detail: RefundTicketDetailResponse) -> SelfCheckInInfoResponse:
         """get_refund_ticket_detail 결과로 셀프 체크인한 자유석 정보를 조회합니다."""
         self._require_session()
         return self._post_read(
@@ -1248,7 +1248,7 @@ class KorailClient:
             parser=parse_self_checkin_cancel_response,
         )
 
-    def get_common_code(
+    def get_common_codes(
         self,
         code: str | Sequence[str] = "",
     ) -> BaseKorailResponse:
@@ -1295,7 +1295,7 @@ class KorailClient:
             require_envelope=False,
         )
 
-    def get_maas_menu_list(
+    def list_maas_menus(
         self,
         *,
         pnr_no: str | None = None,
@@ -1317,7 +1317,7 @@ class KorailClient:
             include_common=include_common,
         )
 
-    def get_maas_station_data(
+    def list_maas_stations(
         self,
         additional_service_code: str,
     ) -> StationDataResponse:
@@ -1330,7 +1330,7 @@ class KorailClient:
             require_envelope=False,
         )
 
-    def get_station_info(self) -> StationInfoResponse:
+    def get_station_list_version(self) -> StationInfoResponse:
         """역 데이터의 판본과 수록 역 수를 빈 POST로 조회합니다."""
         return self._post_read(
             "/classes/com.korail.mobile.common.stationinfo",
@@ -1340,7 +1340,7 @@ class KorailClient:
             require_envelope=False,
         )
 
-    def get_station_data(self) -> StationDataResponse:
+    def list_stations(self) -> StationDataResponse:
         """전체 역 목록을 코드·이름·좌표까지 한 번에 받아 옵니다."""
         return self._post_read(
             "/classes/com.korail.mobile.common.stationdata",
@@ -1498,7 +1498,7 @@ class KorailClient:
     def _cached_station_data(self, *, refresh: bool = False) -> StationDataResponse:
         # 간편 API의 역 검사와 숫자 역 코드 해석이 같은 목록을 한 번만 받아 씁니다.
         if self._station_data is None or refresh:
-            self._station_data = self.get_station_data()
+            self._station_data = self.list_stations()
             self._station_names = None
         return self._station_data
 
@@ -1525,7 +1525,7 @@ class KorailClient:
             include_common=False,
         )
 
-    def get_transfer_stations(
+    def list_transfer_stations(
         self,
         departure_station_code: str,
         arrival_station_code: str,
@@ -1537,7 +1537,7 @@ class KorailClient:
             parser=parse_transfer_station_list_response,
         )
 
-    def get_ticket_list(
+    def list_tickets(
         self,
         page_no: int = 1,
         *,
@@ -1571,7 +1571,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """열차 한 편에 실제 미결제 예약(홀드)을 만듭니다.
 
-        결제·취소는 호출자 몫입니다. 응답을 읽지 못해도 홀드가 잡혔을 수 있으니 다시 보내지 말고 get_reservation_history 로 확인하십시오."""
+        결제·취소는 호출자 몫입니다. 응답을 읽지 못해도 홀드가 잡혔을 수 있으니 다시 보내지 말고 list_reservations 로 확인하십시오."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_reservation_form(
@@ -1593,7 +1593,7 @@ class KorailClient:
         )
         return _hold_for_job(hold, job_type)
 
-    def confirm_standby_hold(
+    def set_standby_options(
         self,
         hold: ReservationHoldResponse,
         *,
@@ -1627,7 +1627,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """탑승 순서의 열차 두 편을 한 PNR 로 홀드합니다.
 
-        결제·취소는 호출자 몫이며, 실패해도 다시 보내지 말고 get_reservation_history 로 확인하십시오."""
+        결제·취소는 호출자 몫이며, 실패해도 다시 보내지 말고 list_reservations 로 확인하십시오."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_transfer_reservation_form(
@@ -1679,7 +1679,7 @@ class KorailClient:
             parser=parse_reservation_hold_response,
         )
 
-    def reserve_limousine(
+    def reserve_airport_bus(
         self,
         schedule: LimousineSchedule,
         seat_nos: Sequence[str],
@@ -1688,7 +1688,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """공항버스 좌석을 실제로 미결제 예약합니다.
 
-        결제·취소는 호출자 몫이며, 실패해도 다시 보내지 말고 get_reservation_history 로 확인하십시오."""
+        결제·취소는 호출자 몫이며, 실패해도 다시 보내지 말고 list_reservations 로 확인하십시오."""
         self._require_session("reservation requires")
         form = build_limousine_reservation_form(self.config, schedule, seat_nos, passengers=passengers)
         return self._mutation(
@@ -1752,7 +1752,7 @@ class KorailClient:
         latitude: str | None = None,
         longitude: str | None = None,
     ) -> RefundTicketResponse:
-        """get_refund_commission 으로 확인한 발권 승차권 한 장을 환불합니다.
+        """get_refund_fee 로 확인한 발권 승차권 한 장을 환불합니다.
 
         실제 환불과 수수료가 발생하며 자동 재전송하지 않으니, 실패하면 승차권 상태를 확인하십시오."""
         self._require_session("refund requires")
@@ -1768,7 +1768,7 @@ class KorailClient:
         )
         return self._mutation(route, form, parser=parse_refund_ticket_response)
 
-    def verify_station_ticket_refund(
+    def check_station_ticket_refund(
         self,
         request: StationRefundVerificationRequest,
     ) -> StationRefundVerificationResponse:
@@ -1780,7 +1780,7 @@ class KorailClient:
             parser=lambda raw: self._parse_mutation_response(raw, parse_station_refund_verification_response),
         )
 
-    def execute_station_ticket_refund(
+    def refund_station_ticket(
         self,
         request: StationRefundExecutionRequest,
     ) -> StationRefundExecutionResponse:

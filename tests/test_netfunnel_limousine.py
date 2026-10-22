@@ -567,7 +567,7 @@ EXPECTED_GATES = {
     "reservation_view": ("act_21", True),
 }
 EXPECTED_GATED_METHODS = {
-    "get_reservation_history",
+    "list_reservations",
     "get_seat_assignment_schedule",
     "search_trains",
     "search_transfer_trains",
@@ -639,7 +639,7 @@ def test_disabled_queue_sends_directly(scripted_client_factory, f8_logged_in_ses
         config=KorailConfig(base_url="https://api.invalid", netfunnel_enabled=False),
         session=f8_logged_in_session,
     )
-    assert client.get_reservation_history().str_result == "SUCC"
+    assert client.list_reservations().str_result == "SUCC"
     assert client.netfunnel is None and not pending
     assert [request.url.path for request in requests] == [
         "/classes/com.korail.mobile.reservation.ReservationView"
@@ -1164,9 +1164,9 @@ RESERVATION_REQUIRED = (
 @pytest.mark.parametrize(
     "method,name",
     [
-        *(("get_limousine_schedules", name) for name in SCHEDULE_QUERY_REQUIRED),
-        *(("get_limousine_seat_inventory", name) for name in SEAT_QUERY_REQUIRED),
-        *(("reserve_limousine", name) for name in RESERVATION_REQUIRED),
+        *(("list_airport_bus_schedules", name) for name in SCHEDULE_QUERY_REQUIRED),
+        *(("get_airport_bus_seat_inventory", name) for name in SEAT_QUERY_REQUIRED),
+        *(("reserve_airport_bus", name) for name in RESERVATION_REQUIRED),
     ],
 )
 def test_missing_required_identifier_never_sends(
@@ -1176,10 +1176,10 @@ def test_missing_required_identifier_never_sends(
     The query types and the reservation builder now all refuse None/blank values before anything is sent."""
     client, requests = api_factory({"strResult": "SUCC"})
     with pytest.raises(KorailInvalidInputError, match=name):
-        if method == "reserve_limousine":
-            client.reserve_limousine(replace(schedule, **{name: value}), ["SYNTHETIC-SEAT-A"])
+        if method == "reserve_airport_bus":
+            client.reserve_airport_bus(replace(schedule, **{name: value}), ["SYNTHETIC-SEAT-A"])
         else:
-            query = schedule_query if method == "get_limousine_schedules" else seat_query
+            query = schedule_query if method == "list_airport_bus_schedules" else seat_query
             getattr(client, method)(replace(query, **{name: value}))
     assert requests == []
 
@@ -1227,7 +1227,7 @@ def test_schedule_client_wire_and_parse_no_queue(api_factory, schedule_query) ->
     and reservation_sale_division_code are omitted."""
     raw = {"strResult": "SUCC", "trainList": [{"trnNo": "99001", "rcvdPrc": "00000000000100"}]}
     client, requests = api_factory(raw, authenticated=False)
-    result = client.get_limousine_schedules(schedule_query)
+    result = client.list_airport_bus_schedules(schedule_query)
     assert len(requests) == 1 and requests[0].method == "POST"
     assert requests[0].url.path == "/classes/com.korail.mobile.lmu.scdlQry.do"
     assert decoded_form(requests[0]) == {k: v for k, v in expected_schedule_form().items() if v != ""}
@@ -1238,7 +1238,7 @@ def test_seat_client_wire_and_parse_no_queue(api_factory, seat_query) -> None:
     """NetworkApi.java:269-271; AirportBusSeatMapViewModel.java:843-865 provides this DTO."""
     raw = {"strResult": "SUCC", "seatList": [{"seat_no": "SYNTHETIC-SEAT-A"}], "layout_type": 7}
     client, requests = api_factory(raw, authenticated=False)
-    result = client.get_limousine_seat_inventory(seat_query)
+    result = client.get_airport_bus_seat_inventory(seat_query)
     assert len(requests) == 1 and requests[0].method == "POST"
     assert requests[0].url.path == "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do"
     assert decoded_form(requests[0]) == expected_seat_form()
@@ -1254,7 +1254,7 @@ def test_reserve_client_full_wire_no_queue(api_factory, schedule) -> None:
         "h_jrny_cnt": "1",
     }
     client, requests = api_factory(raw)
-    result = client.reserve_limousine(
+    result = client.reserve_airport_bus(
         schedule, ["SYNTHETIC-SEAT-A", "SYNTHETIC-SEAT-B"], passengers=KorailPassengerCounts(adult=1, child=1)
     )
     assert len(requests) == 1 and requests[0].method == "POST"
@@ -1266,7 +1266,7 @@ def test_reserve_client_full_wire_no_queue(api_factory, schedule) -> None:
 def test_reserve_client_requires_session_before_send(api_factory, schedule) -> None:
     client, requests = api_factory({"strResult": "SUCC"}, authenticated=False)
     with pytest.raises(KorailAuthError):
-        client.reserve_limousine(schedule, ["SYNTHETIC-SEAT-A"])
+        client.reserve_airport_bus(schedule, ["SYNTHETIC-SEAT-A"])
     assert requests == []
 
 
@@ -1274,7 +1274,9 @@ def test_duplicate_rejected_before_any_request(api_factory, schedule) -> None:
     """AirportBusSeatMapViewModel.java:1996-2038 uniqueness must hold before an actual hold is sent."""
     client, requests = api_factory({"strResult": "SUCC"})
     with pytest.raises(KorailProtocolError):
-        client.reserve_limousine(schedule, ["SYNTHETIC-SEAT-A"] * 2, passengers=KorailPassengerCounts(adult=2))
+        client.reserve_airport_bus(
+            schedule, ["SYNTHETIC-SEAT-A"] * 2, passengers=KorailPassengerCounts(adult=2)
+        )
     assert requests == []
 
 
@@ -1287,7 +1289,7 @@ def test_reservation_parser_failure_preserves_raw_without_retry(api_factory, sch
     }
     client, requests = api_factory(raw)
     with pytest.raises(KorailProtocolError) as raised:
-        client.reserve_limousine(schedule, ["SYNTHETIC-SEAT-A"])
+        client.reserve_airport_bus(schedule, ["SYNTHETIC-SEAT-A"])
     assert raised.value.raw == raw
     assert hasattr(raised.value, "parser_raw") and len(requests) == 1
 
@@ -1295,7 +1297,7 @@ def test_reservation_parser_failure_preserves_raw_without_retry(api_factory, sch
 def test_reservation_transport_failure_is_not_retried(api_factory, schedule) -> None:
     client, requests = api_factory(httpx.ReadTimeout("synthetic reservation timeout"))
     with pytest.raises(KorailTransportError):
-        client.reserve_limousine(schedule, ["SYNTHETIC-SEAT-A"])
+        client.reserve_airport_bus(schedule, ["SYNTHETIC-SEAT-A"])
     assert len(requests) == 1
 
 
@@ -1303,7 +1305,7 @@ def test_read_fail_envelope_preserves_raw(api_factory, schedule_query) -> None:
     raw = {"strResult": "FAIL", "h_msg_cd": "SYNTHETIC-ERROR", "h_msg_txt": "synthetic"}
     client, requests = api_factory(raw)
     with pytest.raises(KorailApiError) as raised:
-        client.get_limousine_schedules(schedule_query)
+        client.list_airport_bus_schedules(schedule_query)
     assert raised.value.raw == raw and len(requests) == 1
 
 
