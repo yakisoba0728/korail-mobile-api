@@ -3,7 +3,7 @@
 이 가이드는 [`KorailConfig`][korail_mobile_api.config.KorailConfig]로 클라이언트의 동작을 바꾸는 방법을 설명합니다.
 설정 필드 전체, DynaPath 토큰, 대기열(NetFunnel), 언어 필드, 프록시, 환경변수로 설정을 만드는 방법을 차례로 다룹니다.
 설정을 넘기지 않으면 코레일+ 앱 7.0.8에서 확인한 기본 요청값(`AppVersion=7.0.8`, API `Version=250601003`)을 씁니다.
-2026-10-23 현재 기본값 요청이 서버에서 `-8204`로 거절된다는 보고가 있으니 먼저 [요청 버전](#request-version)을 확인하세요.
+`-8204` 보고와 2026-10-23 확인 결과는 [요청 버전](#request-version)에 있습니다.
 
 ## 설정 적용
 
@@ -71,9 +71,9 @@ API 요청의 `User-Agent`와 대기열 요청의 `User-Agent`는 서로 다른 
     2026-10-21부터 익명 열차 조회를 포함한 모든 요청이 `-8204`("원활한 예매 및 결제 서비스를 위해 최신 버전으로 업데이트해 주세요")로 실패한다는 보고가 있습니다([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)).
     `2!` 기본 헤더 도입 전 `main`에서 기본값과 `app_version="7.0.10"`만 바꾼 설정(API `Version`은 기본값) 모두 실패했습니다.
     기록된 실서버 성공은 2026-10-23 `AppVersion=7.0.10`·API `Version=250722001`·기본 `2!` 헤더 조합의 병합 전 작업 트리 관측 1회뿐입니다([기록](../verification-7010.md#diagnostic-20261023)).
-    2.6.2의 기본 조합(`2!`·7.0.8·250601003)은 실서버에서 시도하지 않았습니다.
+    2026-10-23 08:16 KST에 PyPI의 2.6.2로 로그인 없는 직통 열차 조회(서울→부산)를 실서버에서 확인했습니다. 기본 조합(`2!`·7.0.8·250601003)과 `KorailConfig(app_version="7.0.10", version="250722001")` 모두 `SUCC`/`IRG000000`이었습니다. ([기록](../status.md#live-check-262))
 
-두 값을 함께 바꿔 시도할 수 있지만 동작을 보장하지 않습니다. `app_version`은 API `Version`을 바꾸지 않으므로 각각 지정합니다.
+기본값으로 실패할 때만 두 값을 함께 바꿔 보세요. 동작을 보장하지 않습니다. `app_version`은 API `Version`을 바꾸지 않으므로 각각 지정합니다.
 
 ```python
 from korail_mobile_api import KorailClient, KorailConfig
