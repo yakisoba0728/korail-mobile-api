@@ -6,7 +6,7 @@
 from korail_mobile_api import TrainSearchQuery, KorailPassengerCounts
 ```
 
-입력·응답 모델은 모두 고정된(frozen) dataclass이며 키워드 인자로만 만듭니다. 서버가 보낸 원본은 `raw` 필드에 그대로 남지만
+입력·응답 모델은 모두 고정된(frozen) dataclass이며 키워드 인자로만 만듭니다. 서버가 보낸 원문은 `raw` 필드에 그대로 남지만
 `repr()`에는 나오지 않습니다.
 
 | 페이지 | 내용 |

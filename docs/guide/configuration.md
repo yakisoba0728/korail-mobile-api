@@ -58,7 +58,7 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 | `disable_dynapath` | `bool` | `False` | `True`이면 DynaPath 토큰을 붙이지 않습니다. |
 | `proxy` | `str` \| `None` | `None` | API 요청과 대기열 요청을 함께 보낼 프록시 URL입니다. [프록시](#proxy)를 참고하세요. |
 
-2.6.2부터 `timeout`, `netfunnel_timeout`, `netfunnel_wait_limit`가 위 범위를 벗어나면(음수, 무한대, `NaN`, 두 제한 시간의 0 등) 설정을 만들 때 `ValueError`로 거절합니다.
+`timeout`, `netfunnel_timeout`, `netfunnel_wait_limit`가 위 범위를 벗어나면(음수, 무한대, `NaN`, 두 제한 시간의 0 등) 설정을 만들 때 `ValueError`로 거절합니다.
 
 `device`, `version`, `app_version`, `key`, `user_agent`를 바꾸면 앱과 다른 요청이 됩니다. 기존 `Version`과 새 `AppVersion`은 서로 다른 필드입니다.
 API 요청의 `User-Agent`와 대기열 요청의 `User-Agent`는 서로 다른 설정입니다.
@@ -85,9 +85,9 @@ finally:
     client.close()
 ```
 
-[`build_config_from_env`](#from-env)를 쓴다면 `KORAIL_APP_VERSION`·`KORAIL_API_VERSION` 환경변수로 같은 값을 넣을 수 있습니다(2.6.2부터).
-서버가 `-8204`로 응답하면 2.6.2부터 [`KorailAppUpdateRequiredError`][korail_mobile_api.KorailAppUpdateRequiredError]가 발생하며 서버 메시지는 그대로 남습니다.
-[정적 검토 범위와 미확정 항목](../verification-7010.md)도 참고하세요.
+[`build_config_from_env`](#from-env)를 쓴다면 `KORAIL_APP_VERSION`·`KORAIL_API_VERSION` 환경변수로 같은 값을 넣을 수 있습니다.
+서버가 `-8204`로 응답하면 [`KorailAppUpdateRequiredError`][korail_mobile_api.KorailAppUpdateRequiredError]가 발생하며 서버 메시지는 그대로 남습니다.
+[정적 검토 범위와 미확인 항목](../verification-7010.md)도 참고하세요.
 
 ### 기기값 프로파일
 
@@ -96,7 +96,7 @@ finally:
 ## DynaPath {#dynapath}
 
 DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-token`)입니다. 기본으로 켜져 있습니다.
-2.6.2부터 기본 `KorailClient()`·`Korail()`은 다음 SDK 2.0.1 native-unavailable 진단을 사용합니다.
+기본 `KorailClient()`·`Korail()`은 다음 SDK 2.0.1 native-unavailable 진단을 사용합니다.
 
 ```text
 2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus
@@ -106,7 +106,7 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 
 토큰을 붙이는 경로는 [`DynapathConfig`][korail_mobile_api.DynapathConfig]의 `allowlist_paths`이며, 기본값은 다음 여섯 경로입니다.
 앱이 토큰을 붙이는 경로 목록과 같은지는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
-2.6.2부터 응답의 DynaPath 차단 판정도 내장 목록이 아니라 설정의 `allowlist_paths`(직접 지정한 목록 포함)를 따릅니다.
+응답의 DynaPath 차단 판정도 내장 목록이 아니라 설정의 `allowlist_paths`(직접 지정한 목록 포함)를 따릅니다.
 
 - `/classes/com.korail.mobile.login.Login`
 - `/classes/com.korail.mobile.seatMovie.ScheduleView`
@@ -151,7 +151,7 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 
 `token_provider`는 토큰을 붙이는 경로의 요청마다 [`DynapathRequestContext`][korail_mobile_api.DynapathRequestContext](`method`, `path`, `url`, `device`, `version`, `key`, `user_agent`, `device_name`, `os_version`)를 받아 토큰 문자열을 돌려주는 함수입니다.
 `None`을 돌려주면 헤더를 붙이지 않습니다. 함수가 예외를 발생시키면 요청을 보내지 않고 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
-2.6.2부터 문자열이 아니거나 ASCII가 아닌 값을 돌려줘도 요청을 보내지 않고 `KorailProtocolError`를 발생시킵니다.
+문자열이 아니거나 ASCII가 아닌 값을 돌려줘도 요청을 보내지 않고 `KorailProtocolError`를 발생시킵니다.
 
 ### 끄기
 
@@ -302,8 +302,8 @@ v1 전용 `KORAIL_DYNAPATH_AS_VALUE`는 더 이상 읽지 않습니다. 계정 I
 | `KORAIL_DEVICE_HEIGHT` | 아니요 | `3120` | `device_height` |
 | `KORAIL_ANDROID_SDK_INT` | 아니요 | `37` | `android_sdk_int` |
 | `KORAIL_PROXY` | 아니요 | 없음(비어 있어도 지정하지 않음) | `proxy` |
-| `KORAIL_APP_VERSION` | 아니요 | `KorailConfig` 기본값(`"7.0.8"`) | `app_version`(공통 필드 `AppVersion`). 2.6.2부터 읽습니다. |
-| `KORAIL_API_VERSION` | 아니요 | `KorailConfig` 기본값(`"250601003"`) | `version`(공통 필드 `Version`). 2.6.2부터 읽습니다. |
+| `KORAIL_APP_VERSION` | 아니요 | `KorailConfig` 기본값(`"7.0.8"`) | `app_version`(공통 필드 `AppVersion`) |
+| `KORAIL_API_VERSION` | 아니요 | `KorailConfig` 기본값(`"250601003"`) | `version`(공통 필드 `Version`) |
 
 두 버전 환경변수는 `build_config_from_env()`만 읽으며 `KorailConfig()`나 `KorailClient()`는 읽지 않습니다. 이 함수는 위 필수 기기 환경변수도 요구하므로, 버전만 바꾸려면 [`KorailConfig(app_version=..., version=...)`](#request-version)를 쓰세요.
 필수 환경변수가 없거나 비어 있으면 `RuntimeError`가 발생합니다. 정수 필드에 숫자가 아닌 값이나 올바르지 않은 프록시 URL을 넣으면 `ValueError`가 발생합니다.

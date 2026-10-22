@@ -2,8 +2,6 @@
 
 라이브러리가 발생시키는 예외입니다. 모두 `KorailApiError`를 상속합니다.
 
-`display_message`, 메시지 사전 조회와 계정 잠금·요청 제한·처리 중·기처리 예외는 2.5.0부터 제공합니다.
-
 ::: korail_mobile_api.KorailApiError
 
 ::: korail_mobile_api.KorailTransportError

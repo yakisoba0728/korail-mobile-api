@@ -453,7 +453,7 @@ if sellable:
 KorailClient.get_free_seat_cars(request: FreeSeatCarRequest) -> FreeSeatCarResponse
 ```
 
-[`FreeSeatCarRequest`][korail_mobile_api.FreeSeatCarRequest]에 조회 결과 행의 운행일, 열차 번호, 출발·도착역 구성 순번과 운행 순번을 옮겨 넣습니다. 3.0부터 `FreeSeatCarRequest.from_train(train)`이 이 값을 복사하며 빠진 값이 있으면 거절합니다. 열차 번호는 다섯 자리가 되도록 앞에 0을 채워 보냅니다.
+[`FreeSeatCarRequest`][korail_mobile_api.FreeSeatCarRequest]에 조회 결과 행의 운행일, 열차 번호, 출발·도착역 구성 순번과 운행 순번을 옮겨 넣습니다. `FreeSeatCarRequest.from_train(train)`이 이 값을 복사하며 빠진 값이 있으면 거절합니다. 열차 번호는 다섯 자리가 되도록 앞에 0을 채워 보냅니다.
 자유석 호차는 숫자 목록이 아니라 `car_no`에 안내 문자열로 오며, 호차가 여러 개이면 한 문자열에 함께 들어 있습니다.
 자유석 칸이 없는 열차는 예외 없이 `car_no`가 `None`인 응답이 옵니다(결과 코드 `IRZ000005`).
 실서버에서는 조회 결과 행의 `free_car_count`가 `"000"`이 아닌 열차에만 자유석 호차가 있었습니다.
@@ -575,7 +575,7 @@ KorailClient.get_merge_seat_options(
 
 [병합 예약](../concepts/glossary.md)에서 입석 구간의 첫 홀드를 만든 뒤, 이어 붙일 좌석 구간을 찾을 때 씁니다.
 [`MergeSeatsInquiryRequest`][korail_mobile_api.MergeSeatsInquiryRequest]의 `boarding_datetime`과 `run_datetime`에는 출발일과 출발 시각을 이어 붙인 값(`YYYYMMDDHHMMSS`)을 넣고, 역은 이름으로 넘깁니다.
-3.0부터 `MergeSeatsInquiryRequest.from_train(train, *, selected_station_name=None, room_class_code="1", seat_attribute_code=None, passenger_count=1)`이 첫 홀드 열차에서 이 값을 복사합니다. `seat_attribute_code`가 `None`이면 열차의 좌석 속성, 그것도 없으면 `015`를 씁니다.
+`MergeSeatsInquiryRequest.from_train(train, *, selected_station_name=None, room_class_code="1", seat_attribute_code=None, passenger_count=1)`이 첫 홀드 열차에서 이 값을 복사합니다. `seat_attribute_code`가 `None`이면 열차의 좌석 속성, 그것도 없으면 `015`를 씁니다.
 열차 번호는 다섯 자리가 되도록 앞에 0을 채워 보내고, `selected_station_name`이 `None`이면 보내지 않습니다.
 요청 객체는 만들 때 `passenger_count`가 1~9의 정수인지 검사하고, 아니면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
 

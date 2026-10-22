@@ -8,7 +8,7 @@
 
 이미 앱이나 다른 도구에서 같은 계정으로 예약했다면 로그인 후 `client.get_reservation_hold(pnr_no)`로
 기존 예약의 결제용 홀드를 가져올 수 있습니다. 새 예약을 만들 필요는 없습니다.
-2.3.0부터 제공하며 사용 예제와 검증 조건은 [기존 예약 가져오기](payments.md#existing-reservation)에 있습니다.
+사용 예제와 검증 조건은 [기존 예약 가져오기](payments.md#existing-reservation)에 있습니다.
 
 ## 홀드와 결제 기한 {#hold}
 
@@ -17,7 +17,7 @@
 
 | 필드 | 뜻 |
 |---|---|
-| `pnr_no` | 예약 번호(PNR)입니다. 예약 상세 조회와 장바구니에 씁니다. |
+| `pnr_no` | 예약번호(PNR)입니다. 예약 상세 조회와 장바구니에 씁니다. |
 | `received_amount` | 결제할 금액입니다. 카드 결제는 이 금액으로 합니다. |
 | `payment_deadline_date`, `payment_deadline_time` | 결제 기한의 날짜와 시각입니다. 앱은 두 값을 이어 붙여 표시합니다. |
 | `payable` | 결제할 수 있는 홀드인지 여부입니다. 예약대기 홀드는 `False`입니다. |
@@ -26,8 +26,6 @@
 `payment_deadline_message`는 이름과 달리 결제 기한 값이 아닙니다. `total_price`는 표시용 합계이므로 결제 금액으로 쓰지 마세요.
 
 ## 승객 구성 {#passengers}
-
-청소년 예약 사전 거절과 `ERR299943` 오류 분류 변경은 2.5.0부터 적용합니다.
 
 [`KorailPassengerCounts`][korail_mobile_api.KorailPassengerCounts]로 승객 종류별 인원을 정합니다. 예약 메서드에 넘기지 않으면 어른 1명입니다.
 

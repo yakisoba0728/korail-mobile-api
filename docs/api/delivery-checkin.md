@@ -9,7 +9,7 @@
 
 1. [`list_recent_delivery_recipients`](#list_recent_delivery_recipients)로 최근에 승차권을 전달했던 수령자를 확인합니다.
 2. [`list_pbp_acceptances`](#list_pbp_acceptances)로 전달한 승차권의 여정·좌석·수령자 내역을 조회합니다.
-3. 회수하려면 2단계에서 받은 승차권 중 첫 여정의 대리수령 예약 번호(`pbp_reservation_no`)마다 한 장을 [`recall_delivered_ticket`](#recall_delivered_ticket)에 넘깁니다.
+3. 회수하려면 2단계에서 받은 승차권 중 첫 여정의 대리수령 예약번호(`pbp_reservation_no`)마다 한 장을 [`recall_delivered_ticket`](#recall_delivered_ticket)에 넘깁니다.
 
 셀프 체크인 흐름:
 
@@ -146,7 +146,7 @@ KorailClient.list_pbp_acceptances(
 **반환값**
 
 [`PbpAcceptanceSpecificationResponse`][korail_mobile_api.PbpAcceptanceSpecificationResponse] — `tickets`에 승차권별 내역이 [`PbpAcceptanceTicket`][korail_mobile_api.PbpAcceptanceTicket]으로 들어 있습니다.
-승차권마다 PNR과 반환 식별자, 여정 목록([`PbpAcceptanceJourney`][korail_mobile_api.PbpAcceptanceJourney])이 있고, 여정마다 수령자 이름·전화번호, 대리수령 예약 번호(`pbp_reservation_no`), 회수 가능 표시(`withdrawal_possible_flag`), 좌석 목록([`PbpAcceptanceSeat`][korail_mobile_api.PbpAcceptanceSeat])이 있습니다.
+승차권마다 PNR과 반환 식별자, 여정 목록([`PbpAcceptanceJourney`][korail_mobile_api.PbpAcceptanceJourney])이 있고, 여정마다 수령자 이름·전화번호, 대리수령 예약번호(`pbp_reservation_no`), 회수 가능 표시(`withdrawal_possible_flag`), 좌석 목록([`PbpAcceptanceSeat`][korail_mobile_api.PbpAcceptanceSeat])이 있습니다.
 좌석의 `car_no`는 정수입니다. 이 필드들은 모두 필수이므로 하나라도 없으면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
 
 **예외**
@@ -185,7 +185,7 @@ KorailClient.recall_delivered_ticket(
 ) -> DeliveredTicketRetrievalResponse
 ```
 
-[`list_pbp_acceptances`](#list_pbp_acceptances)가 반환한 승차권 한 장을 받아, 첫 여정의 대리수령 예약 번호(`pbp_reservation_no`)와 승차권의 PNR을 한 쌍으로 보냅니다.
+[`list_pbp_acceptances`](#list_pbp_acceptances)가 반환한 승차권 한 장을 받아, 첫 여정의 대리수령 예약번호(`pbp_reservation_no`)와 승차권의 PNR을 한 쌍으로 보냅니다.
 여정이 여러 개여도 첫 여정의 값만 씁니다. 라이브러리는 여정의 `withdrawal_possible_flag`를 검사하지 않습니다.
 실패해도 자동으로 다시 보내지 않습니다. 7.0.8에서 조회한 대리수령 대상 승차권 2장은 모두 회수 가능 플래그가 `N`이어서 실제 회수 요청은 보내지 않았습니다.
 

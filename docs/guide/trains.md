@@ -52,7 +52,6 @@ finally:
 
 청소년 인원은 검색 호환용입니다. 일반 운임 예약에는 `adult` 인원으로 지정해야 하며,
 열차 예약에서 `KorailPassengerCounts.teenager > 0`은 요청 전에 거절합니다.
-이 사전 거절은 2.5.0부터 적용합니다.
 청소년드림 할인 상품과의 차이는 [예약 승객 구성](reservations.md#passengers)에 설명했습니다.
 
 ### 역 이름과 역 코드 {#stations}
@@ -302,7 +301,7 @@ finally:
 ## 예매 전 운임 조회 {#fare}
 
 [`get_fare_quote`](../api/trains.md#get_fare_quote)는 열차 한 편이나 환승 두 구간의 운임을 예매 전에 조회합니다.
-2.6.1부터 [`PriceFareLeg.from_train()`][korail_mobile_api.PriceFareLeg.from_train]으로 조회 결과의 식별값을 옮길 수 있습니다. 이전 버전에서는 같은 필드를 직접 지정해야 합니다. 팩토리는 운행일·역·종별·좌석 속성을 추측하지 않고, 응답의 상품 번호도 보존합니다.
+[`PriceFareLeg.from_train()`][korail_mobile_api.PriceFareLeg.from_train]으로 조회 결과의 식별값을 옮길 수 있습니다. 팩토리는 운행일·역·종별·좌석 속성을 추측하지 않고, 응답의 상품 번호도 보존합니다.
 
 ```python
 from datetime import datetime, timedelta, timezone
@@ -333,4 +332,4 @@ finally:
 ## 다음 단계 {#next}
 
 - [예약](reservations.md): 조회한 열차로 홀드를 만들고, 확인하고, 취소하기
-- [오류 처리](errors.md): 조회에서 나는 예외와 응답 원본 확인
+- [오류 처리](errors.md): 조회에서 나는 예외와 응답 원문 확인
