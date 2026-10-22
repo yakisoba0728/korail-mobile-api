@@ -6,13 +6,12 @@ import sys
 from copy import deepcopy
 from dataclasses import replace
 from inspect import Parameter, signature
-from urllib.parse import parse_qs
 
 import httpx
 import pytest
+from conftest import synthetic_config, wire_form
 
 from korail_mobile_api import (
-    KorailConfig,
     KorailProtocolError,
     KorailTransportError,
     OriginalTicketReference,
@@ -71,12 +70,7 @@ def _refund_raw():
 def binding_client(scripted_client_factory, f8_logged_in_session):
     """A strict two-route transport: every extra lookup or mutation is observable."""
     recorded = []
-    config = KorailConfig(
-        base_url="https://api.example.invalid",
-        key="SYNTH-KEY",
-        netfunnel_enabled=False,
-        disable_dynapath=True,
-    )
+    config = synthetic_config(key="SYNTH-KEY", netfunnel_enabled=False, disable_dynapath=True)
 
     def make(*, fee_raw=None, refund_reply=None):
         fee = _fee_raw() if fee_raw is None else fee_raw
@@ -94,10 +88,6 @@ def binding_client(scripted_client_factory, f8_logged_in_session):
     for requests in recorded:
         assert all(request.method == "POST" for request in requests)
         assert [request.url.path for request in requests] == paths[: len(requests)]
-
-
-def _form(request):
-    return parse_qs(request.content.decode(), keep_blank_values=True)
 
 
 def _assert_private_error(error, *extra):
@@ -131,9 +121,9 @@ def test_matching_lookup_and_refund_make_exactly_two_http_requests(binding_clien
     assert len(requests) == 2
     assert requests[0].url.path.endswith("refunds.CommissionView")
     assert requests[1].url.path.endswith("refunds.RefundsRequest")
-    assert _form(requests[0])["h_orgtk_ret_sale_dt"] == ["1017"]
-    assert _form(requests[1])["h_orgtk_sale_dt"] == ["20991019"]
-    assert _form(requests[1])["tk_ret_tms_dv_cd"] == ["SYNTH-TIMES"]
+    assert wire_form(requests[0])["h_orgtk_ret_sale_dt"] == ["1017"]
+    assert wire_form(requests[1])["h_orgtk_sale_dt"] == ["20991019"]
+    assert wire_form(requests[1])["tk_ret_tms_dv_cd"] == ["SYNTH-TIMES"]
     assert raw == unchanged
     assert commission.raw == unchanged
 
@@ -200,7 +190,7 @@ def test_refund_mileage_comparison_follows_app_int32_rules(binding_client, usabl
     if allowed:
         assert client.refund(_ticket(), commission=commission, settle_mileage=True).str_result == "SUCC"
         assert len(requests) == 2
-        assert _form(requests[1])["h_mlg_stl"] == ["Y"]
+        assert wire_form(requests[1])["h_mlg_stl"] == ["Y"]
     else:
         with pytest.raises(KorailProtocolError, match="mileage is below the fee"):
             client.refund(_ticket(), commission=commission, settle_mileage=True)
@@ -354,9 +344,9 @@ def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion
 
     assert client.refund(ticket, commission=commission).str_result == "SUCC"
     assert len(requests) == 2
-    assert _form(requests[0])["h_comp_nm"] == [companion.name]
-    assert _form(requests[0])["h_comp_cert_no"] == [companion.certificate_no]
-    assert _form(requests[1])["h_orgtk_sale_dt"] == ["20991019"]
+    assert wire_form(requests[0])["h_comp_nm"] == [companion.name]
+    assert wire_form(requests[0])["h_comp_cert_no"] == [companion.certificate_no]
+    assert wire_form(requests[1])["h_orgtk_sale_dt"] == ["20991019"]
 
 
 def test_new_ticket_identity_fields_are_keyword_only_and_hidden_from_repr(binding_client):
@@ -425,8 +415,8 @@ def test_ticket_facade_forwards_companion_and_preserves_binding_checks(binding_c
         assert tickets.refund(ticket, commission=commission).str_result == "SUCC"
         assert len(requests) == 2
 
-    assert _form(requests[0])["h_comp_nm"] == [companion.name]
-    assert _form(requests[0])["h_comp_cert_no"] == [companion.certificate_no]
+    assert wire_form(requests[0])["h_comp_nm"] == [companion.name]
+    assert wire_form(requests[0])["h_comp_cert_no"] == [companion.certificate_no]
 
 
 def test_ticket_facade_default_companion_retains_two_request_workflow(binding_client):

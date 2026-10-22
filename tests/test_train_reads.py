@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
-from urllib.parse import parse_qsl
 
 import pytest
+from conftest import synthetic_config, wire_pairs
 from records._travel_search_unsupported import TravelProductSearchQuery
 
 from korail_mobile_api import (
@@ -16,7 +17,6 @@ from korail_mobile_api import (
     GuideSeatConditionRequest,
     KorailApiError,
     KorailAuthError,
-    KorailConfig,
     KorailInvalidInputError,
     KorailProtocolError,
     KorailSession,
@@ -213,6 +213,15 @@ FARE_LEG = PriceFareLeg(
     requested_seat_attribute_code="015",
     train_group_code="101",
     train_class_code="00",
+)
+SECOND_FARE_LEG = PriceFareLeg(
+    departure_station_code="0099",
+    arrival_station_code="0100",
+    run_date=DATE,
+    train_no="00008",
+    requested_seat_attribute_code="031",
+    train_group_code="102",
+    train_class_code="01",
 )
 FARE_REQUEST = PriceFareQuoteRequest(legs=(FARE_LEG,))
 FARE_FORM = {
@@ -552,13 +561,13 @@ ABSENT = object()
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
-    monkeypatch.setattr("korail_mobile_api._domains.common.forms.time.time", lambda: 1700000000.0)
+    monkeypatch.setattr(time, "time", lambda: 1700000000.0)
 
 
 @pytest.fixture
 def rig(scripted_client_factory):
     def make(responses, *, auth=False):
-        config = KorailConfig(
+        config = synthetic_config(
             base_url="https://example.invalid",
             device=COMMON["Device"],
             version=COMMON["Version"],
@@ -582,9 +591,9 @@ def exact_request(request, route, form, *, dynapath=False):
     assert request.url.path == route
     assert not request.url.query
     expected = [(k, str(vv)) for k, v in form.items() for vv in (v if isinstance(v, list) else [v])]
-    assert Counter(parse_qsl(request.content.decode(), keep_blank_values=True)) == Counter(expected)
+    assert Counter(wire_pairs(request)) == Counter(expected)
     assert (request.headers.get("x-dynapath-m-token") == "SYNTH-TOKEN") is dynapath
-    assert "Sid" not in dict(parse_qsl(request.content.decode()))
+    assert "Sid" not in dict(wire_pairs(request))
     if not form and route in {P + "common.stationinfo", P + "common.stationdata", "/ebizcross/getUUID.do"}:
         assert request.content == b""
         assert "content-type" not in request.headers
@@ -893,7 +902,7 @@ def test_search_groups_teenager_infant_and_guide_dog_like_the_app(rig):
     )
     client, calls, _ = rig([SEARCH])
     client.search_trains(query)
-    sent = dict(parse_qsl(calls[0].content.decode()))
+    sent = dict(wire_pairs(calls[0]))
     assert [sent[f"txtPsgFlg_{index}"] for index in range(1, 6)] == ["4", "2", "1", "0", "0"]
     with pytest.raises(KorailProtocolError):
         client.search_trains(replace(QUERY, infant_passengers="1"))
@@ -968,11 +977,11 @@ def test_special_search_sends_the_normal_form_byte_for_byte(rig):
         P + "seatMovie.ScheduleViewSpecial",
     ] * 2
     assert calls[0].content == calls[1].content and calls[2].content == calls[3].content
-    keys = [key for key, _ in parse_qsl(calls[1].content.decode())]
+    keys = [key for key, _ in wire_pairs(calls[1])]
     assert (
         "txtGoHour" not in keys and "qryStTrnNo2" not in keys and keys.index("mbCrdNo") < keys.index("qryDvCd")
     )
-    assert "mbCrdNo" not in dict(parse_qsl(calls[3].content.decode()))
+    assert "mbCrdNo" not in dict(wire_pairs(calls[3]))
 
 
 def test_numeric_station_codes_are_resolved_once_then_cached(rig):
@@ -1087,11 +1096,11 @@ def test_p058_clears_session_even_on_guidance_path(name, rig):
     case = BY_NAME[name]
     raw = {"strResult": "FAIL", "h_msg_cd": "P058", "h_msg_txt": "SYNTH_EXPIRED"}
     client, calls, _ = rig([raw], auth=True)
-    client.http._client.cookies.set("JSESSIONID", "SYNTH-SESSION")
+    client.http.cookies.set("JSESSIONID", "SYNTH-SESSION")
     with pytest.raises(KorailSessionExpiredError) as error:
         getattr(client, name)(*case[1], **case[2])
     assert error.value.raw == raw
-    assert client.session.current is None and not client.http._client.cookies
+    assert client.session.current is None and not client.http.cookies
     assert len(calls) == 1
 
 
@@ -1114,16 +1123,8 @@ def test_ticket_maas_repeated_return_numbers_and_history_dates(rig):
         P + "copt.gdMenuLt.do",
         {**COMMON, "pnrNo": "SYNTH-PNR", "tkRetNo": ["SYNTH-RETURN-A", "SYNTH-RETURN-B"]},
     )
-    assert [key for key, _ in parse_qsl(calls[0].content.decode())] == [
-        "Device",
-        "Version",
-        "AppVersion",
-        "Key",
-        "lang",
-        "pnrNo",
-        "tkRetNo",
-        "tkRetNo",
-    ]
+    keys = [key for key, _ in wire_pairs(calls[0])]
+    assert keys == "Device Version AppVersion Key lang pnrNo tkRetNo tkRetNo".split()
     client.list_maas_services(MaasServiceDetailQuery.history("20290101", "20291231"))
     exact_request(calls[1], P + "copt.gdReqQry.do", {**DEVICE, "qryDtFrom": "20290101", "qryDtTo": "20291231"})
     assert len(calls) == 2
@@ -1163,16 +1164,7 @@ def test_two_leg_fare_and_goods_column_order(rig):
     The comma literals here deliberately freeze library policy, not decryption claims.
     """
     first = replace(FARE_LEG, goods_no="SYNTH-G1")
-    second = PriceFareLeg(
-        departure_station_code="0099",
-        arrival_station_code="0100",
-        run_date=DATE,
-        train_no="00008",
-        requested_seat_attribute_code="031",
-        train_group_code="102",
-        train_class_code="01",
-        goods_no="SYNTH-G2",
-    )
+    second = replace(SECOND_FARE_LEG, goods_no="SYNTH-G2")
     client, calls, _ = rig([ENVELOPE])
     client.get_fare_quote(PriceFareQuoteRequest(legs=(first, second)))
     form = {
@@ -1190,7 +1182,7 @@ def test_two_leg_fare_and_goods_column_order(rig):
         "stlbTrnClsfCd": "00,01",
     }
     exact_request(calls[0], P + "trn.prcFare.do", form, dynapath=True)
-    keys = [k for k, _ in parse_qsl(calls[0].content.decode())]
+    keys = [k for k, _ in wire_pairs(calls[0])]
     assert keys.index("trnNo") < keys.index("gdNo") < keys.index("rqSeatAttCd")
 
 
@@ -1198,19 +1190,10 @@ def test_price_fare_quote_sends_empty_goods_numbers_like_the_app(rig):
     """TrainOpInfoViewModel.java:794 passes null gdNo, so both legs carry the empty default and the joined
     column is just the separator. TrainOpInfoViewModel.java:941-962: the quote is a display fare; payment uses the
     hold's received_amount."""
-    second = PriceFareLeg(
-        departure_station_code="0099",
-        arrival_station_code="0100",
-        run_date=DATE,
-        train_no="00008",
-        requested_seat_attribute_code="031",
-        train_group_code="102",
-        train_class_code="01",
-    )
     client, calls, _ = rig([ENVELOPE, ENVELOPE])
     client.get_fare_quote(PriceFareQuoteRequest(legs=(FARE_LEG,)))
-    client.get_fare_quote(PriceFareQuoteRequest(legs=(FARE_LEG, second)))
-    sent = [dict(parse_qsl(call.content.decode(), keep_blank_values=True)) for call in calls]
+    client.get_fare_quote(PriceFareQuoteRequest(legs=(FARE_LEG, SECOND_FARE_LEG)))
+    sent = [dict(wire_pairs(call)) for call in calls]
     assert sent[0]["gdNo"] == "" and sent[1]["gdNo"] == ","
 
 
@@ -1253,7 +1236,7 @@ def test_seat_attribute_override_follows_one_rule_for_both_seat_reads(method, ri
     getattr(client, method)(
         replace(TRAIN, seat_attribute_code="031"), *args, passenger_count=2, seat_attribute_code=""
     )
-    sent = [dict(parse_qsl(call.content.decode()))[key] for call in calls]
+    sent = [dict(wire_pairs(call))[key] for call in calls]
     assert sent == ["021", "031"]
     with pytest.raises(KorailProtocolError):
         getattr(client, method)(TRAIN, *args, passenger_count=2, seat_attribute_code="abc")
@@ -1297,13 +1280,8 @@ def test_travel_search_is_record_only_and_keeps_the_dto_order(rig):
     result = record.search_travel_products(client, query)
     assert (result.products[0].goods_no, result.page_count) == ("SYNTH_GOODS", "1")
     assert calls[0].url.path == "/ebizcom/gdLstDtl.do"
-    assert [key for key, _ in parse_qsl(calls[0].content.decode())][len(COMMON) :] == [
-        "funcDvCd",
-        "gdThmNm",
-        "bltnLstOrdr",
-        "nowPgNo",
-        "pgPrCnt",
-    ]
+    keys = [key for key, _ in wire_pairs(calls[0])]
+    assert keys[len(COMMON) :] == "funcDvCd gdThmNm bltnLstOrdr nowPgNo pgPrCnt".split()
     assert record.search_travel_products(client, query).products == ()
     with pytest.raises(KorailProtocolError):
         record.search_travel_products(client, query)
@@ -1349,7 +1327,7 @@ def test_read_forms_follow_the_app_dto_order(name, expected, rig):
     case = BY_NAME[name]
     client, calls, _ = rig([case[5]], auth=case[7])
     getattr(client, name)(*case[1], **case[2])
-    assert [key for key, _ in parse_qsl(calls[0].content.decode(), keep_blank_values=True)] == expected.split()
+    assert [key for key, _ in wire_pairs(calls[0])] == expected.split()
 
 
 def test_nested_parser_raw_promotes_partial_context(rig, monkeypatch):
