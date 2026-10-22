@@ -48,7 +48,7 @@ These read files, names or exact text. Update them together with the structure t
 - `.github/workflows/ci.yml` reads the exact `_F8_SOCKET_GUARD` assignment in `tests/conftest.py` by AST, and its installed-wheel job copies a fixed list of test files by name (including `test_wire_equivalence.py` and `_wire_pin.py`); a renamed file silently leaves that run.
 - `tests/_wire_pin.py` is a captured oracle: never edit or regenerate it. A method rename changes only the `RENAMED` map in `tests/test_wire_equivalence.py`.
 - `tests/test_packaging.py` hardcodes the sdist top-level files, the `checks/` and `tests/` files that must ship, and the record modules in `tests/records/`; it also requires README to equal the wheel's long description, so README uses absolute URLs and keeps the `docs/assets/*` file names.
-- `docs/changelog.md` includes `CHANGELOG.md` by snippet, so CHANGELOG links are absolute. Counts such as the number of public methods or error codes are pinned in tests; do not repeat them in guides.
+- `docs/changelog.md` includes `CHANGELOG.md` by snippet, so CHANGELOG links are absolute. Counts such as the number of public methods or error codes are pinned in tests; outside the entry pages (README, `docs/index.md`, `docs/status.md`, `docs/api/index.md`) do not repeat them.
 
 ## Safety boundaries
 

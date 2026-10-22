@@ -123,4 +123,4 @@
 - **N카드 할인 코드**: [`reserve_with_discount_card`](../api/passes.md#reserve_with_discount_card)가 보내는 할인 코드는 실서버에서 확인하지 못했습니다.
 - **일부 환불 제어값**: 값을 알 수 없는 제어값은 추측하지 않고 요청에서 뺍니다.
 
-메서드별 실서버 확인 여부는 [실서버 확인 현황](../status.md)에 있습니다.
+영역별 현재 상태는 [실서버 확인 현황](../status.md), 메서드별 과거 결과는 [날짜별 실서버 기록](../records.md)과 [7.0.8 재검증](../verification-708.md)에 있습니다.

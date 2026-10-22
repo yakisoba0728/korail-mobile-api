@@ -95,6 +95,7 @@ history = korail.tickets.all(mode="2", boarding_date_from=start, boarding_date_t
 | `recalculate_price(..., add_to_cart=True)` | 재계산이 성공한 뒤 [`add_to_cart`](api/reservations.md#add_to_cart)를 직접 호출하세요. 2.6.2에서 추가한 `ReservationHoldResponse.cart_addition`과 `ReservationHoldResponse.cart_addition_error`도 제거했습니다. |
 | `search_trains_with_transfer_fallback(..., continuation=...)` | 이 메서드는 첫 페이지만 조회합니다. 다음 페이지는 [`search_trains`](api/trains.md#search_trains)나 [`search_transfer_trains`](api/trains.md#search_transfer_trains)에 `continuation`을 넘기세요. |
 | `DiscountCardScheduleResponse.following_page_exists` | 없습니다. 항상 `None`이었습니다. |
+| `CartItem.usage_window` | 없습니다. 쓰이지 않던 필드입니다. |
 
 ```text
 recalculated = client.recalculate_price(request, add_to_cart=True)
@@ -122,6 +123,8 @@ client.extend_discount_card(
 
 - [`HoldReference`][korail_mobile_api.HoldReference]`(*, pnr_no, journey_count, journey_sequence=None, change_no=None)`: [`cancel_unpaid_hold`](api/reservations.md#cancel_unpaid_hold)가 홀드 대신 받습니다. `hold.reference`로 얻거나, 응답을 읽지 못한 예약의 원문에서 `HoldReference.from_raw(error.raw)`로 만듭니다. `from_raw`는 PNR(`h_pnr_no`)과 여정 수(`h_jrny_cnt`)만 요구합니다. 같은 값이면 홀드로 취소할 때와 같은 요청을 보냅니다.
 - `OriginalTicketReference.from_ticket(ticket)`: 승차권 목록의 한 장에서 원표 반환일(`return_sale_date`, `MMDD`)을 판매일로 넣습니다. `YYYYMMDD`를 받는 두 메서드는 [승차권 식별자 이어 쓰기](api/account.md#ticket-identifiers)를 참고하세요.
+- `AirportBusSeatInventoryQuery.from_schedule(schedule, *, passenger_count=1)`: 조회한 운행 편의 식별값을 좌석 조회 입력으로 옮깁니다([아래 예](#response-attributes)).
+- `DynapathRequestContext`에 보낼 본문 바이트 `body`와 `app_version`이 들어갑니다. 직접 만든 `token_provider`가 읽을 수 있습니다.
 - `FreeSeatCarRequest.from_train(train)`, `MergeSeatsInquiryRequest.from_train(train, *, selected_station_name=None, room_class_code="1", seat_attribute_code=None, passenger_count=1)`: 조회한 열차의 값을 복사하고 빠진 값은 거절합니다.
 - `KorailClient`를 `with` 문으로 쓸 수 있습니다. 블록이 끝나면 `close`만 부르며 서버 로그아웃은 하지 않습니다.
 
