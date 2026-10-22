@@ -186,7 +186,8 @@ CASES = [
         {"pnrNo": "TEST-PNR", "addSrvReqNo": "TEST-SERVICE"},
         success(cart_infos={"cart_info": [{"h_pnr_no": "TEST-PNR", "h_rcvd_amt": "001200"}]}),
         (("items.0.pnr_no", "TEST-PNR"), ("items.0.received_amount", "001200")),
-        "NetworkApi.java:691-692; CartListIn.java:51",
+        "NetworkApi.java:691-692; CartListIn.java:51; CartInfo.java:28-61,281-392 (String fields, h_tk_cnt :51; "
+        "unread getters :35,36,47,48,50; utlClsDt+utlClsTm joined at PayTicketContentKt.java:5234)",
     ),
     case(
         "get_deposit_banks",
@@ -499,7 +500,9 @@ CASES = [
             }
         ),
         (("journeys.0.trains.0.pnr_no", "TEST-PNR"), ("items.0.train_no", "00999")),
-        "NetworkApi.java:635-636; ReservationViewIn.java:50-65",
+        "NetworkApi.java:635-636; ReservationViewIn.java:50-65; ReservationViewOut.java:64; "
+        "ReservationViewOutTrainInfo.java:94,496 (protected deadline slots, h_rsv_amt); "
+        "ReservationViewOutJrnyInfo.java:55 (reservationOut key guessed from the property name)",
     ),
     case(
         "get_seat_assignment_schedule",
@@ -586,7 +589,7 @@ CASES = [
         {"pnrNo": "TEST-PNR"},
         success(rsvCnt="0002"),
         (("reservation_count", "0002"),),
-        "NetworkApi.java:744-745; TicketDupCheckIn.java:51",
+        "NetworkApi.java:744-745; TicketDupCheckIn.java:51; TicketDupCheckOut.java:28,50 (String rsvCnt)",
     ),
     case(
         "get_pbp_acceptance_specifications",
@@ -678,7 +681,8 @@ CASES = [
             ("journeys.0.run_date", DATE),
             ("journeys.0.seats.0.total_discount_amount", "001200"),
         ),
-        "NetworkApi.java:423-424; TicketRsvInquiryIn.java:51",
+        "NetworkApi.java:423-424; TicketRsvInquiryIn.java:51; ReservationOutJrnyInfo.java:86,305 (h_arv_dt); "
+        "ReservationOutSeatInfo.java:33,81,269 (h_tot_disc_amt); h_psg_tp_dv_nm only in BasketTicketDataKt.java:44",
     ),
     case(
         "get_refund_commission",

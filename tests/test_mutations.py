@@ -49,7 +49,12 @@ from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.constants import KorailReservationJobType as Job
 from korail_mobile_api.constants import KorailSeatClass as Cabin
-from korail_mobile_api.errors import KorailApiError, KorailProtocolError, KorailSessionExpiredError
+from korail_mobile_api.errors import (
+    KorailApiError,
+    KorailInvalidInputError,
+    KorailProtocolError,
+    KorailSessionExpiredError,
+)
 from korail_mobile_api.facade import ReservationResource
 
 COMMON = {
@@ -243,7 +248,11 @@ def hold_raw() -> dict[str, Any]:
 def reservation_form(
     *, transfer: bool = False, job: str = "1101", stnd: str = "N", cabin2: str = "1"
 ) -> dict[str, Any]:
-    """TicketReservationIn.java:80; TicketReservationInJrny.java:69; TrainScheduleViewModel.java:2932,3004."""
+    """TicketReservationIn.java:80; TicketReservationInJrny.java:69; TrainScheduleViewModel.java:2932,3004.
+
+    TicketReservationIn.java:96-100: unset seat attributes have protected defaults, so 000 is the observed value.
+    TrainScheduleOutTrainInfo.java:1631,3683: the app echoes txtJrnySqno; 001/002 are observed values.
+    NetworkService.java:15350,15366: arrays are flattened with 1-based indexes."""
     result = {
         **COMMON,
         "txtMenuId": "11",
@@ -520,6 +529,9 @@ def cases() -> list[Case]:
         "vlidTrmClsDt": "20991231",
     }
     return [
+        # ReservationOut.java:49,400-409,444-448: deadline date/time, h_tot_fare (meaning unknown) and the displayed
+        # h_tot_prc; PayViewModel.java:11297-11307,11314-11318 sums h_tot_rcvd_amt and shows h_tot_prc.
+        # ReservationOutJrnyInfo.java:86,305,361: h_arv_dt and h_jrny_sqno, absent from observed reserve responses.
         Case(
             "reserve",
             lambda c: c.reserve(train()),
@@ -530,6 +542,8 @@ def cases() -> list[Case]:
             "parse_reservation_hold_response",
             {"pnr_no": PNR, "received_amount": "1200", "total_price": "9900"},
         ),
+        # TrainScheduleViewModel.java:2937-3004: the transfer overload; both legs pass isTransfer=true (:2968) and
+        # TrainScheduleOutTrainInfo.java:3674-3683 picks the journey type.
         Case(
             "reserve_transfer",
             lambda c: c.reserve_transfer([train(), train(True)], seat_classes=(Cabin.GENERAL, Cabin.SPECIAL)),
@@ -560,6 +574,8 @@ def cases() -> list[Case]:
             "parse_reservation_hold_response",
             {"pnr_no": PNR},
         ),
+        # ReservationWaitApplyUiData.java:85; ReservationWaitViewModel.java:503-513: SMS joins the three phone parts
+        # and checks 11 digits.
         Case(
             "confirm_standby_hold",
             lambda c: c.confirm_standby_hold(
@@ -572,6 +588,8 @@ def cases() -> list[Case]:
             None,
             {},
         ),
+        # ReservationCancelChkIn.java:29-32,53: four own fields; the journey count is echoed from the response
+        # (ReservationWaitViewModel.java:398; MyReservationViewModel.java:1557; PayViewModel.java:4686).
         Case(
             "cancel_unpaid_hold",
             lambda c: c.cancel_unpaid_hold(hold()),
@@ -643,6 +661,8 @@ def cases() -> list[Case]:
             "parse_station_refund_execution_response",
             {"refund_division_code": "SYNTH-DIV"},
         ),
+        # AddCartListIn.java:25-30,79; NetworkApi.java:265-267: only hidPnrNo besides CommonIn.
+        # AddCartListOut.java:76; PsgDiscAddInfos.java:81; PsgDiscAddInfo.java:81,85: response keys.
         Case(
             "add_to_cart",
             lambda c: c.add_to_cart(CartAddRequest(PNR)),
@@ -1134,6 +1154,8 @@ def test_real_hold_parse_failure_keeps_committed_identifiers(mutation_client, da
     [("padded", "1200"), ("no-seats", "1200"), ("incomplete-seat", None), ("blank-zero", "1200")],
 )
 def test_received_amount_never_becomes_partial_sum(mutation_client, variant: str, expected: str | None) -> None:
+    """PayViewModel.java:11297-11307 sums h_tot_rcvd_amt; the numbered hidMnsStlAmt link is protected
+    (PaymentMethodHelper.java:113,211), so the seat-sum policy is the library's."""
     raw = hold_raw()
     if variant == "no-seats":
         raw.pop("jrny_infos")
@@ -1201,7 +1223,8 @@ def test_payment_result_and_nested_settlement_stay_independent(
 
 
 def test_all_passenger_rows_and_combination_rules(mutation_client) -> None:
-    """PassengerType.basicList() has seven types; ReqDiscount values confirmed by 7.0.8 literal recovery."""
+    """PassengerType.basicList() has seven types; ReqDiscount values confirmed by 7.0.8 literal recovery.
+    Passengers.java:48,610-616,743-753: the total counts every type and zero rows are skipped before indexing."""
     passengers = KorailPassengerCounts(
         adult=1, child=1, infant=1, senior=1, severe_disability=1, mild_disability=1, guide_dog=1
     )
@@ -1309,7 +1332,8 @@ def test_teenager_merge_and_facade_reservations_rejected_before_http(
     ],
 )
 def test_invalid_passenger_combinations_before_http(mutation_client, passengers: KorailPassengerCounts) -> None:
-    """PassengersBottomSheetKt.java:21124-21185: infant needs non-child/non-infant; guide dog <= disabled passengers."""
+    """PassengersBottomSheetKt.java:20715-20729,21124-21185 (warningPassengerType): infant needs non-child/non-infant;
+    guide dog <= disabled passengers."""
     client, requests = mutation_client([], "POST", (), {})
     with pytest.raises(KorailProtocolError):
         client.reserve(train(), passengers=passengers)
@@ -1317,7 +1341,11 @@ def test_invalid_passenger_combinations_before_http(mutation_client, passengers:
 
 
 def test_transfer_seat_and_attribute_indexing(mutation_client) -> None:
-    """TicketReservationIn.java:80; TicketReservationInSrcar.java:51; TicketReservationInSrcarTrailing.java:52; TrainSeatMapViewModel.java:2108-2138."""
+    """TicketReservationIn.java:80; TicketReservationInSrcar.java:51; TicketReservationInSrcarTrailing.java:52; TrainSeatMapViewModel.java:2108-2138.
+
+    TrainSeatMapViewModel.java:2210,2289: the chosen car and getSeatNo are copied, with the SEAT job only.
+    TicketReservationInSrcar.java:81-88; TicketReservationInSrcarTrailing.java:86-89: leading/trailing seat keys.
+    TrainScheduleViewModel.java:2914-2930,2982-2999: explicit seat attribute, then the row's, then the default."""
     expected = reservation_form(transfer=True, job="1103")
     expected.update(
         txtSeatAttCd4="021",
@@ -1774,7 +1802,7 @@ def test_mutation_parser_keeps_the_whole_response_when_called_directly(mutation_
 @pytest.mark.parametrize("transfer", [False, True], ids=["direct", "transfer"])
 def test_standby_holds_are_not_payable(mutation_client, transfer: bool) -> None:
     """TrainScheduleViewModel.java:5096-5101; ReservationWaitViewModel.java:1155-1160: WAIT saves options, never
-    pays."""
+    pays. TrainScheduleOutTrainInfo.java:3587-3625: 특실 has no WAIT state."""
     row = train() if transfer else train(general_reservation_code="13", standing_reservation_code="11")
     expected = reservation_form(transfer=transfer, job="1102", stnd="N")
     client, requests = mutation_client([hold_raw()], "POST", ("certification.TicketReservation",), expected)
@@ -1832,6 +1860,62 @@ def test_standing_only_row_is_not_booked_as_immediate(mutation_client) -> None:
     with pytest.raises(KorailProtocolError, match="available general seat"):
         client.reserve(train(general_reservation_code="13", standing_reservation_code="11"))
     assert not requests
+
+
+@pytest.mark.parametrize(
+    "call, match",
+    [
+        pytest.param(
+            lambda c: c.reserve(train(), passengers=1), "exact KorailPassengerCounts", id="passengers"
+        ),
+        pytest.param(lambda c: KorailPassengerCounts(adult=-1), "non-negative", id="passenger-count"),
+        pytest.param(lambda c: c.reserve(train(general_reservation_code="13")), "general seat", id="general"),
+        pytest.param(
+            lambda c: c.reserve(train(special_reservation_code="13"), seat_class=Cabin.SPECIAL),
+            "special seat",
+            id="special",
+        ),
+        pytest.param(
+            lambda c: c.reserve(train(wait_reservation_flag="N"), job_type=Job.STANDBY),
+            "h_wait_rsv_flg",
+            id="wait",
+        ),
+        pytest.param(lambda c: c.cancel_unpaid_hold(hold(journey_count="0000")), "unpaid hold", id="cancel"),
+        pytest.param(lambda c: c.confirm_standby_hold(hold(), sms_notify=True), "11-digit", id="standby-sms"),
+    ],
+)
+def test_reservation_input_faults_raise_invalid_input_before_http(mutation_client, call, match: str) -> None:
+    """Pre-request rejections are KorailInvalidInputError, still a KorailProtocolError. The seat and waiting-list
+    checks are TrainSummary.has_general_seat/has_special_seat/has_waiting_list."""
+    client, requests = mutation_client([], "POST", (), {})
+    with pytest.raises(KorailInvalidInputError, match=match):
+        call(client)
+    assert not requests
+
+
+@pytest.mark.parametrize("standing_leg", [None, 0, 1])
+def test_transfer_standing_flag_is_the_or_of_its_legs(mutation_client, standing_leg: int | None) -> None:
+    """TrainScheduleViewModel.java:2961-2967,3004 ORs the per-leg check; TrainScheduleOutTrainInfo.java:2881-2889
+    and TrainScheduleViewModel.java:2870-2874: 일반실 sold out (13) with standing available (11)."""
+    legs = [train(), train(True)]
+    if standing_leg is not None:
+        legs[standing_leg] = replace(
+            legs[standing_leg], general_reservation_code="13", standing_reservation_code="11"
+        )
+    expected = reservation_form(transfer=True, job="1202", stnd="N" if standing_leg is None else "Y")
+    client, requests = mutation_client([hold_raw()], "POST", ("certification.TicketReservation",), expected)
+    client.reserve_transfer(legs, job_type=Job.MERGE_STANDING)
+    assert len(requests) == 1
+
+
+@pytest.mark.parametrize("journey_count, sent", [(" 1", "1"), ("0002\t", "0002"), ("0001", "0001")])
+def test_cancel_sends_the_journey_count_it_validated(mutation_client, journey_count: str, sent: str) -> None:
+    """The check stripped the value but the form sent it unstripped (" 1" went out as txtJrnyCnt=+1).
+    Zero padding is echoed as received (MyReservationViewModel.java:1557)."""
+    case = next(c for c in CASES if c.name == "cancel_unpaid_hold")
+    client, requests = mutation_client([BASE], "POST", (case.routes[-1],), {**case.form, "txtJrnyCnt": sent})
+    client.cancel_unpaid_hold(hold(journey_count=journey_count), check_first=False)
+    assert len(requests) == 1
 
 
 @pytest.mark.parametrize(

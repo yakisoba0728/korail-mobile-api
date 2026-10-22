@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import fields
 from typing import Any
 from urllib.parse import parse_qs
 
@@ -21,6 +22,11 @@ from korail_mobile_api import (
     KorailSessionExpiredError,
     KorailTransportError,
     ReservationHoldResponse,
+    TicketReservationDetailResponse,
+)
+from korail_mobile_api._domains.reservations.parsers import (
+    parse_existing_reservation_hold_response,
+    parse_ticket_reservation_detail_response,
 )
 
 PNR = "SYNTHETIC-EXISTING-PNR"
@@ -145,6 +151,25 @@ def test_read_existing_reservation_then_explicitly_pay(
         PAYMENT_PATH,
         "5004",
     ]
+
+
+def test_detail_and_existing_hold_read_shared_reservation_out_fields_alike(detail_raw: dict[str, Any]) -> None:
+    """MyReservationViewModel.java:1280-1302: ReservationList returns the ReservationOut a new hold returns.
+    The two models declare each shared key with one rule; only the hold's identifiers are strict."""
+    detail_fields = {item.name: item.metadata for item in fields(TicketReservationDetailResponse)}
+    hold_fields = {item.name: item.metadata for item in fields(ReservationHoldResponse)}
+    shared = {name for name in detail_fields.keys() & hold_fields.keys() if "wire" in hold_fields[name]}
+    for name in shared:
+        detail_raw.setdefault(hold_fields[name]["wire"], f"SYNTHETIC-{name}")
+    detail = parse_ticket_reservation_detail_response(detail_raw)
+    hold = parse_existing_reservation_hold_response(detail_raw, pnr_no=PNR)
+    assert len(shared) == 16
+    assert {name: getattr(hold, name) for name in shared} == {name: getattr(detail, name) for name in shared}
+    assert {name for name in shared if detail_fields[name]["read"] is not hold_fields[name]["read"]} == {
+        "pnr_no",
+        "journey_count",
+        "window_no",
+    }
 
 
 @pytest.mark.parametrize("declared", [ABSENT, "55200", "00055200", 55200])
