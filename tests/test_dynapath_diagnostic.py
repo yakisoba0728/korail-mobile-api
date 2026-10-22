@@ -2,26 +2,19 @@
 
 import pickle
 
-import httpx
+from conftest import synthetic_config
 
 from korail_mobile_api import (
     DynapathConfig,
     DynapathRequestContext,
-    KorailConfig,
     KorailDeviceProfile,
     build_config_from_profile,
 )
 from korail_mobile_api._core.dynapath import build_default_token_settings
 
 
-def test_default_client_uses_diagnostic_header_without_extra_requests(f8_client_factory):
-    requests = []
-
-    def handler(request):
-        requests.append(request)
-        return httpx.Response(200, json={"strResult": "SUCC", "h_msg_cd": "SYNTHETIC"})
-
-    client = f8_client_factory(handler, logged_in=False)
+def test_default_client_uses_diagnostic_header_without_extra_requests(scripted_client_factory):
+    client, requests, _ = scripted_client_factory([{"strResult": "SUCC", "h_msg_cd": "SYNTHETIC"}], repeat=True)
     login = "/classes/com.korail.mobile.login.Login"
     for path in (login, login, "/synthetic-unprotected"):
         client.http.post_form(path)
@@ -31,41 +24,17 @@ def test_default_client_uses_diagnostic_header_without_extra_requests(f8_client_
     assert client.config.dynapath.token_settings is None
     restored = pickle.loads(pickle.dumps(client.config))
     assert restored == client.config
+    names = "method path url device version key user_agent device_name os_version".split()
     assert (
-        restored.dynapath.token_provider(
-            DynapathRequestContext(
-                **dict.fromkeys(
-                    (
-                        "method",
-                        "path",
-                        "url",
-                        "device",
-                        "version",
-                        "key",
-                        "user_agent",
-                        "device_name",
-                        "os_version",
-                    ),
-                    "synthetic",
-                )
-            )
-        )
+        restored.dynapath.token_provider(DynapathRequestContext(**dict.fromkeys(names, "synthetic")))
         == expected
     )
 
 
-def test_explicit_legacy_settings_still_select_v1(f8_client_factory):
-    requests = []
-
-    def handler(request):
-        requests.append(request)
-        return httpx.Response(200, json={"strResult": "SUCC"})
-
+def test_explicit_legacy_settings_still_select_v1(scripted_client_factory):
     settings = build_default_token_settings()
-    config = KorailConfig(
-        base_url="https://api.example.invalid",
-        netfunnel_enabled=False,
-        dynapath=DynapathConfig(enabled=True, token_settings=settings),
+    config = synthetic_config(
+        netfunnel_enabled=False, dynapath=DynapathConfig(enabled=True, token_settings=settings)
     )
     config = build_config_from_profile(
         KorailDeviceProfile(
@@ -77,7 +46,7 @@ def test_explicit_legacy_settings_still_select_v1(f8_client_factory):
         base=config,
     )
     assert config.dynapath.token_settings.device_id == "synthetic-install"
-    client = f8_client_factory(handler, config=config)
+    client, requests, _ = scripted_client_factory([{"strResult": "SUCC"}], config=config)
     client.http.post_form("/classes/com.korail.mobile.login.Login")
     assert client.config.dynapath.token_provider is None and settings.sdk_version == "v1.0.3"
     assert requests[0].headers["x-dynapath-m-token"].startswith("bEeEP")

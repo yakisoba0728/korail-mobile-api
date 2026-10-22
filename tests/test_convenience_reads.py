@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from urllib.parse import parse_qs
 
 import httpx
 import pytest
+from conftest import synthetic_config, wire_form
 
 from korail_mobile_api import (
     AirportBusResource,
@@ -40,7 +40,7 @@ MOMENT = datetime(2099, 1, 2, 9)
 
 @pytest.fixture
 def config() -> KorailConfig:
-    return KorailConfig(base_url="https://api.example.invalid", netfunnel_enabled=False, disable_dynapath=True)
+    return synthetic_config(netfunnel_enabled=False, disable_dynapath=True)
 
 
 def _row(number: str, time: str = "100000", **fields: object) -> dict[str, object]:
@@ -253,7 +253,7 @@ def test_iterator_is_lazy_bounded_and_preserves_search_options(scripted_client_f
     assert next(iterator).train_no == "00007" and len(requests) == 1
     assert [train.train_no for train in iterator] == ["00008"]
     assert len(requests) == 2 and pending == []
-    forms = [parse_qs(request.content.decode()) for request in requests]
+    forms = [wire_form(request) for request in requests]
     for form in forms:
         assert form["txtPsgFlg_1"] == ["2"] and form["txtPsgFlg_2"] == ["1"]
         assert form["adjStnScdlOfrFlg"] == ["Y"]
@@ -278,7 +278,7 @@ def test_iterator_uses_unfiltered_page_and_composite_identity(scripted_client_fa
         ("00007", "9901"),
         ("00007", "9902"),
     ]
-    assert parse_qs(requests[1].content.decode())["txtGoHour"] == ["100000"]
+    assert wire_form(requests[1])["txtGoHour"] == ["100000"]
     assert len(requests) == 2
 
 
@@ -401,7 +401,7 @@ def test_iterator_keeps_original_query_after_long_queue_wait(scripted_client_fac
     )
     trains = TrainResource(client, StationResource(client), validate_stations=False)
     assert len(list(trains.iter_search("출발", "도착", max_pages=2))) == 2
-    assert [parse_qs(request.content.decode())["txtGoHour"] for request in requests] == [["090000"], ["090000"]]
+    assert [wire_form(request)["txtGoHour"] for request in requests] == [["090000"], ["090000"]]
 
 
 @pytest.mark.parametrize(
@@ -422,7 +422,7 @@ def test_membership_dates_and_original_response(
     client, requests, _ = scripted_client_factory([raw], config=config, session=f8_logged_in_session)
     response = MembershipResource(client).mileage(**kwargs, ledger="2", movement="1", page_no=2)
     assert response.raw == raw
-    form = parse_qs(requests[0].content.decode())
+    form = wire_form(requests[0])
     assert (form["qryStDt"][0], form["qryClsDt"][0]) == expected
     assert form["pontTpVal"] == ["2"] and form["qryDvVal"] == ["1"] and form["nowPgNo"] == ["2"]
 
@@ -460,7 +460,7 @@ def test_membership_default_range_uses_today_kst(
         [{"strResult": "SUCC"}], config=config, session=f8_logged_in_session
     )
     MembershipResource(client).mileage()
-    form = parse_qs(requests[0].content.decode())
+    form = wire_form(requests[0])
     assert form["qryStDt"] == ["20990101"] and form["qryClsDt"] == ["20990131"]
 
 
@@ -472,7 +472,7 @@ def test_membership_explicit_early_dates_do_not_compute_default_range(
     )
     membership = MembershipResource(client)
     membership.mileage(start_date=date.min, end_date=date.min)
-    form = parse_qs(requests[0].content.decode())
+    form = wire_form(requests[0])
     assert form["qryStDt"] == form["qryClsDt"] == ["00010101"]
     with pytest.raises(KorailInvalidInputError, match="30-day"):
         membership.mileage(end_date=date.min)
@@ -484,7 +484,7 @@ def test_membership_coupons_preserve_page_and_pnr(scripted_client_factory, confi
         [{"strResult": "SUCC"}], config=config, session=f8_logged_in_session
     )
     assert MembershipResource(client).coupons(page_no=2, pnr_no="SYNTHETIC-PNR").items == ()
-    form = parse_qs(requests[0].content.decode())
+    form = wire_form(requests[0])
     assert form["txtSelPage"] == ["2"] and form["pnrNo"] == ["SYNTHETIC-PNR"]
 
 
@@ -514,11 +514,11 @@ def test_bus_stop_cache_refresh_and_name_search(scripted_client_factory, config)
     assert bus.stops() is bus.stops() and len(requests) == 1
     result = bus.search(" 시험출발 ", "9903", service_code="980", depart_after=MOMENT)
     assert result.raw["extra"] == "kept" and result.schedules == ()
-    form = parse_qs(requests[1].content.decode())
+    form = wire_form(requests[1])
     assert form["dptRsStnCd"] == ["9901"] and form["arvRsStnCd"] == ["9903"]
     assert form["dptDt"] == ["20990102"] and form["dptTm"] == ["090000"]
     assert "rsvSaleDvCd" not in form
-    assert parse_qs(requests[0].content.decode())["code"] == [
+    assert wire_form(requests[0])["code"] == [
         "app.limousine.stationNm",
         "app.limousine.stationCd",
     ]
@@ -613,7 +613,7 @@ def test_bus_seats_copy_schedule_identifiers(scripted_client_factory, config):
     )
     result = AirportBusResource(client).seats(schedule, passenger_count=2)
     assert result.raw["extra"] == "kept" and result.seats == ()
-    form = parse_qs(requests[0].content.decode())
+    form = wire_form(requests[0])
     assert form["trnNo"] == ["00007"] and form["srcarNo"] == ["0001"]
     assert form["dptStnRunOrdr"] == ["001"] and form["arvStnRunOrdr"] == ["002"]
     assert form["totPsgCnt"] == ["2"] and form["isArrow"] == ["false"] and "gdNo" not in form

@@ -5,11 +5,12 @@ from __future__ import annotations
 import ast
 import base64
 import socket
+import sys
 from pathlib import Path
-from urllib.parse import parse_qs, parse_qsl
 
 import httpx
 import pytest
+from conftest import synthetic_config, wire_form, wire_pairs
 
 import korail_mobile_api as package
 from korail_mobile_api import DynapathConfig, DynapathTokenSettings
@@ -19,7 +20,6 @@ from korail_mobile_api._core.dynapath import DYNAPATH_ALLOWLIST_PATHS, DynapathT
 from korail_mobile_api._core.http import KorailHttpClient, parse_base_response
 from korail_mobile_api._core.netfunnel import KorailNetFunnelClient
 from korail_mobile_api._core.session import KORAIL_COMMON_CODE_BOOTSTRAP_CODES, infer_login_input_flag
-from korail_mobile_api._core.wire import _device_version_key
 from korail_mobile_api._domains.common.models import LoginCryptoInfo
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
@@ -52,19 +52,18 @@ def login_response(code="IRZ000001", result="SUCC", cookie=True, **extra):
     return httpx.Response(200, json=envelope(code, result, **extra), headers=headers)
 
 
-def form(request):
-    return parse_qs(request.content.decode("utf-8"), keep_blank_values=True)
+def offline(**changes):
+    """No queue and a synthetic DynaPath token unless a test overrides them."""
+    token = DynapathConfig(enabled=True, token_provider=lambda context: "synthetic-token")
+    return synthetic_config(
+        **{"base_url": "https://offline.invalid", "netfunnel_enabled": False, "dynapath": token, **changes}
+    )
 
 
 @pytest.fixture
 def factory(scripted_client_factory):
     def make(responses=(), *, config=None):
-        config = config or KorailConfig(
-            base_url="https://offline.invalid",
-            netfunnel_enabled=False,
-            dynapath=DynapathConfig(enabled=True, token_provider=lambda context: "synthetic-token"),
-        )
-        client, requests, _ = scripted_client_factory(responses, config=config)
+        client, requests, _ = scripted_client_factory(responses, config=config or offline())
         return client, requests
 
     return make
@@ -106,11 +105,11 @@ def test_login_success_code_and_session_cookie(factory, code, result):
     assert client.session.pending is None
     assert [r.url.path for r in requests] == [SERVICE, COMMON, LOGIN]
     assert all(r.method == "POST" for r in requests)
-    assert form(requests[-1])["txtInputFlg"] == ["2"]
-    assert form(requests[-1])["checkValidPw"] == ["Y"]
-    assert form(requests[-1])["idx"] == ["synthetic-index"]
+    assert wire_form(requests[-1])["txtInputFlg"] == ["2"]
+    assert wire_form(requests[-1])["checkValidPw"] == ["Y"]
+    assert wire_form(requests[-1])["idx"] == ["synthetic-index"]
     assert PASSWORD not in requests[-1].content.decode()
-    assert "custId" not in form(requests[-1]) and "etrPath" not in form(requests[-1])
+    assert "custId" not in wire_form(requests[-1]) and "etrPath" not in wire_form(requests[-1])
 
 
 @pytest.mark.parametrize(
@@ -275,7 +274,7 @@ def test_login_does_not_gate_encryption_on_pwd_aes_flag(factory, value):
     """LoginRepositoryImpl.java:922-936,1237-1253 ignores pwdAESCphd for password encryption."""
     client, requests = factory([*bootstrap(pwdAESCphd=value), login_response()])
     client.login(ID, PASSWORD)
-    assert form(requests[-1])["txtPwd"][0] != PASSWORD
+    assert wire_form(requests[-1])["txtPwd"][0] != PASSWORD
 
 
 def test_login_overrides_and_common_code_repeated_fields(factory):
@@ -291,14 +290,14 @@ def test_login_overrides_and_common_code_repeated_fields(factory):
         cust_id="synthetic-cust",
         etr_path="synthetic-entry",
     )
-    sent = form(requests[-1])
+    sent = wire_form(requests[-1])
     assert sent["txtInputFlg"] == ["synthetic-flag"] and sent["checkValidPw"] == ["N"]
     assert sent["custId"] == ["synthetic-cust"] and sent["etrPath"] == ["synthetic-entry"]
     assert "idx" not in sent
-    assert form(requests[1])["code"] == list(KORAIL_COMMON_CODE_BOOTSTRAP_CODES)
-    assert form(requests[1])["OSVersion"] == ["37"]
-    assert form(requests[1])["deviceWidth"] == ["1440"]
-    assert len(form(requests[0])["timeStamp"]) == 1
+    assert wire_form(requests[1])["code"] == list(KORAIL_COMMON_CODE_BOOTSTRAP_CODES)
+    assert wire_form(requests[1])["OSVersion"] == ["37"]
+    assert wire_form(requests[1])["deviceWidth"] == ["1440"]
+    assert len(wire_form(requests[0])["timeStamp"]) == 1
 
 
 @pytest.mark.parametrize(
@@ -492,14 +491,10 @@ def test_dynapath_detection_limited_to_fixed_paths(factory):
 def test_dynapath_detection_follows_a_custom_allowlist(factory):
     """2.6.2: detection used the built-in path set even when the token went to configured paths."""
     raw = {"synthetic_detection_field": -8203, "strResult": "SUCC"}
-    config = KorailConfig(
-        base_url="https://offline.invalid",
-        netfunnel_enabled=False,
-        dynapath=DynapathConfig(
-            enabled=True, token_provider=lambda context: "synthetic-token", allowlist_paths=frozenset({SERVICE})
-        ),
+    token = DynapathConfig(
+        enabled=True, token_provider=lambda context: "synthetic-token", allowlist_paths=frozenset({SERVICE})
     )
-    client, requests = factory([raw, raw], config=config)
+    client, requests = factory([raw, raw], config=offline(dynapath=token))
     with pytest.raises(E.KorailDynaPathError):
         client.http.post_form(SERVICE)
     assert client.http.post_form(LOGIN, require_envelope=False).raw == raw
@@ -585,15 +580,13 @@ def test_common_fields_headers_override_and_empty_omission(factory):
         contexts.append(context)
         return "synthetic-custom-token"
 
-    config = KorailConfig(
-        base_url="https://offline.invalid",
+    config = offline(
         device="synthetic-device",
         version="synthetic-version",
         key="synthetic-key",
         lang="synthetic-lang",
         user_agent="synthetic-ua",
         timeout=12.0,
-        netfunnel_enabled=False,
         dynapath=DynapathConfig(
             enabled=True,
             token_provider=provider,
@@ -605,7 +598,7 @@ def test_common_fields_headers_override_and_empty_omission(factory):
     client, requests = factory([envelope(), envelope()], config=config)
     client.http.post_form(LOGIN, {"empty": "", "zero": 0})
     client.http.post_form(SERVICE)
-    first = form(requests[0])
+    first = wire_form(requests[0])
     assert first == {
         "Device": ["synthetic-device"],
         "Version": ["synthetic-version"],
@@ -634,12 +627,8 @@ def test_token_provider_called_only_on_configured_paths(factory, path):
 
 
 def test_none_provider_token_is_omitted(factory):
-    config = KorailConfig(
-        base_url="https://offline.invalid",
-        netfunnel_enabled=False,
-        dynapath=DynapathConfig(enabled=True, token_provider=lambda context: None),
-    )
-    client, requests = factory([envelope()], config=config)
+    token = DynapathConfig(enabled=True, token_provider=lambda context: None)
+    client, requests = factory([envelope()], config=offline(dynapath=token))
     client.http.post_form(LOGIN)
     assert "x-dynapath-m-token" not in requests[0].headers
 
@@ -648,12 +637,7 @@ def test_provider_failure_never_sends_request(factory):
     def provider(context):
         raise ValueError("synthetic provider error")
 
-    config = KorailConfig(
-        base_url="https://offline.invalid",
-        netfunnel_enabled=False,
-        dynapath=DynapathConfig(enabled=True, token_provider=provider),
-    )
-    client, requests = factory(config=config)
+    client, requests = factory(config=offline(dynapath=DynapathConfig(enabled=True, token_provider=provider)))
     with pytest.raises(E.KorailProtocolError) as caught:
         client.http.post_form(LOGIN)
     assert isinstance(caught.value.__cause__, ValueError) and not requests
@@ -661,12 +645,8 @@ def test_provider_failure_never_sends_request(factory):
 
 @pytest.mark.parametrize("token", [123, b"bytes", "토큰"])
 def test_unsendable_provider_token_never_sends_request(factory, token):
-    config = KorailConfig(
-        base_url="https://offline.invalid",
-        netfunnel_enabled=False,
-        dynapath=DynapathConfig(enabled=True, token_provider=lambda context: token),
-    )
-    client, requests = factory(config=config)
+    provider = DynapathConfig(enabled=True, token_provider=lambda context: token)
+    client, requests = factory(config=offline(dynapath=provider))
     with pytest.raises(E.KorailProtocolError, match="ASCII str or None"):
         client.http.post_form(LOGIN)
     assert not requests
@@ -826,7 +806,7 @@ def test_logout_always_clears_local_state(factory, failure, expected):
         client.logout()
     assert client.session.current is None and client.session.pending is None and not client.http.cookies
     assert requests[-1].url.path == LOGOUT
-    assert form(requests[-1])["timeStamp"][0].isdigit()
+    assert wire_form(requests[-1])["timeStamp"][0].isdigit()
     assert requests[-1].headers["cookie"] == f"JSESSIONID={COOKIE}"
     assert len(requests) == 4
 
@@ -1019,7 +999,9 @@ def test_crypto_independent_openssl_vectors(key, password, expected):
 def test_login_wire_encryption_matches_independent_vector(factory):
     client, requests = factory([*bootstrap(), login_response()])
     client.login(ID, PASSWORD)
-    assert form(requests[-1])["txtPwd"] == ["d2pDQ3FIZ3ZQdXV2d1BxUkE5azRCV1RZSWJFVk5Oc2ZrS0o5K09wOHU0RT0=\n"]
+    assert wire_form(requests[-1])["txtPwd"] == [
+        "d2pDQ3FIZ3ZQdXV2d1BxUkE5azRCV1RZSWJFVk5Oc2ZrS0o5K09wOHU0RT0=\n"
+    ]
 
 
 @pytest.mark.parametrize("lang", [None, "synthetic-language"])
@@ -1027,13 +1009,7 @@ def test_login_wire_encryption_matches_independent_vector(factory):
 def test_login_form_matches_dto_declaration_order(factory, lang: str | None, optional: bool) -> None:
     """LoginIn.java:57-80,141-164; CommonIn.java:467-474; NetworkService.java:15335-15392. The @FieldMap route
     (NetworkApi.java:458-460) rejects null values, so absent options are omitted (ParameterHandler.java:276-293)."""
-    config = KorailConfig(
-        base_url="https://api.example.invalid",
-        netfunnel_enabled=False,
-        dynapath=DynapathConfig(enabled=True, token_provider=lambda context: "synthetic-token"),
-        lang=lang,
-    )
-    client, seen = factory([*bootstrap(), login_response()], config=config)
+    client, seen = factory([*bootstrap(), login_response()], config=offline(lang=lang))
     client.login(
         ID,
         PASSWORD,
@@ -1041,7 +1017,7 @@ def test_login_form_matches_dto_declaration_order(factory, lang: str | None, opt
         etr_path="synthetic-entry" if optional else None,
     )
     assert [request.url.path for request in seen] == [SERVICE, COMMON, LOGIN]
-    pairs = parse_qsl(seen[-1].content.decode("ascii"), keep_blank_values=True)
+    pairs = wire_pairs(seen[-1])
     expected = ["Device", "Version", "AppVersion", "Key"]
     if lang is not None:
         expected.append("lang")
@@ -1065,22 +1041,18 @@ def test_login_form_matches_dto_declaration_order(factory, lang: str | None, opt
 @pytest.mark.parametrize("entrypoint", ["http", "parser", "model"])
 def test_oversized_envelope_integer_is_protocol_error_with_raw(key: str, entrypoint: str) -> None:
     """checks/BEHAVIOR.md (스칼라·봉투): numeric strings normalize; rejected responses retain the entire raw object."""
-    import sys
-
-    from korail_mobile_api import BaseKorailResponse, KorailProtocolError
-    from korail_mobile_api._core.http import parse_base_response
     from korail_mobile_api._domains.tickets.parsers import parse_delay_return_receipt_response
 
     parsers = {
         "http": parse_base_response,
         "parser": parse_delay_return_receipt_response,
-        "model": BaseKorailResponse.from_raw,
+        "model": package.BaseKorailResponse.from_raw,
     }
     raw = {"strResult": "SUCC", key: 10**700, "extra": {"synthetic": True}}
     previous = sys.get_int_max_str_digits()
     try:
         sys.set_int_max_str_digits(640)
-        with pytest.raises(KorailProtocolError) as error:
+        with pytest.raises(E.KorailProtocolError) as error:
             parsers[entrypoint](raw)
         assert error.value.raw is raw
     finally:
@@ -1088,14 +1060,13 @@ def test_oversized_envelope_integer_is_protocol_error_with_raw(key: str, entrypo
 
 
 def test_base_response_from_raw_normalizes_envelope_without_classifying_status() -> None:
-    from korail_mobile_api import BaseKorailResponse
-
+    from_raw = package.BaseKorailResponse.from_raw
     raw = {"h_msg_cd": 12, "h_msg_txt": 34, "strResult": 56}
-    result = BaseKorailResponse.from_raw(raw)
+    result = from_raw(raw)
     assert (result.h_msg_cd, result.h_msg_txt, result.str_result) == ("12", "34", "56")
     assert result.raw is raw
-    assert BaseKorailResponse.from_raw({"strResult": "FAIL", "h_msg_cd": "P058"}).h_msg_cd == "P058"
-    assert BaseKorailResponse.from_raw({}).str_result is None
+    assert from_raw({"strResult": "FAIL", "h_msg_cd": "P058"}).h_msg_cd == "P058"
+    assert from_raw({}).str_result is None
 
 
 @pytest.mark.parametrize("lang", [None, "", "synthetic-language"])
@@ -1122,7 +1093,6 @@ def test_common_form_keeps_order_and_returns_fresh_mapping(lang: str | None, app
     try:
         first = client.common_fields()
         assert list(first.items()) == expected
-        assert list(_device_version_key(config).items()) == expected
         first["Device"] = "changed"
         assert list(client.common_fields().items()) == expected
     finally:
@@ -1190,12 +1160,8 @@ def test_mutation_refused_before_sending_keeps_request_sent_unset(factory, refus
     def provider(context):
         raise RuntimeError("synthetic provider failure")
 
-    config = KorailConfig(
-        base_url="https://offline.invalid",
-        netfunnel_enabled=False,
-        dynapath=DynapathConfig(enabled=True, token_provider=provider, allowlist_paths=frozenset({MUTATION})),
-    )
-    client, requests = factory(config=config if refusal == "provider" else None)
+    token = DynapathConfig(enabled=True, token_provider=provider, allowlist_paths=frozenset({MUTATION}))
+    client, requests = factory(config=offline(dynapath=token) if refusal == "provider" else None)
     if refusal == "closed":
         client.close()
     with pytest.raises(E.KorailProtocolError) as caught:
@@ -1247,12 +1213,7 @@ def test_dynapath_context_carries_the_encoded_body_and_app_version(factory, app_
         contexts.append(context)
         return "synthetic-token"
 
-    config = KorailConfig(
-        base_url="https://offline.invalid",
-        netfunnel_enabled=False,
-        app_version=app_version,
-        dynapath=DynapathConfig(enabled=True, token_provider=provider),
-    )
+    config = offline(app_version=app_version, dynapath=DynapathConfig(enabled=True, token_provider=provider))
     client, requests = factory([envelope(), envelope()], config=config)
     client.http.post_form(LOGIN, {"txtMemberNo": "synthetic 한글 &=+", "flag": True})
     client.http.get_json(LOGIN, {"q": "synthetic"})

@@ -13,6 +13,7 @@ from types import ModuleType
 from typing import get_type_hints
 
 import pytest
+from conftest import wire_form
 
 import korail_mobile_api as api
 from korail_mobile_api import TrainSummary, _domains
@@ -22,7 +23,6 @@ from korail_mobile_api._domains.payments.parsers import (
     parse_reservation_payment_response,
 )
 from korail_mobile_api._domains.reservations.parsers import parse_reservation_hold_response
-from korail_mobile_api._domains.tickets.forms import build_self_seat_change_info_form
 
 DOMAIN_MODULES = [
     importlib.import_module(info.name)
@@ -176,7 +176,9 @@ def test_unknown_response_codes_remain_strings() -> None:
 
 
 @pytest.mark.parametrize("room_class_code", ["1", "2", "FUTURE", None])
-def test_self_seat_change_preserves_room_codes(room_class_code: str | None) -> None:
+def test_self_seat_change_preserves_room_codes(
+    room_class_code: str | None, scripted_client_factory, f8_logged_in_session
+) -> None:
     """SeatAvailabilityIn.java:26-30,55: String, no allowlist (PsrmType.java:19-29 literals are protected);
     SelfSeatChangeOptionViewModel.java:342-344: psrmClCd only when the room value is not null."""
     request = api.SelfSeatChangeInfoRequest(
@@ -186,11 +188,13 @@ def test_self_seat_change_preserves_room_codes(room_class_code: str | None) -> N
         arrival_station_code="TEST-B",
         room_class_code=room_class_code,
     )
-    form = build_self_seat_change_info_form(request)
+    client, requests, _ = scripted_client_factory([{"strResult": "SUCC"}], session=f8_logged_in_session)
+    client.get_self_seat_change_options(request)
+    form = wire_form(requests[0])
     if room_class_code is None:
         assert "psrmClCd" not in form
     else:
-        assert form["psrmClCd"] == room_class_code
+        assert form["psrmClCd"] == [room_class_code]
 
 
 @pytest.mark.parametrize("room_class_code", [1, True, object(), "", " "])

@@ -5,10 +5,10 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field, replace
 from typing import Any
-from urllib.parse import parse_qs
 
 import httpx
 import pytest
+from conftest import wire_pairs
 
 from korail_mobile_api import (
     AirportBusSchedule,
@@ -118,10 +118,12 @@ def queue_factory():
         limit: float | None = None,
         complete: Reply | None = None,
         overshoot: float = 0.0,
+        url: str | None = None,
     ):
         clock = Clock(overshoot=overshoot)
         world = QueueWorld(clock, replies, complete or Reply(text="unparsed completion"))
         config = KorailConfig(netfunnel_timeout=3.0, netfunnel_wait_limit=limit)
+        config = replace(config, netfunnel_url=url) if url else config
         client = KorailNetFunnelClient(
             config,
             transport=httpx.MockTransport(world.handler),
@@ -230,27 +232,15 @@ def test_error_bypass_modes(queue_factory, kind: str, mode: int) -> None:
 
 
 @pytest.mark.parametrize("mode", [0, 1])
-def test_unparseable_queue_url_is_a_queue_transport_failure(mode: int) -> None:
+def test_unparseable_queue_url_is_a_queue_transport_failure(queue_factory, mode: int) -> None:
     """2.6.2: httpx.InvalidURL used to escape raw and skip the error bypass."""
-    clock = Clock()
-    sent: list[str] = []
-    config = KorailConfig(netfunnel_url="https://q.example.invalid/\x00", netfunnel_timeout=3.0)
-    client = KorailNetFunnelClient(
-        config,
-        transport=httpx.MockTransport(lambda request: pytest.fail("queue request must not be built")),
-        sleeper=clock.sleep,
-        clock=clock,
-    )
-    gate = KorailNetFunnelGate("synthetic", "SYNTHETIC-AID", mode == 0)
-    try:
-        if mode == 0:
-            with pytest.raises(KorailNetFunnelError):
-                client.run(gate, lambda: sent.append("API"))
-        else:
-            client.run(gate, lambda: sent.append("API"))
-    finally:
-        client.close()
-    assert sent == ([] if mode == 0 else ["API"])
+    client, gate, world, _ = queue_factory([], mode=mode, url="https://q.example.invalid/\x00")
+    if mode == 0:
+        with pytest.raises(KorailNetFunnelError):
+            client.run(gate, world.send)
+    else:
+        client.run(gate, world.send)
+    assert world.sent == mode and world.requests == []
 
 
 @pytest.mark.parametrize("mode", [0, 1])
@@ -694,13 +684,18 @@ def seat_query() -> AirportBusSeatInventoryQuery:
     )
 
 
+COMMON = {
+    "Device": "SYNTHETIC-DEVICE",
+    "Version": "SYNTHETIC-VERSION",
+    "AppVersion": "7.0.8",
+    "Key": "SYNTHETIC-KEY",
+    "lang": "ko",
+}
+
+
 def expected_schedule_form() -> dict[str, str]:
     return {
-        "Device": "SYNTHETIC-DEVICE",
-        "Version": "SYNTHETIC-VERSION",
-        "AppVersion": "7.0.8",
-        "Key": "SYNTHETIC-KEY",
-        "lang": "ko",
+        **COMMON,
         "dptDt": "20990101",
         "dptRsStnCd": "9001",
         "arvRsStnCd": "9002",
@@ -715,11 +710,7 @@ def expected_schedule_form() -> dict[str, str]:
 
 def expected_seat_form() -> dict[str, str]:
     return {
-        "Device": "SYNTHETIC-DEVICE",
-        "Version": "SYNTHETIC-VERSION",
-        "AppVersion": "7.0.8",
-        "Key": "SYNTHETIC-KEY",
-        "lang": "ko",
+        **COMMON,
         "trnClsfCd": "99",
         "trnGpCd": "980",
         "runDt": "20990101",
@@ -981,11 +972,7 @@ def schedule() -> AirportBusSchedule:
 def expected_reservation_form() -> dict[str, str]:
     # Current library wire values / dated accepted observation, NOT recovered protected enums.
     return {
-        "Device": "SYNTHETIC-DEVICE",
-        "Version": "SYNTHETIC-VERSION",
-        "AppVersion": "7.0.8",
-        "Key": "SYNTHETIC-KEY",
-        "lang": "ko",
+        **COMMON,
         "txtMenuId": "11",
         "txtJobId": "1101",
         "hidFreeFlg": "N",
@@ -1242,9 +1229,9 @@ def api_factory(config, scripted_client_factory, f8_logged_in_session):
 
 
 def decoded_form(request: httpx.Request) -> dict[str, str]:
-    pairs = parse_qs(request.content.decode(), keep_blank_values=True)
-    assert all(len(values) == 1 for values in pairs.values())
-    return {key: values[0] for key, values in pairs.items()}
+    pairs = wire_pairs(request)
+    assert len(dict(pairs)) == len(pairs)  # no repeated key
+    return dict(pairs)
 
 
 def test_schedule_client_wire_and_parse_no_queue(api_factory, schedule_query) -> None:

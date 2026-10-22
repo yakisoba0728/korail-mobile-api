@@ -1,28 +1,23 @@
 """INVALID public-call input raises before any request leaves the client, NetFunnel gate included.
 
 Each row makes one argument of a working smoke call (``test_public_api_smoke._f8_arguments``) invalid
-and pins the exception raised today. ``FIXES`` rows state the desired behavior of known defects as
-strict xfails, so they flip once the 2.6.2 fix lands. Synthetic values only; offline.
+and pins the exception raised today. ``FIXES`` rows pin defects fixed in 2.6.2 without ``match=``, so a
+reworded message still passes. Synthetic values only; offline.
 """
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
+from test_public_api_smoke import F8_DATE, _f8_arguments
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-from test_public_api_smoke import F8_DATE, _f8_arguments  # noqa: E402
-
-import korail_mobile_api as api  # noqa: E402
-from korail_mobile_api.constants import KORAIL_STANDBY_WAIT_FLAG  # noqa: E402
+import korail_mobile_api as api
+from korail_mobile_api.constants import KORAIL_STANDBY_WAIT_FLAG
 
 Job = api.KorailReservationJobType
 Cabin = api.KorailSeatClass
@@ -79,7 +74,6 @@ class Row:
     match: str | None = None
     error: type[Exception] = INVALID
     logged_in: bool = True
-    defect: str | None = None
 
 
 def _train(**changes: Any) -> api.TrainSummary:
@@ -648,7 +642,7 @@ ROWS = [
     Row("common-code-int", lambda c: c.get_common_codes(1), "sequence of strings", INVALID, False),
 ]
 
-# Desired behavior of defects fixed in parallel for 2.6.2. No match=, so a reworded fix still flips them.
+# Defects fixed in 2.6.2.
 FIXES = [
     # D6: non-ASCII digits reach int() (bare ValueError) or the wire.
     Row(
@@ -693,11 +687,6 @@ FIXES = [
 ]
 
 
-def _param(row: Row) -> Any:
-    marks = [] if row.defect is None else [pytest.mark.xfail(strict=True, reason=f"2.6.2 fix: {row.defect}")]
-    return pytest.param(row, id=row.id, marks=marks)
-
-
 def _recording(sent: list[httpx.Request]) -> Callable[[httpx.Request], httpx.Response]:
     """Answer like a healthy server so a missing guard shows up as a recorded request, not a parse error."""
 
@@ -710,7 +699,7 @@ def _recording(sent: list[httpx.Request]) -> Callable[[httpx.Request], httpx.Res
     return handler
 
 
-@pytest.mark.parametrize("row", [_param(row) for row in ROWS + FIXES])
+@pytest.mark.parametrize("row", [pytest.param(row, id=row.id) for row in ROWS + FIXES])
 def test_invalid_input_is_rejected_before_any_request(
     f8_client_factory: Callable[..., api.KorailClient], row: Row
 ) -> None:

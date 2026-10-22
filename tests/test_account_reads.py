@@ -9,10 +9,9 @@ from copy import deepcopy
 from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as dataclass_fields
 from typing import Any
-from urllib.parse import parse_qsl
 
-import httpx
 import pytest
+from conftest import synthetic_config, wire_pairs
 
 import korail_mobile_api as api
 from korail_mobile_api import KorailSession
@@ -30,9 +29,8 @@ from korail_mobile_api._core.parsing import (
     wire_models,
 )
 from korail_mobile_api._domains.passes import forms as passes_forms
-from korail_mobile_api._domains.reservations.parsers import _reservation_passengers, parse_cart_list_response
+from korail_mobile_api._domains.reservations.parsers import _reservation_passengers
 from korail_mobile_api.client import KorailClient
-from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import KorailProtocolError, KorailSessionExpiredError
 
 PREFIX = "/classes/com.korail.mobile."
@@ -149,7 +147,7 @@ class Case:
     method: str
     route: str
     kwargs: dict[str, Any]
-    fields: tuple[tuple[str, str], ...]
+    fields: dict[str, str] | tuple[tuple[str, str], ...]
     response: dict[str, Any]
     checks: tuple[tuple[str, Any], ...]
     source: str
@@ -157,31 +155,13 @@ class Case:
     query: bool = False
     common_lang: bool = True
 
-
-def case(
-    method: str,
-    route: str,
-    kwargs: dict[str, Any],
-    fields: dict[str, str] | tuple[tuple[str, str], ...],
-    response: dict[str, Any],
-    checks: tuple[tuple[str, Any], ...],
-    source: str,
-    **options: Any,
-) -> Case:
-    return Case(
-        method,
-        route,
-        kwargs,
-        tuple(fields.items()) if isinstance(fields, dict) else fields,
-        response,
-        checks,
-        source,
-        **options,
-    )
+    def __post_init__(self) -> None:
+        if isinstance(self.fields, dict):  # a table row may list its fields as a dict
+            object.__setattr__(self, "fields", tuple(self.fields.items()))
 
 
 CASES = [
-    case(
+    Case(
         "list_cart_items",
         "cart.showCartList",
         {"pnr_no": "TEST-PNR", "additional_service_request_no": "TEST-SERVICE"},
@@ -191,7 +171,7 @@ CASES = [
         "NetworkApi.java:691-692; CartListIn.java:51; CartInfo.java:28-61,281-392 (String fields, h_tk_cnt :51; "
         "unread getters :35,36,47,48,50; utlClsDt+utlClsTm joined at PayTicketContentKt.java:5234)",
     ),
-    case(
+    Case(
         "list_deposit_banks",
         "dlay.dptnBank.do",
         {},
@@ -201,7 +181,7 @@ CASES = [
         "NetworkApi.java:392-393; DptnBank.java:46-58",
         common_lang=False,
     ),
-    case(
+    Case(
         "list_delay_discount_tickets",
         "passCard.DelayDiscountView",
         {"departure_date_to": DATE},
@@ -211,7 +191,7 @@ CASES = [
         "NetworkApi.java:352-353; DelayDiscountViewIn.java:50,77",
         query=True,
     ),
-    case(
+    Case(
         "list_discount_coupons",
         "passCard.CouponView",
         {"page_no": 2, "pnr_no": "TEST-PNR"},
@@ -220,7 +200,7 @@ CASES = [
         (("items.0.coupon_no", "TEST-COUPON"), ("items.0.management_close_date", DATE)),
         "NetworkApi.java:328-329; CouponIn.java:52",
     ),
-    case(
+    Case(
         "get_point_summary",
         "xPoint.MyXPointView",
         {},
@@ -229,7 +209,7 @@ CASES = [
         (("korail_point", "001200"),),
         "NetworkApi.java:515-516; MyXPointViewIn.java:49; MyXPointViewOut.java:27-74",
     ),
-    case(
+    Case(
         "get_mileage_history",
         "mlg.amtSpec.do",
         {"request": api.MileageHistoryRequest(start_date=DATE, end_date="20300203", page_no=2)},
@@ -245,7 +225,7 @@ CASES = [
         (("entries.0.departure_date", DATE), ("entries.0.point_amount", "001200")),
         "NetworkApi.java:274-275; AmtSpecIn.java:57",
     ),
-    case(
+    Case(
         "list_discount_card_usages",
         "ticket.dcntCrdUseQry.do",
         {"card_no": "TEST-NCARD"},
@@ -254,7 +234,7 @@ CASES = [
         (("items.0.passenger_name", "TEST-PERSON"), ("items.0.run_date", DATE)),
         "NetworkApi.java:218-219; NCardHistoryIn.java:50; 검증 못 함",
     ),
-    case(
+    Case(
         "get_discount_card_schedule",
         "research.dcntCrdScheduleView.do",
         {
@@ -285,7 +265,7 @@ CASES = [
         (("trains.0.train_no", "00999"), ("trains.0.run_date", DATE)),
         "NetworkApi.java:340-341; NCardScheduleIn.java:61; NetworkService.java:2387-2393; 검증 못 함",
     ),
-    case(
+    Case(
         "get_pass_availability",
         "pass.passInfoList",
         {"kind_code": "TEST-KIND", "period_code": "TEST-PERIOD", "age_code": "TEST-AGE"},
@@ -298,7 +278,7 @@ CASES = [
         (("open_dates", (DATE,)), ("pass_info.0.pnr_no", "TEST-PNR"), ("offices.0.code", "TEST-CODE")),
         "NetworkApi.java:543-544; PassInfoListIn.java:57",
     ),
-    case(
+    Case(
         "get_pass_schedule",
         "pass.passScheduleInfoList",
         {
@@ -335,7 +315,7 @@ CASES = [
         (("schedules.0.trains.0.train_no", "00999"),),
         "NetworkApi.java:563-564; PassScheduleInfoListIn.java:63",
     ),
-    case(
+    Case(
         "get_trip_menu",
         "pass.trGdMenuLt.do",
         {},
@@ -358,7 +338,7 @@ CASES = [
         ),
         "NetworkApi.java:768-769; TrGdMenuLtIn.java:50; TrGdMenuLtOutPass.java:152 (h_seiect_station)",
     ),
-    case(
+    Case(
         "get_pass_menu",
         "pass.passMenu.do",
         {"menu_no": "TEST-MENU"},
@@ -379,7 +359,7 @@ CASES = [
         ),
         "NetworkApi.java:547-548; PassMenuIn.java:52",
     ),
-    case(
+    Case(
         "list_crew_request_reasons",
         "push.crwCallRq.do",
         {},
@@ -388,7 +368,7 @@ CASES = [
         (("items.0.message_code", "TEST-CODE"), ("items.0.content", "TEST-REASON")),
         "NetworkService.java:3952-3955; CommonIn.java:350; CrewCallCommonIn.java:50",
     ),
-    case(
+    Case(
         "get_commuter_kind_menu",
         "push.cmtrKnd.do",
         {"commuter_kind_code": "TEST-KIND"},
@@ -400,7 +380,7 @@ CASES = [
         query=True,
         common_lang=False,
     ),
-    case(
+    Case(
         "get_commuter_info",
         "research.cmtrInfo.do",
         {"request": api.CommuterInitialRequest(pass_data=PASS_DATA)},
@@ -425,7 +405,7 @@ CASES = [
         ),
         "NetworkApi.java:199-200; CommutationInfoIn.java:64",
     ),
-    case(
+    Case(
         "list_product_reservations",
         "product.ReservationList",
         {
@@ -445,7 +425,7 @@ CASES = [
         verb="GET",
         query=True,
     ),
-    case(
+    Case(
         "get_product_detail",
         "product.ReservationDetail",
         {"reservation_no": "TEST-RSV", "reservation_sequence": "0002"},
@@ -466,7 +446,7 @@ CASES = [
         verb="GET",
         query=True,
     ),
-    case(
+    Case(
         "get_ticket_receipt",
         "receipt.ReceiptInfo",
         {
@@ -491,7 +471,7 @@ CASES = [
         ),
         "NetworkApi.java:748-749; ReceiptInfo.java:87; StlInfo.java:55; CashReceiptInfo.java:52",
     ),
-    case(
+    Case(
         "list_reservations",
         "reservation.ReservationView",
         {},
@@ -506,7 +486,7 @@ CASES = [
         "ReservationViewOutTrainInfo.java:94,496 (protected deadline slots, h_rsv_amt); "
         "ReservationViewOutJrnyInfo.java:55 (reservationOut key guessed from the property name)",
     ),
-    case(
+    Case(
         "get_seat_assignment_schedule",
         "research.assignScheduleView.do",
         {
@@ -546,7 +526,7 @@ CASES = [
         (("trains.0.train_no", "00999"), ("next_page_flag", "Y")),
         "NetworkApi.java:278-279; AssignScheduleIn.java:63; dated 2026-09-22 slot observation",
     ),
-    case(
+    Case(
         "list_multi_child_discount_targets",
         "cust.mchdDcntTgt.do",
         {"departure_date": DATE},
@@ -555,7 +535,7 @@ CASES = [
         (("targets.0.customer_family_name", "TEST-PERSON"), ("targets.0.family_sequence", "0002")),
         "NetworkApi.java:491-492; MchdDcntTgtIn.java:51",
     ),
-    case(
+    Case(
         "get_trip_preferences",
         "research.custTripInfo.do",
         {},
@@ -564,7 +544,7 @@ CASES = [
         (("trips.0.departure_station_name", "TEST-FROM"), ("trips.0.adult_count", "0002")),
         "NetworkApi.java:332-333; CustTripInfoOut.java:51-63",
     ),
-    case(
+    Case(
         "list_trip_change_dates",
         "reservation.tripChgDate.do",
         {"departure_date": DATE},
@@ -575,7 +555,7 @@ CASES = [
         verb="GET",
         query=True,
     ),
-    case(
+    Case(
         "get_delivery_recipient",
         "tk.dlvRcvCust.do",
         {"ticket": FULL_REFERENCE},
@@ -584,7 +564,7 @@ CASES = [
         (("acceptance_customer_management_no", "TEST"), ("member_card_no", "TEST")),
         "NetworkApi.java:372-373; DeliveryRcvCustOut.java:51; DeliveryTicketFormViewModel.java:697-700; 검증 못 함",
     ),
-    case(
+    Case(
         "check_ticket_duplication",
         "ticket.ticketDupCheck.do",
         {"request": api.TicketDuplicationCheckRequest(pnr_no="TEST-PNR")},
@@ -593,7 +573,7 @@ CASES = [
         (("reservation_count", "0002"),),
         "NetworkApi.java:744-745; TicketDupCheckIn.java:51; TicketDupCheckOut.java:28,50 (String rsvCnt)",
     ),
-    case(
+    Case(
         "list_pbp_acceptances",
         "tk.pbpAcepSpec.do",
         {"tickets": (FULL_REFERENCE, SECOND_REFERENCE)},
@@ -607,7 +587,7 @@ CASES = [
         "NetworkApi.java:368-369; DeliveredTicketOut.java:50; Tk.java:54; Jrny.java:60; Seat.java:35,53 (int scarNo; "
         "the quoted-int Json setting is protected, NetworkServiceKt.java:15-31)",
     ),
-    case(
+    Case(
         "get_original_tickets",
         "research.tripChgOgtk.do",
         {"tickets": (REFERENCE, replace(REFERENCE, sale_sequence="TEST-SEQUENCE-2"))},
@@ -634,7 +614,7 @@ CASES = [
         "NetworkApi.java:235-236; OgTicketInquiryIn.java:53; ChangeOrtkInfo.java:52; OgTicketInquiryOut.java:27; "
         "OrgTk.java:28-52 (keys are attribute-name guesses); JrnyInfo.java:29-63; SeatInfo.java:25-51",
     ),
-    case(
+    Case(
         "get_self_seat_change_options",
         "self.seatChgInfo.do",
         {
@@ -658,7 +638,7 @@ CASES = [
         "NetworkApi.java:807-808; SeatAvailabilityIn.java:55; SeatAvailabilityOut.java:28-42; ChgStnInfo.java:21-35; "
         "ChgRsnInfo.java:21-24 (serializer names protected, ChgRsnInfo$$serializer.java:34-36: keys are guesses)",
     ),
-    case(
+    Case(
         "list_recent_delivery_recipients",
         "tk.rcntDlvHst.do",
         {},
@@ -670,7 +650,7 @@ CASES = [
         ),
         "NetworkApi.java:595-596; RecentDeliveryHistoryOut.java:51-63; DeliveryHistoryData.java:52",
     ),
-    case(
+    Case(
         "get_ticket_reservation_detail",
         "certification.ReservationList",
         {"request": api.TicketReservationDetailRequest(pnr_no="TEST-PNR")},
@@ -696,7 +676,7 @@ CASES = [
         "NetworkApi.java:423-424; TicketRsvInquiryIn.java:51; ReservationOutJrnyInfo.java:86,305 (h_arv_dt); "
         "ReservationOutSeatInfo.java:33,81,269 (h_tot_disc_amt); h_psg_tp_dv_nm only in BasketTicketDataKt.java:44",
     ),
-    case(
+    Case(
         "get_refund_fee",
         "refunds.CommissionView",
         {
@@ -717,7 +697,7 @@ CASES = [
         "h_orgtk_sale_dt, RefundTicketIn.java:38; compaNm/compaBrth from MyTicketDetailViewModel.java:277, "
         "FTicketDetailViewModel.java:179); RefundCommissionOut.java:35-41,62,140-164",
     ),
-    case(
+    Case(
         "get_refund_ticket_detail",
         "refunds.SelTicketInfo",
         {"ticket": REFERENCE, "from_purchase_history": True, "txt_index": "TEST-INDEX"},
@@ -752,7 +732,7 @@ CASES = [
         "TrainScheduleViewModel.java:2639,2730-2736,2749,2831); retPsbFlg Y is no refund guarantee "
         "(NormalTicketSectionKt.java:951)",
     ),
-    case(
+    Case(
         "list_tickets",
         "myTicket.MyTicketNewList.do",
         {"page_no": 3, "mode": "2", "boarding_date_from": DATE, "boarding_date_to": "20300203"},
@@ -784,7 +764,7 @@ CASES = [
         ),
         "NetworkApi.java:511-512; MyTicketListIn.java:62; MyTicketListOut.java:82 (pnr_list)",
     ),
-    case(
+    Case(
         "get_delay_certificate",
         "dlay.athnIsu.do",
         {"ticket": REFERENCE},
@@ -800,7 +780,7 @@ CASES = [
         "h_orgtk_wct_no/h_orgtk_ret_sale_dt/h_orgtk_sale_sqno/h_orgtk_ret_pwd (DelayCertificateViewModel.java:94); "
         "delayed tickets only (NormalTicketSectionKt.java:786-808)",
     ),
-    case(
+    Case(
         "get_delay_return_receipt",
         "dlay.pymtRcet.do",
         {"ticket": REFERENCE},
@@ -810,7 +790,7 @@ CASES = [
         "NetworkApi.java:355-357; DelayReturnReceiptIn.java:52; DelayReturnReceiptOut.java:53-69; same values as "
         "the delay certificate (DelayReturnReceiptViewModel.java:88; TicketReceiptRouteKt.java:309-313)",
     ),
-    case(
+    Case(
         "get_self_checkin",
         "checkin.info.do",
         {"detail": DETAIL},
@@ -826,7 +806,7 @@ CASES = [
         "NetworkApi.java:674-676; SelfCheckInInfoIn.java:55; SelfCheckInInfoOut.java:56-59,146; "
         "saleDt is h_sale_dt (SelfCheckInResultViewModel.java:111-112,249-250)",
     ),
-    case(
+    Case(
         "check_self_checkin_seat",
         "checkin.psbFlg.do",
         {"detail": DETAIL, "qr_code": "TEST-QR"},
@@ -860,16 +840,17 @@ def make_client(scripted_client_factory):
     """NetworkService.java:15320-15427: observe the encoded request, not just the builder."""
 
     def make(response: dict[str, Any], *, lang: str | None = "TEST-LANG", **config_changes: Any):
-        config = KorailConfig(
-            base_url="https://offline.invalid",
-            device="TEST-DEVICE",
-            version="TEST-VERSION",
-            key="TEST-KEY",
-            advertising_id="TEST-ADVERTISING",
-            lang=lang,
-            netfunnel_enabled=False,
-            disable_dynapath=True,
-            **config_changes,
+        config = synthetic_config(
+            **{
+                "device": "TEST-DEVICE",
+                "version": "TEST-VERSION",
+                "key": "TEST-KEY",
+                "advertising_id": "TEST-ADVERTISING",
+                "lang": lang,
+                "netfunnel_enabled": False,
+                "disable_dynapath": True,
+                **config_changes,
+            }
         )
         session = KorailSession(
             jsessionid="TEST-SESSION", customer_no="TEST-CUSTOMER", member_card_no="TEST-MEMBER"
@@ -929,11 +910,6 @@ def attr_path(obj: Any, path: str) -> Any:
     return obj
 
 
-def wire_pairs(request: httpx.Request, query: bool = False) -> list[tuple[str, str]]:
-    data = request.url.query if query else request.content
-    return parse_qsl(data.decode("utf-8"), keep_blank_values=True)
-
-
 @pytest.mark.parametrize("entry", CASES, ids=lambda c: c.method)
 @pytest.mark.parametrize("lang", [None, "TEST-LANG", ""])
 def test_account_read_contract(entry: Case, lang: str | None, make_client) -> None:
@@ -956,7 +932,7 @@ def test_account_read_contract(entry: Case, lang: str | None, make_client) -> No
         else [pair for pair in COMMON if pair[0] != "AppVersion"]
     )
     common += [("lang", lang)] if lang and entry.common_lang else []
-    assert Counter(wire_pairs(request, entry.query)) == Counter(common + list(entry.fields)), entry.source
+    assert Counter(wire_pairs(request, query=entry.query)) == Counter(common + list(entry.fields)), entry.source
     if entry.query:
         assert request.content == b""
     else:
@@ -1282,8 +1258,8 @@ def test_default_empty_optional_request_fields_are_omitted(entry, kwargs, expect
     """NetworkService.java:15335-15344; MyTicketListIn.java:62: no fabricated type discriminator."""
     client, calls = make_client(entry.response, lang=None)
     getattr(client, entry.method)(**kwargs)
-    assert Counter(wire_pairs(calls[0], entry.query)) == Counter(COMMON + list(expected.items()))
-    assert "type" not in dict(wire_pairs(calls[0], entry.query))
+    assert Counter(wire_pairs(calls[0], query=entry.query)) == Counter(COMMON + list(expected.items()))
+    assert "type" not in dict(wire_pairs(calls[0], query=entry.query))
 
 
 @pytest.mark.parametrize(
@@ -1295,15 +1271,15 @@ def test_default_empty_optional_request_fields_are_omitted(entry, kwargs, expect
 )
 def test_direct_field_and_query_keep_empty_common_values(method, kwargs, query, make_client) -> None:
     """NetworkApi.java:392-393; PushService.java:16-17: explicit @Field/@Query bypass flattening."""
-    client, calls = make_client(BY_NAME[method].response)
-    object.__setattr__(client.config, "key", "")
+    client, calls = make_client(BY_NAME[method].response, key="")
     getattr(client, method)(**kwargs)
-    assert ("Key", "") in wire_pairs(calls[0], query)
-    assert "lang" not in dict(wire_pairs(calls[0], query))
+    sent = wire_pairs(calls[0], query=query)
+    assert ("Key", "") in sent
+    assert "lang" not in dict(sent)
     if method == "list_deposit_banks":
-        assert wire_pairs(calls[0], query) == COMMON[:2] + [("Key", ""), COMMON[2]]
+        assert sent == COMMON[:2] + [("Key", ""), COMMON[2]]
     else:
-        assert "AppVersion" not in dict(wire_pairs(calls[0], query))
+        assert "AppVersion" not in dict(sent)
 
 
 def test_deposit_bank_direct_fields_allow_app_version_omission(make_client) -> None:
@@ -1601,7 +1577,7 @@ def test_malformed_envelope_preserves_entire_response(entry, field, make_client)
     assert len(calls) == 1
 
 
-def test_cart_nested_pay_details_stay_in_raw() -> None:
+def test_cart_nested_pay_details_stay_in_raw(make_client) -> None:
     """CartInfo.java:28-61 declares six nested pay-detail objects; ACCEPTANCE.md L7 keeps them only in raw."""
     names = (
         "greenCarPayDetail",
@@ -1613,7 +1589,8 @@ def test_cart_nested_pay_details_stay_in_raw() -> None:
     )
     details = {name: {"SYNTH-KEY": f"SYNTH-{name}"} for name in names}
     row = {"h_pnr_no": "TEST-PNR", "h_rcvd_amt": "001200", **details}
-    item = parse_cart_list_response(success(cart_infos={"cart_info": [row]})).items[0]
+    client, _ = make_client(success(cart_infos={"cart_info": [row]}))
+    item = client.list_cart_items(**BY_NAME["list_cart_items"].kwargs).items[0]
     assert {name: item.raw[name] for name in names} == details
     for model_field in dataclass_fields(item):
         if model_field.name != "raw":
@@ -1621,26 +1598,16 @@ def test_cart_nested_pay_details_stay_in_raw() -> None:
 
 
 @pytest.mark.parametrize("value", [True, 1.5, [], {}, "20300102", 20300102, None])
-def test_optional_delay_run_date_uses_optional_scalar_policy(value: object) -> None:
+def test_optional_delay_run_date_uses_optional_scalar_policy(value: object, make_client) -> None:
     """DelayCertificate.java:57-60 differs from the observed optional runDt; checks/BEHAVIOR.md governs it."""
-    from korail_mobile_api._domains.tickets.parsers import parse_delay_certificate_response
-
-    row = {
-        "runDay": "synthetic-day",
-        "trnNo": "00001",
-        "dptRsStnCd": "0001",
-        "arvRsStnCd": "0002",
-        "arvRsStnNm": "synthetic-station",
-        "dlayArvFlg": "Y",
-        "trnDlayTm": "20",
-        "runDt": value,
-    }
-    raw = {"strResult": "SUCC", "dlayList": [row]}
-    parsed = parse_delay_certificate_response(raw)
+    entry = BY_NAME["get_delay_certificate"]
+    payload = deepcopy(entry.response)
+    payload["dlayList"][0]["runDt"] = value
+    client, _ = make_client(payload)
+    parsed = client.get_delay_certificate(**entry.kwargs)
     expected = str(value) if type(value) in (int, str) else None
     assert parsed.delays[0].run_date == expected
-    assert parsed.delays[0].raw is row
-    assert parsed.raw is raw
+    assert parsed.raw == payload and parsed.delays[0].raw is parsed.raw["dlayList"][0]
 
 
 def test_ticket_list_parser_reads_the_response_mapping() -> None:

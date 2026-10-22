@@ -13,13 +13,11 @@ The refund tests assert only inherited-before-own order, not protected defaults,
 the final protected map, server order sensitivity or runtime equivalence.
 """
 
-from urllib.parse import parse_qsl
-
 import httpx
 import pytest
+from conftest import synthetic_config, wire_pairs
 
 from korail_mobile_api import (
-    KorailConfig,
     OriginalTicketReference,
     PaidTicket,
     RefundCompanion,
@@ -55,8 +53,7 @@ def test_observed_app_contract_subset(f8_client_factory, app_version, lang):
     client = f8_client_factory(
         handler,
         logged_in=True,
-        config=KorailConfig(
-            base_url="https://api.example.invalid",
+        config=synthetic_config(
             netfunnel_enabled=False,
             disable_dynapath=True,
             key="",  # Explicit @Field preserves this; flattened forms omit it below.
@@ -68,7 +65,7 @@ def test_observed_app_contract_subset(f8_client_factory, app_version, lang):
     expected_bank = list(APP_CONTRACT["bank"]["fields"])
     if app_version is None:
         expected_bank.remove("AppVersion")
-    bank = list(parse_qsl(seen[0].content.decode(), keep_blank_values=True))
+    bank = wire_pairs(seen[0])
     assert seen[0].url.path == APP_CONTRACT["bank"]["path"]
     assert [key for key, _ in bank] == expected_bank
     assert ("Key", "") in bank
@@ -97,15 +94,15 @@ def test_observed_app_contract_subset(f8_client_factory, app_version, lang):
         expected_common.append("lang")
     for name, request in zip(("fee", "refund"), seen[1:], strict=True):
         assert request.url.path == APP_CONTRACT[name]["path"]
-        pairs = parse_qsl(request.content.decode(), keep_blank_values=True)
+        pairs = wire_pairs(request)
         keys = [key for key, _ in pairs]
         assert keys[: len(expected_common)] == expected_common
         assert keys[len(expected_common)] == APP_CONTRACT[name]["identity"]
         assert "Key" not in keys
         assert len(keys) == len(set(keys))
         assert dict(pairs).get("AppVersion") == app_version
-    fee_form = dict(parse_qsl(seen[1].content.decode()))
-    refund_form = dict(parse_qsl(seen[2].content.decode()))
+    fee_form = dict(wire_pairs(seen[1]))
+    refund_form = dict(wire_pairs(seen[2]))
     assert fee_form["h_orgtk_ret_sale_dt"] == "0102"
     assert fee_form["h_comp_nm"] == companion.name
     assert fee_form["h_comp_cert_no"] == companion.certificate_no

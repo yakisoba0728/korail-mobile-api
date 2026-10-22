@@ -12,7 +12,6 @@ from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs
 
 import httpx
 import pytest
@@ -546,15 +545,6 @@ F8_CASE_DATA["get_reservation_hold"] = {
 }
 
 
-def _f8_match_fields(actual: dict[str, list[str]], expected: dict[str, list[str]]) -> None:
-    assert actual.keys() == expected.keys()
-    for key, values in expected.items():
-        if values == ["<DYNAMIC>"]:
-            assert len(actual[key]) == 1 and actual[key][0].isdigit()
-        else:
-            assert actual[key] == values, key
-
-
 def _f8_handler(
     exchanges: list[dict[str, Any]],
 ) -> tuple[Callable[[httpx.Request], httpx.Response], list[str]]:
@@ -568,8 +558,7 @@ def _f8_handler(
         assert request.url.scheme == "https"
         assert request.url.host == expected["host"]
         assert request.url.path == expected["path"]
-        _f8_match_fields(parse_qs(request.url.query.decode(), keep_blank_values=True), expected["query"])
-        _f8_match_fields(parse_qs(request.content.decode(), keep_blank_values=True), expected["form"])
+        # test_wire_equivalence.py pins these calls' query and form bytes in order.
         opcode = request.url.params.get("opcode")
         seen.append(opcode or request.url.path)
         payload = expected["response"]
@@ -590,8 +579,8 @@ def _f8_handler(
 def test_f8_all_public_methods(method_name: str, f8_client_factory: Callable[..., api.KorailClient]) -> None:
     """NetworkApi.java:87-811; PushService.java:16-17; Netfunnel.java:610-664,848-880.
 
-    Each call asserts the entire query/form key set and values, HTTP method/path,
-    typed result, and all 5101/API/5004 events, not just mocked method invocations.
+    Each call asserts the HTTP method/path, typed result, and all 5101/API/5004 events, not just mocked
+    method invocations; test_wire_equivalence.py pins the same calls' query/form bytes.
     Fixtures freeze the baseline; they do not prove protected fields or live acceptance.
     """
     case = F8_CASE_DATA[method_name]

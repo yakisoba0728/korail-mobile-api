@@ -9,11 +9,11 @@ from typing import Any
 from unittest.mock import Mock
 
 import pytest
+from conftest import synthetic_config
 
 from korail_mobile_api import (
     BaseKorailResponse,
     Korail,
-    KorailConfig,
     KorailPassengerCounts,
     KorailProtocolError,
     KorailReservationJobType,
@@ -48,7 +48,7 @@ def _train(**changes: Any) -> TrainSummary:
 
 @pytest.fixture
 def korail() -> Iterator[Korail]:
-    with Korail(KorailConfig(netfunnel_enabled=False), validate_stations=False) as value:
+    with Korail(synthetic_config(netfunnel_enabled=False), validate_stations=False) as value:
         yield value
 
 
@@ -134,7 +134,7 @@ def test_invalid_filter_is_rejected_before_search(
     def unexpected(*args: object, **kwargs: object) -> None:
         raise AssertionError("invalid filters must not send requests")
 
-    with Korail(KorailConfig(netfunnel_enabled=False)) as korail:
+    with Korail(synthetic_config(netfunnel_enabled=False)) as korail:
         monkeypatch.setattr(korail.client, "list_stations", unexpected)
         monkeypatch.setattr(korail.client, "search_trains", unexpected)
         with pytest.raises(TypeError, match="must be bool"):

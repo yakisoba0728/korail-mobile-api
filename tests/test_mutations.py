@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import copy
 import logging
+import sys
 from contextlib import closing
 from dataclasses import dataclass, replace
 from typing import Any, Callable
-from urllib.parse import parse_qs, parse_qsl
 
 import httpx
 import pytest
+from conftest import synthetic_config, wire_form, wire_pairs
 
 import korail_mobile_api._domains.payments.forms as payload_module
 import korail_mobile_api.client as client_module
@@ -128,19 +129,17 @@ def card(**changes: Any) -> CardPayment:
 
 @pytest.mark.parametrize("card_type, birthday", [("J", "000101"), ("S", "0000000000")])
 def test_card_representations_hide_fields_without_changing_payment(
-    caplog: pytest.LogCaptureFixture, card_type: str, birthday: str
+    mutation_client, caplog: pytest.LogCaptureFixture, card_type: str, birthday: str
 ) -> None:
     payment = card(card_type=card_type, birthday=birthday)
     logging.getLogger(__name__).warning("card=%r", payment)
     assert repr(payment) == str(payment) == repr(replace(payment)) == "CardPayment()"
     assert repr([payment]) == "[CardPayment()]"
     assert caplog.records[-1].getMessage() == "card=CardPayment()"
-    form = payload_module.build_card_payment_form(KorailConfig(), hold(), payment)
-    assert form["hidStlCrCrdNo1"] == payment.card_number
-    assert form["hidVanPwd1"] == payment.card_password
-    assert form["hidCrdVlidTrm1"] == payment.card_expire
-    assert form["hidAthnVal1"] == birthday and form["hidAthnDvCd1"] == card_type
-    assert replace(payment) == payment
+    expected = payment_form(hidAthnDvCd1=card_type, hidAthnVal1=birthday)
+    client, requests = mutation_client([BASE], "POST", ("payment.ReservationPayment",), expected)
+    client.pay_with_card(hold(), payment)
+    assert len(requests) == 1 and replace(payment) == payment
 
 
 class _UnrenderableCardField:
@@ -302,6 +301,17 @@ def reservation_form(
         }
         result.update({f"{k}{i}": v for k, v in row.items()})
     return result
+
+
+def merge_form(standing: bool = True) -> dict[str, Any]:
+    """ReservationMergeViewModel.smali:7671-7774: the first hold's form with the four merge fields changed."""
+    return {
+        **reservation_form(job="1202"),
+        "txtStndFlg": "Y" if standing else "N",
+        "txtMidRsStnCd": "9099",
+        "txtMidStnConsOrdr": "004",
+        "txtMidStnRunOrdr": "003",
+    }
 
 
 def payment_form(**changes: str) -> dict[str, Any]:
@@ -504,12 +514,6 @@ class Case:
 
 def cases() -> list[Case]:
     reserve = "certification.TicketReservation"
-    merge = {
-        **reservation_form(job="1202", stnd="Y"),
-        "txtMidRsStnCd": "9099",
-        "txtMidStnConsOrdr": "004",
-        "txtMidStnRunOrdr": "003",
-    }
     nreserve = {**reservation_form(), "txtMenuId": "A2", "txtDiscKndCd1": "153", "txtCardNo_1": "SYNTH-N-CARD"}
     cancel = {**COMMON, "txtPnrNo": PNR, "txtJrnySqno": "0007", "txtJrnyCnt": "0001", "hidRsvChgNo": "009"}
     return [
@@ -548,7 +552,7 @@ def cases() -> list[Case]:
             lambda c: c.reserve_merge(train(), merge_rows()),
             "POST",
             (reserve,),
-            merge,
+            merge_form(),
             hold_raw(),
             "parse_reservation_hold_response",
             {"received_amount": "1200"},
@@ -819,7 +823,7 @@ def pairs(mapping: dict[str, Any]) -> dict[str, list[str]]:
 @pytest.fixture
 def mutation_client(scripted_client_factory):
     """Keep independent wire goldens while sharing transport recording and cleanup."""
-    config = KorailConfig(
+    config = synthetic_config(
         base_url="https://offline.invalid",
         device=COMMON["Device"],
         version=COMMON["Version"],
@@ -837,14 +841,13 @@ def mutation_client(scripted_client_factory):
             assert request.url.host == "offline.invalid"
             assert request.method == method
             assert request.url.path == ROOT + routes[i]
-            encoded = request.url.query.decode() if method == "GET" else request.content.decode()
             if method == "GET":
                 assert request.content == b""
             else:
                 assert request.url.query == b""
                 assert request.headers["content-type"].startswith("application/x-www-form-urlencoded")
             form = expected[i] if isinstance(expected, list) else expected
-            assert parse_qs(encoded, keep_blank_values=True) == pairs(form)
+            assert wire_form(request, query=method == "GET") == pairs(form)
             return responses[i]
 
         client, requests, _ = scripted_client_factory([reply] * len(responses), config=config, session=session)
@@ -996,13 +999,7 @@ def test_cancel_second_stage_failure_is_not_retried(mutation_client) -> None:
 def test_merge_exact_four_overrides(mutation_client, standing: bool) -> None:
     """ReservationMergeViewModel.smali:7671-7774 mask=0x7ffef; TicketReservationIn.java:486 (zero-based bits 4,19,20,21)."""
     first = reservation_form(job="1202")
-    merged = {
-        **first,
-        "txtStndFlg": "Y" if standing else "N",
-        "txtMidRsStnCd": "9099",
-        "txtMidStnConsOrdr": "004",
-        "txtMidStnRunOrdr": "003",
-    }
+    merged = merge_form(standing)
     changed = {key for key in first.keys() | merged.keys() if first.get(key) != merged.get(key)}
     assert changed == ({"txtStndFlg"} if standing else set()) | {
         "txtMidRsStnCd",
@@ -1676,7 +1673,7 @@ def test_recalculation_form_keeps_the_retrofit_field_order(mutation_client) -> N
         [hold_raw()], "POST", ("certification.PriceReCalculation",), recalc_form(txtPsrmClCd1="2")
     )
     client.recalculate_price(recalc_request(cabin_class_code="2"))
-    keys = [key for key, _ in parse_qsl(requests[0].content.decode(), keep_blank_values=True)]
+    keys = [key for key, _ in wire_pairs(requests[0])]
     lists = ("psg_tp_dv_cd", "psrm_cl_cd", "dcnt_knd_cd1", "hidDscpNo", "hidDcntKndCd", "hidFmlyNo")
     assert keys[-12:] == [key for key in lists for _ in range(2)]
     assert "txtPsrmClCd1" in keys[:-12]
@@ -1739,8 +1736,7 @@ def test_mutation_forms_follow_the_app_dto_order(mutation_client, name: str, exp
     case = next(c for c in CASES if c.name == name)
     client, requests = mutation_client([copy.deepcopy(case.response)], case.method, case.routes[:1], case.form)
     case.invoke(client)
-    keys = [key for key, _ in parse_qsl(requests[0].content.decode(), keep_blank_values=True)]
-    assert keys == expected
+    assert [key for key, _ in wire_pairs(requests[0])] == expected
 
 
 def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order() -> None:
@@ -1784,8 +1780,7 @@ def test_retrieval_sends_the_pair_after_the_count_and_needs_a_journey(mutation_c
     case = next(c for c in CASES if c.name == "recall_delivered_ticket")
     client, requests = mutation_client([case.response], case.method, case.routes, case.form)
     case.invoke(client)
-    keys = [key for key, _ in parse_qsl(requests[0].content.decode(), keep_blank_values=True)]
-    assert keys[-3:] == ["pbpCnt", "pbpRsvNo", "pnrNo"]
+    assert [key for key, _ in wire_pairs(requests[0])][-3:] == ["pbpCnt", "pbpRsvNo", "pnrNo"]
     with pytest.raises(KorailProtocolError, match="first journey"):
         client.recall_delivered_ticket(replace(DELIVERED_TICKET, journeys=()))
     with pytest.raises(KorailProtocolError):
@@ -1862,14 +1857,9 @@ def test_merge_first_and_follow_up_holds_stay_payable(mutation_client) -> None:
         [hold_raw()], "POST", ("certification.TicketReservation",), reservation_form(job="1202", stnd="N")
     )
     assert first_client.reserve(train(), job_type=Job.MERGE_STANDING).payable is True
-    merged = {
-        **reservation_form(job="1202"),
-        "txtStndFlg": "Y",
-        "txtMidRsStnCd": "9099",
-        "txtMidStnConsOrdr": "004",
-        "txtMidStnRunOrdr": "003",
-    }
-    follow_up_client, _ = mutation_client([hold_raw()], "POST", ("certification.TicketReservation",), merged)
+    follow_up_client, _ = mutation_client(
+        [hold_raw()], "POST", ("certification.TicketReservation",), merge_form()
+    )
     assert follow_up_client.reserve_merge(train(), merge_rows()).payable is True
     assert hold().payable is True
 
@@ -1970,21 +1960,12 @@ def test_transfer_legs_must_be_distinct_and_in_boarding_order(
 
 def test_merge_rows_with_the_same_run_date_are_accepted(mutation_client) -> None:
     rows = tuple(TrainScheduleItem(**{**row.__dict__, "run_date": "20991230"}) for row in merge_rows())
-    merged = {
-        **reservation_form(job="1202"),
-        "txtStndFlg": "Y",
-        "txtMidRsStnCd": "9099",
-        "txtMidStnConsOrdr": "004",
-        "txtMidStnRunOrdr": "003",
-    }
-    client, requests = mutation_client([hold_raw()], "POST", ("certification.TicketReservation",), merged)
+    client, requests = mutation_client([hold_raw()], "POST", ("certification.TicketReservation",), merge_form())
     client.reserve_merge(train(), rows)
     assert len(requests) == 1
 
 
 def test_mutation_parsers_read_integer_envelope_fields_as_strings() -> None:
-    from korail_mobile_api._domains.reservations.parsers import parse_reservation_hold_response
-
     raw = {**hold_raw(), "h_msg_cd": 0, "h_msg_txt": 7}
     result = parse_reservation_hold_response(raw)
     assert (result.h_msg_cd, result.h_msg_txt) == ("0", "7")
@@ -1997,34 +1978,6 @@ def test_merge_rows_from_another_run_date_are_rejected(mutation_client) -> None:
     with pytest.raises(KorailProtocolError, match="run_date"):
         client.reserve_merge(train(), rows)
     assert not requests
-
-
-@pytest.mark.parametrize(
-    "case",
-    [
-        c
-        for c in CASES
-        if c.name in {"reserve", "reserve_transfer", "reserve_with_discount_card", "pay_with_card"}
-    ],
-    ids=lambda c: c.name,
-)
-def test_queue_handoff_one_operation_not_retry(mutation_client, case: Case) -> None:
-    """Client gate boundary only. NetFunnel SDK protocol belongs to session 5 and checks/netfunnel_offline.py."""
-    calls: list[str] = []
-
-    class Queue:
-        def run(self, gate: str, send: Callable[[], Any]) -> Any:
-            calls.append(gate)
-            return send()
-
-        def close(self) -> None:
-            pass
-
-    client, requests = mutation_client([case.response], case.method, case.routes, case.form)
-    client.netfunnel = Queue()
-    case.invoke(client)
-    assert calls == ["pay" if case.name == "pay_with_card" else "reserve"]
-    assert len(requests) == 1
 
 
 def test_numeric_zero_identifiers_are_echoed_without_repadding(mutation_client) -> None:
@@ -2063,15 +2016,10 @@ def test_non_object_json_keeps_raw(mutation_client, payload: Any) -> None:
     assert len(requests) == 1
 
 
-def test_invalid_json_retains_original_body_without_retry(scripted_client_factory) -> None:
+def test_invalid_json_retains_original_body_without_retry(mutation_client) -> None:
     raw_text = '{"synthetic_partial_pnr":"SYNTH-PNR-ONLY",'
-    config = KorailConfig(
-        base_url="https://offline.invalid",
-        netfunnel_enabled=False,
-        dynapath=DynapathConfig(enabled=True, token_provider=lambda ctx: "SYNTHETIC-NOT-A-TOKEN"),
-    )
-    client, requests, _ = scripted_client_factory(
-        [httpx.Response(200, text=raw_text)], config=config, session=KorailSession(jsessionid="SYNTH-SESSION")
+    client, requests = mutation_client(
+        [httpx.Response(200, text=raw_text)], "POST", ("certification.TicketReservation",), reservation_form()
     )
     with pytest.raises(KorailProtocolError) as caught:
         client.reserve(train())
@@ -2130,21 +2078,15 @@ def test_refund_required_but_nullable_list_and_integer_string_compatibility(
 
 def test_actual_first_and_merge_requests_differ_only_at_four_fields(mutation_client) -> None:
     """ReservationMergeViewModel.smali:7671-7774; original request copied, not two new short journeys."""
-    first_expected = reservation_form(job="1202")
-    merged = {
-        **first_expected,
-        "txtStndFlg": "Y",
-        "txtMidRsStnCd": "9099",
-        "txtMidStnConsOrdr": "004",
-        "txtMidStnRunOrdr": "003",
-    }
     client, requests = mutation_client(
-        [hold_raw(), hold_raw()], "POST", ("certification.TicketReservation",) * 2, [first_expected, merged]
+        [hold_raw(), hold_raw()],
+        "POST",
+        ("certification.TicketReservation",) * 2,
+        [reservation_form(job="1202"), merge_form()],
     )
     client.reserve(train(), job_type=Job.MERGE_STANDING)
     client.reserve_merge(train(), merge_rows())
-    actual_first = dict(parse_qsl(requests[0].content.decode(), keep_blank_values=True))
-    actual_second = dict(parse_qsl(requests[1].content.decode(), keep_blank_values=True))
+    actual_first, actual_second = dict(wire_pairs(requests[0])), dict(wire_pairs(requests[1]))
     changed = {
         k for k in actual_first.keys() | actual_second.keys() if actual_first.get(k) != actual_second.get(k)
     }
@@ -2184,19 +2126,10 @@ def test_cancel_first_stage_common_envelope_failures_stop(mutation_client) -> No
 @pytest.mark.parametrize("key", ["h_psg_tp_cd", "h_psrm_cl_cd", "h_dcnt_knd_cd1", "dcnt_reld_no"])
 def test_recalculation_from_hold_keeps_raw_on_oversized_integer(key: str) -> None:
     """ReservationOutSeatInfo.java:80–109 declares strings; conversion errors must preserve the hold."""
-    import sys
-
-    from korail_mobile_api import (
-        KorailProtocolError,
-        PriceRecalculationRequest,
-        ReservationHoldResponse,
-        ReservationJourney,
-    )
-
     seat = {key: 10**700}
     journey_raw = {"seat_infos": {"seat_info": [seat]}}
     raw = {"strResult": "SUCC", "synthetic_journey": journey_raw}
-    hold = ReservationHoldResponse(
+    held = ReservationHoldResponse(
         str_result="SUCC",
         pnr_no="SYNTHETIC-PNR",
         journeys=(ReservationJourney(raw=journey_raw),),
@@ -2206,7 +2139,7 @@ def test_recalculation_from_hold_keeps_raw_on_oversized_integer(key: str) -> Non
     try:
         sys.set_int_max_str_digits(640)
         with pytest.raises(KorailProtocolError) as error:
-            PriceRecalculationRequest.for_hold(hold, ["SYNTHETIC-DISCOUNT"])
+            PriceRecalculationRequest.for_hold(held, ["SYNTHETIC-DISCOUNT"])
         assert error.value.raw is raw
         assert error.value.parser_raw is seat
         assert isinstance(error.value.__cause__, ValueError)
@@ -2230,7 +2163,7 @@ def test_documented_recovery_cancels_a_hold_whose_response_failed_to_parse(scrip
         str_result="SUCC", pnr_no=str(raw.get("h_pnr_no") or ""), journey_count=str(raw.get("h_jrny_cnt") or "")
     )
     client.cancel_unpaid_hold(pending)
-    cancel = dict(parse_qsl(requests[-1].content.decode()))
+    cancel = dict(wire_pairs(requests[-1]))
     assert [request.url.path.rsplit(".", 1)[-1] for request in requests] == [
         "TicketReservation",
         "ReservationCancel",
