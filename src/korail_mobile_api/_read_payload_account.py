@@ -128,7 +128,9 @@ def _validate_maas_service_detail_query_values(
 def build_multi_child_discount_target_form(
     departure_date: str,
 ) -> dict[str, str]:
-    return {"dptDt": _calendar_date(departure_date, "departure_date").strftime("%Y%m%d")}
+    # 검증한 입력을 그대로 보냅니다. strftime 의 %Y 는 glibc 에서 1000년 미만을 0 으로 채우지 않습니다.
+    _calendar_date(departure_date, "departure_date")
+    return {"dptDt": departure_date}
 
 
 def build_korail_point_summary_form() -> dict[str, str]:
@@ -189,7 +191,8 @@ def build_maas_cart_status_form(item: CartItem) -> dict[str, str]:
 def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
     # 달력 검증은 앱에 없는 라이브러리 검사입니다(앱은 날짜 선택기 값만 보냅니다). 라이브: 20260230·20261340 은 SUCC/API.I00000 에 tripChgDates 없이
     # 돌아왔고, 정상 날짜는 변경 가능일이 없어도 빈 tripChgDates 를 실었습니다(20250101·20991231 등).
-    return {"tripChgDate": _calendar_date(departure_date, "departure_date").strftime("%Y%m%d")}
+    _calendar_date(departure_date, "departure_date")
+    return {"tripChgDate": departure_date}
 
 
 def build_recent_delivery_history_form(customer_no: str) -> dict[str, str]:

@@ -69,12 +69,12 @@ KST = timezone(timedelta(hours=9))
 _PAST_TOLERANCE = timedelta(minutes=1)
 
 
-def _departure_moment(depart_after: datetime | None) -> datetime:
+def _departure_moment(depart_after: datetime | None, *, allow_past: bool = False) -> datetime:
     moment = depart_after if depart_after is not None else datetime.now(KST)
     if not isinstance(moment, datetime):
         raise TypeError("depart_after must be a datetime")
     moment = moment.replace(tzinfo=KST) if moment.tzinfo is None else moment.astimezone(KST)
-    if moment < datetime.now(KST) - _PAST_TOLERANCE:
+    if not allow_past and moment < datetime.now(KST) - _PAST_TOLERANCE:
         raise ValueError("이미 지난 출발 시각입니다")
     return moment
 
@@ -84,12 +84,9 @@ class StationResource:
 
     def __init__(self, client: KorailClient) -> None:
         self._client = client
-        self._cache: tuple[KorailStation, ...] | None = None
 
     def all(self, *, refresh: bool = False) -> tuple[KorailStation, ...]:
-        if self._cache is None or refresh:
-            self._cache = self._client.get_station_data().stations
-        return self._cache
+        return self._client._cached_station_data(refresh=refresh).stations
 
     def find(self, reference: str) -> KorailStation | None:
         value = reference.strip()
@@ -149,7 +146,10 @@ class TrainResource:
         """
         if type(include_no_seats) is not bool or type(include_waiting_list) is not bool:
             raise TypeError("include_no_seats and include_waiting_list must be bool")
-        moment = _departure_moment(depart_after)
+        # 다음 페이지는 첫 페이지와 같은 조건이어야 하므로 시각을 다시 읽지 않고 지난 시각도 허용합니다.
+        if continuation is not None and depart_after is None:
+            raise ValueError("continuation needs the depart_after of the first page")
+        moment = _departure_moment(depart_after, allow_past=continuation is not None)
         query = self._query(
             departure, arrival, moment, passengers, train_group_code, include_srt, include_nearby_stations
         )
@@ -166,11 +166,11 @@ class TrainResource:
         include_srt: bool,
         include_nearby_stations: bool,
     ) -> TrainSearchQuery:
-        if self._validate_stations:
-            self._stations.ensure_exists(departure, arrival)
         counts = passengers if passengers is not None else KorailPassengerCounts()
         if not isinstance(counts, KorailPassengerCounts):
             raise TypeError("passengers must be KorailPassengerCounts")
+        if self._validate_stations:
+            self._stations.ensure_exists(departure, arrival)
         return TrainSearchQuery(
             departure_station_code=departure,
             arrival_station_code=arrival,

@@ -6,7 +6,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from typing import Any
 from urllib.parse import urlencode
 
@@ -14,10 +15,9 @@ import httpx
 
 from ._parsing import _envelope
 from ._payload_helpers import _device_version_key
-from ._transport import build_transport
+from ._transport import build_transport, redact_failed_request
 from .config import KorailConfig
 from .constants import (
-    DYNAPATH_ALLOWLIST_PATHS,
     DYNAPATH_REQUIRED_PATHS,
 )
 from .dynapath import DynapathRequestContext, DynapathTokenGenerator
@@ -114,16 +114,17 @@ def _send(
     try:
         return send()
     except (httpx.HTTPError, httpx.InvalidURL) as exc:
+        redact_failed_request(exc)
         raise KorailTransportError(f"KORAIL transport failed for {method} {path}") from exc
 
 
-def _decode_response(response: httpx.Response, *, path: str) -> Any:
+def _decode_response(response: httpx.Response, *, path: str, block_paths: AbstractSet[str]) -> Any:
     """판정 순서: DynaPath 차단(보호 경로, 상태 코드와 무관) → 2xx 가 아닌 상태 → JSON 오류."""
     try:
         payload, decoded = response.json(), True
     except ValueError:
         payload, decoded = None, False
-    if path in DYNAPATH_ALLOWLIST_PATHS:
+    if path in block_paths:
         blocked_payload = _dynapath_block_payload(payload)
         if blocked_payload is not None:
             message = blocked_payload.get("message")
@@ -155,10 +156,15 @@ def _drop_empty(mapping: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in mapping.items() if not _is_empty_string(value)}
 
 
+def _reject_none(fields: Iterable[tuple[str, Any]], path: str) -> None:
+    # httpx 는 None 을 빈 값(key=)으로 보내지만 빌더의 생략 규칙은 빈 문자열이나 키 제외입니다.
+    for name, value in fields:
+        if value is None:
+            raise KorailProtocolError(f"KORAIL request field {name} is None; nothing was sent to {path}")
+
+
 def _form_value(value: Any) -> str:
-    """None 은 빈 값, bool 은 true/false 입니다."""
-    if value is None:
-        return ""
+    """bool 은 true/false 입니다."""
     if isinstance(value, bool):
         return "true" if value else "false"
     return str(value)
@@ -244,6 +250,9 @@ class KorailHttpClient:
             raise KorailProtocolError("KORAIL DynaPath token provider failed") from exc
         if token is None:
             return {}
+        # 헤더에 실을 수 없는 값은 httpx 의 날 예외 대신 요청 전에 거절합니다.
+        if not isinstance(token, str) or not token.isascii():
+            raise KorailProtocolError("KORAIL DynaPath token provider must return an ASCII str or None")
         return {dynapath.header_name: token}
 
     def _finish_read(
@@ -255,7 +264,11 @@ class KorailHttpClient:
         raise_on_fail: bool,
         require_envelope: bool,
     ) -> BaseKorailResponse:
-        payload = _decode_response(_send(self._client, send, method=method, path=path), path=path)
+        payload = _decode_response(
+            _send(self._client, send, method=method, path=path),
+            path=path,
+            block_paths=self.config.dynapath.allowlist_paths,
+        )
         # 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다.
         common_out = path not in _NON_COMMON_OUT_READ_PATHS
         return parse_base_response(
@@ -296,6 +309,7 @@ class KorailHttpClient:
                 mapping_form.update(data)
             if omit_empty_fields:
                 mapping_form = _drop_empty(mapping_form)
+        _reject_none(ordered_form if ordered_form is not None else (mapping_form or {}).items(), path)
         headers = {"Content-Type": "application/x-www-form-urlencoded"} if form_encoded else {}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
@@ -339,6 +353,7 @@ class KorailHttpClient:
         query.update(params)
         if omit_empty_fields:
             query = _drop_empty(query)
+        _reject_none(query.items(), path)
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
@@ -359,6 +374,7 @@ class KorailHttpClient:
     ) -> BaseKorailResponse:
         """실패 판정을 꺼도 봉투 타입 검사와 P058 만료 판정은 유지합니다."""
         data = _drop_empty(data)
+        _reject_none(data.items(), path)
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         headers.update(self._dynapath_headers("POST", path))
         response = _send(
@@ -367,7 +383,7 @@ class KorailHttpClient:
             method="POST",
             path=path,
         )
-        payload = _decode_response(response, path=path)
+        payload = _decode_response(response, path=path, block_paths=self.config.dynapath.allowlist_paths)
         return parse_base_response(payload, raise_on_fail=raise_on_fail, require_result=True)
 
     def get_json(
@@ -389,6 +405,7 @@ class KorailHttpClient:
             query.update(params)
         if omit_empty_fields:
             query = _drop_empty(query)
+        _reject_none(query.items(), path)
         headers = self._dynapath_headers("GET", path) if include_dynapath else {}
         return self._finish_read(
             lambda: self._client.get(path, params=query, headers=headers),

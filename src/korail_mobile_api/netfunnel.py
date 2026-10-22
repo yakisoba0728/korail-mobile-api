@@ -16,7 +16,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from ._transport import build_transport
+from ._transport import build_transport, redact_failed_request
 from .config import KorailConfig
 from .constants import (
     KORAIL_NETFUNNEL_PATH,
@@ -227,7 +227,8 @@ class KorailNetFunnelClient:
             )
         try:
             response = self._client.post(url, content=b"")
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            redact_failed_request(exc)
             raise KorailTransportError(
                 f"KORAIL NetFunnel transport failed for POST {KORAIL_NETFUNNEL_PATH}"
             ) from exc

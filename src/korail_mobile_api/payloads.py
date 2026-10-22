@@ -158,6 +158,23 @@ def build_cache_query(timestamp_ms: int | None = None) -> dict[str, str]:
     return {"timeStamp": str(resolved)}
 
 
+def validate_train_search_passengers(query: TrainSearchQuery) -> None:
+    """역 이름 조회 같은 선행 요청 전에도 부를 수 있는 승객 수 검사입니다."""
+    counts = (
+        query.passengers,
+        query.child_passengers,
+        query.senior_passengers,
+        query.high_disability_passengers,
+        query.low_disability_passengers,
+        query.teenager_passengers,
+        query.infant_passengers,
+        query.guide_dog_passengers,
+    )
+    # 범위·합계는 앱 DTO 가 검사하지 않아 서버에 맡깁니다(TrainScheduleIn.java:95).
+    if any(type(count) is not int for count in counts):
+        raise KorailProtocolError("passenger counts must be integers")
+
+
 def build_train_search_form(
     config: KorailConfig,
     query: TrainSearchQuery,
@@ -172,19 +189,7 @@ def build_train_search_form(
     """다음 쪽 커서는 세 필드만 보내며 pgPrCnt는 보내지 않습니다(TrainScheduleIn.java:641-650; TrainScheduleViewModel.java:7340)."""
     if continuation is not None and not isinstance(continuation, TrainSearchContinuation):
         raise KorailProtocolError("KORAIL train search continuation must be a TrainSearchContinuation")
-    counts = (
-        query.passengers,
-        query.child_passengers,
-        query.senior_passengers,
-        query.high_disability_passengers,
-        query.low_disability_passengers,
-        query.teenager_passengers,
-        query.infant_passengers,
-        query.guide_dog_passengers,
-    )
-    # 범위·합계는 앱 DTO 가 검사하지 않아 서버에 맡깁니다(TrainScheduleIn.java:95).
-    if any(type(count) is not int for count in counts):
-        raise KorailProtocolError("passenger counts must be integers")
+    validate_train_search_passengers(query)
     if not isinstance(query.seat_attribute_code, str) or not query.seat_attribute_code:
         raise KorailProtocolError("seat_attribute_code must be a non-empty string")
     form = {

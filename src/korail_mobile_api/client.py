@@ -144,6 +144,7 @@ from .payloads import (
     build_train_schedule_form,
     build_train_schedule_special_form,
     build_train_search_form,
+    validate_train_search_passengers,
 )
 from .read_models import (
     CartListResponse,
@@ -338,6 +339,7 @@ class KorailClient:
             _close_connections(self.http.close, primary=error)
             raise
         self.session = KorailSessionClient(self.http)
+        self._station_data: StationDataResponse | None = None
         self._station_names: dict[str, str] | None = None
 
     def close(self) -> None:
@@ -1581,6 +1583,7 @@ class KorailClient:
         use_special_schedule: bool = False,
         peak_season: bool = False,
     ) -> BaseKorailResponse:
+        validate_train_search_passengers(query)
         departure_name = self._resolve_station_reference(query.departure_station_code)
         arrival_name = self._resolve_station_reference(query.arrival_station_code)
         current = self.session.current
@@ -1611,11 +1614,18 @@ class KorailClient:
             lambda: self.http.post_form(route, form, include_common=False),
         )
 
+    def _cached_station_data(self, *, refresh: bool = False) -> StationDataResponse:
+        # 간편 API의 역 검사와 숫자 역 코드 해석이 같은 목록을 한 번만 받아 씁니다.
+        if self._station_data is None or refresh:
+            self._station_data = self.get_station_data()
+            self._station_names = None
+        return self._station_data
+
     def _resolve_station_reference(self, reference: str) -> str:
         if not reference.strip().isdigit():
             return resolve_station_name(reference, {})
         if self._station_names is None:
-            self._station_names = parse_station_name_map(self.get_station_data().raw)
+            self._station_names = parse_station_name_map(self._cached_station_data().raw)
         return resolve_station_name(reference, self._station_names)
 
     def get_train_schedule(
@@ -1788,7 +1798,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """병합예약의 후속 요청으로 실제 미결제 예약을 만듭니다.
 
-        ``passengers.teenager > 0``은 요청 전에 ``KorailProtocolError``로 거절합니다.
+        ``passengers.teenager > 0``과 ``MERGE_STANDING`` 이외의 ``job_type``은 요청 전에 ``KorailProtocolError``로 거절합니다.
         첫 홀드는 호출자가 취소해야 하며 후속 홀드는 별도 PNR일 수 있습니다(ReservationMergeViewModel.java:1352,1556; 실서버 관측)."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -2014,10 +2024,14 @@ class KorailClient:
         )
         if not add_to_cart:
             return hold
-        cart = self._mutation(
-            "/classes/com.korail.mobile.cart.addCartList",
-            build_cart_add_form(self.config, CartAddRequest(request.pnr_no)),
-            parser=parse_cart_add_response,
-            raise_on_fail=False,
-        )
+        try:
+            cart = self._mutation(
+                "/classes/com.korail.mobile.cart.addCartList",
+                build_cart_add_form(self.config, CartAddRequest(request.pnr_no)),
+                parser=parse_cart_add_response,
+                raise_on_fail=False,
+            )
+        except KorailApiError as exc:
+            # 재계산된 홀드는 서버에 이미 반영됐으므로 돌려주고, 장바구니 실패는 결과에 남깁니다.
+            return replace(hold, cart_addition_error=exc)
         return replace(hold, cart_addition=cart)
