@@ -706,6 +706,8 @@ def cases() -> list[Case]:
             "parse_reservation_hold_response",
             {"pnr_no": PNR, "received_amount": "1200"},
         ),
+        # SelfCheckInInfoViewModel.java:224-225; SelfCheckInRegisterIn.java:59: seat fields from the seat row,
+        # jrnySqno and saleDd from the detail. SelfCheckInRegisterOut.java:47-52: msgId required, nullable.
         Case(
             "register_self_checkin",
             lambda c: c.register_self_checkin(CHECKIN_DETAIL, CHECKIN_SEAT),
@@ -726,6 +728,8 @@ def cases() -> list[Case]:
             "parse_self_checkin_register_response",
             {"message_id": "SYNTH-MSG"},
         ),
+        # SelfCheckInResultViewModel.java:111-112; SelfCheckInCancelIn.java:53: the info fields.
+        # SelfCheckInCancelOut.java:50-56: msgId optional.
         Case(
             "cancel_self_checkin",
             lambda c: c.cancel_self_checkin(CHECKIN_DETAIL),
@@ -1708,7 +1712,7 @@ def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order
 
 def test_retrieval_sends_the_pair_after_the_count_and_needs_a_journey(mutation_client) -> None:
     """NetworkApi.java:642-644: FieldMap (common, pbpCnt) then @Field pbpRsvNo, pnrNo;
-    DeliveredTicketViewModel.java:283."""
+    DeliveredTicketViewModel.java:185-205,283: one call per ticket grouped by the first journey's pbpRsvNo."""
     case = next(c for c in CASES if c.name == "retrieve_delivered_ticket")
     client, requests = mutation_client([case.response], case.method, case.routes, case.form)
     case.invoke(client)

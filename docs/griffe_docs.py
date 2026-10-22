@@ -42,6 +42,15 @@ class DocsExtension(griffe.Extension):
     def on_attribute_instance(
         self, *, node: ast.AST | griffe.ObjectNode, attr: griffe.Attribute, **kwargs: Any
     ) -> None:
+        value = attr.value
+        if isinstance(value, griffe.ExprCall) and str(value.function) == "wire":
+            # wire() 는 dataclasses.field 를 감싸므로 실제 기본값(wire(key) 는 None, default 가 없으면 필수)만 보입니다.
+            defaults = [
+                arg.value
+                for arg in value.arguments
+                if isinstance(arg, griffe.ExprKeyword) and arg.name == "default"
+            ]
+            attr.value = "None" if len(value.arguments) == 1 else (defaults[0] if defaults else None)
         if attr.docstring is not None or attr.lineno is None:
             return
         lines = (

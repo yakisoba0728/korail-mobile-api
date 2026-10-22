@@ -597,7 +597,8 @@ CASES = [
         ),
         PBP_BODY,
         (("tickets.0.journeys.0.seats.0.car_no", 2), ("tickets.0.pnr_no", "TEST")),
-        "NetworkApi.java:368-369; DeliveredTicketOut.java:50; Tk.java:54; Jrny.java:60; Seat.java:53",
+        "NetworkApi.java:368-369; DeliveredTicketOut.java:50; Tk.java:54; Jrny.java:60; Seat.java:35,53 (int scarNo; "
+        "the quoted-int Json setting is protected, NetworkServiceKt.java:15-31)",
     ),
     case(
         "get_original_ticket_inquiry",
@@ -786,7 +787,8 @@ CASES = [
         },
         success(**{**dict.fromkeys(CHECKIN_INFO_KEYS, "TEST"), "seatNo": "7A"}),
         (("seat_no", "7A"),),
-        "NetworkApi.java:674-676; SelfCheckInInfoIn.java:55; SelfCheckInInfoOut.java:56-59",
+        "NetworkApi.java:674-676; SelfCheckInInfoIn.java:55; SelfCheckInInfoOut.java:56-59,146; "
+        "saleDt is h_sale_dt (SelfCheckInResultViewModel.java:111-112,249-250)",
     ),
     case(
         "check_self_checkin_seat",
@@ -802,7 +804,10 @@ CASES = [
         },
         success(consList=[{**dict.fromkeys(CHECKIN_SEAT_KEYS, "TEST"), "cpsNo": "TEST-CPS"}]),
         (("seats.0.cps_no", "TEST-CPS"),),
-        "NetworkApi.java:678-680; SelfCheckInPossibleIn.java:56; ConsList.java:63-101",
+        "NetworkApi.java:678-680; SelfCheckInPossibleIn.java:56; ConsList.java:63-101; "
+        "saleDd is h_orgtk_ret_sale_dt (SelfCheckInInfoViewModel.java:102-108); qrcode is the seat-table QR, "
+        "not h_qrcode (SelfCheckInInfoRouteKt.java:241-254, strings.xml:3245-3247); the app registers the "
+        "first row (SelfCheckInInfoViewModel.java:151-153); SelfCheckInPossibleOut.java:50-55",
     ),
 ]
 BY_NAME = {c.method: c for c in CASES}
