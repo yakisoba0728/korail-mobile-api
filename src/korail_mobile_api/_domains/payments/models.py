@@ -126,7 +126,7 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     original_return_password: str | None = wire("h_orgtk_ret_pwd")
     ticket_kind_code: str | None = wire("h_tk_knd_cd")
     ticket_kind_name: str | None = wire("h_tk_knd_nm")
-    # 실서버에서 Y 인 상세도 수수료 조회는 WRT200022·WRT200399 로 거절됐습니다(docs/status.md).
+    # 실서버에서 Y 인 상세도 수수료 조회는 WRT200022·WRT200399 로 거절됐습니다(docs/records.md).
     #: 환불 가능 여부 플래그(``retPsbFlg``)입니다. ``"Y"``여도 환불할 수 있다는 보장은 없으므로 ``get_refund_fee``의 결과로
     #: 확인하세요.
     refund_possible_flag: str | None = wire("retPsbFlg")
