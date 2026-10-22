@@ -120,7 +120,7 @@ client.extend_discount_card(
 
 요청 바이트를 바꾸지 않는 연결 도구입니다.
 
-- [`HoldReference`][korail_mobile_api.HoldReference]`(pnr_no, journey_count, journey_sequence=None, change_no=None)`: [`cancel_unpaid_hold`](api/reservations.md#cancel_unpaid_hold)가 홀드 대신 받습니다. `hold.reference`로 얻거나, 응답을 읽지 못한 예약의 원문에서 `HoldReference.from_raw(error.raw)`로 만듭니다. `from_raw`는 PNR(`h_pnr_no`)과 여정 수(`h_jrny_cnt`)만 요구합니다. 같은 값이면 홀드로 취소할 때와 같은 요청을 보냅니다.
+- [`HoldReference`][korail_mobile_api.HoldReference]`(*, pnr_no, journey_count, journey_sequence=None, change_no=None)`: [`cancel_unpaid_hold`](api/reservations.md#cancel_unpaid_hold)가 홀드 대신 받습니다. `hold.reference`로 얻거나, 응답을 읽지 못한 예약의 원문에서 `HoldReference.from_raw(error.raw)`로 만듭니다. `from_raw`는 PNR(`h_pnr_no`)과 여정 수(`h_jrny_cnt`)만 요구합니다. 같은 값이면 홀드로 취소할 때와 같은 요청을 보냅니다.
 - `OriginalTicketReference.from_ticket(ticket)`: 승차권 목록의 한 장에서 원표 반환일(`return_sale_date`, `MMDD`)을 판매일로 넣습니다. `YYYYMMDD`를 받는 두 메서드는 [승차권 식별자 이어 쓰기](api/account.md#ticket-identifiers)를 참고하세요.
 - `FreeSeatCarRequest.from_train(train)`, `MergeSeatsInquiryRequest.from_train(train, *, selected_station_name=None, room_class_code="1", seat_attribute_code=None, passenger_count=1)`: 조회한 열차의 값을 복사하고 빠진 값은 거절합니다.
 - `KorailClient`를 `with` 문으로 쓸 수 있습니다. 블록이 끝나면 `close`만 부르며 서버 로그아웃은 하지 않습니다.
@@ -174,4 +174,118 @@ except KorailApiError as error:
 
 ## 모델과 속성 이름 {#models}
 
-모델·속성 이름 변경(`Limousine*` → `AirportBus*` 등)은 이 절에 정리할 예정입니다. 아직 작성 중입니다.
+이름만 바뀌었습니다. 읽는 전송 키, 값, 누락·`null` 규칙과 요청 바이트는 같습니다.
+
+### 클래스 {#model-classes}
+
+| 2.x | 3.0 |
+|---|---|
+| `LimousineStop` | [`AirportBusStop`][korail_mobile_api.AirportBusStop] |
+| `LimousineSchedule` | [`AirportBusSchedule`][korail_mobile_api.AirportBusSchedule] |
+| `LimousineScheduleQuery` | [`AirportBusScheduleQuery`][korail_mobile_api.AirportBusScheduleQuery] |
+| `LimousineScheduleResponse` | [`AirportBusScheduleResponse`][korail_mobile_api.AirportBusScheduleResponse] |
+| `LimousineSeat` | [`AirportBusSeat`][korail_mobile_api.AirportBusSeat] |
+| `LimousineSeatInventoryQuery` | [`AirportBusSeatInventoryQuery`][korail_mobile_api.AirportBusSeatInventoryQuery] |
+| `LimousineSeatInventoryResponse` | [`AirportBusSeatInventoryResponse`][korail_mobile_api.AirportBusSeatInventoryResponse] |
+
+2.x `limousine_models` 모듈의 `LIMOUSINE_CAR_NO`, `LIMOUSINE_ROOM_CLASS_CODE`, `LIMOUSINE_SEAT_ATTRIBUTE_CODE`는 내부 상수 `AIRPORT_BUS_*`가 됐으며 공개 API가 아닙니다. 값은 같습니다.
+
+### 입력 모델 필드 {#request-fields}
+
+| 2.x | 3.0 |
+|---|---|
+| `TrainSearchQuery.departure_station_code` | `TrainSearchQuery.departure_station` |
+| `TrainSearchQuery.arrival_station_code` | `TrainSearchQuery.arrival_station` |
+
+역 이름이나 숫자로만 된 역 코드를 받는 동작은 같습니다. 문자열이 아닌 값을 거절하는 오류 문구도 새 이름을 씁니다(예: `arrival_station must be a string`).
+
+### 응답 모델 속성 {#response-attributes}
+
+같은 전송 키를 읽는 필드는 모든 모델에서 한 이름을 씁니다. 아래 47개 필드의 이름이 바뀌었습니다.
+
+| 모델 | 2.x | 3.0 | 전송 키 |
+|---|---|---|---|
+| `AirportBusSchedule` | `service_code` | `train_group_code` | `trnGpCd` |
+| `AirportBusSchedule` | `train_class_code` | `settlement_train_class_code` | `stlbTrnClsfCd` |
+| `CartItem` | `service_code` | `additional_service_code` | `addSrvDvCd` |
+| `CustomerTripInfo` | `train_classification_code` | `train_class_code` | `trnClsfCd` |
+| `DelayDiscountTicketListResponse` | `current_page` | `page_no` | `h_page_no` |
+| `DiscountCardScheduleTrain` | `arrival_station_order` | `arrival_construction_order` | `arvStnConsOrdr` |
+| `DiscountCardScheduleTrain` | `departure_station_order` | `departure_construction_order` | `dptStnConsOrdr` |
+| `DiscountCoupon` | `expiration_date` | `management_close_date` | `h_fdcert_mg_cls_dt` |
+| `DiscountCoupon` | `start_date` | `management_start_date` | `h_fdcert_mg_st_dt` |
+| `DiscountCouponListResponse` | `current_page` | `page_no` | `h_page_no` |
+| `MaasServiceDetail` | `additional_service_division_code` | `additional_service_code` | `addSrvDvCd` |
+| `MaasServiceDetail` | `request_no` | `additional_service_request_no` | `addSrvReqNo` |
+| `MaasServiceDetailInfo` | `cancel_deadline_date` | `cancellation_deadline` | `strCncDlnDt` |
+| `MaasServiceDetailInfo` | `cancel_return_amount` | `cancellation_return_amount` | `strCncRetAmt` |
+| `MaasServiceDetailInfo` | `cancel_return_fee` | `cancellation_fee` | `strCncRetFee` |
+| `MaasServiceDetailInfo` | `settlement_deadline_date` | `settlement_deadline` | `strStlDlnDt` |
+| `MaasServiceDetailInfo` | `usage_period_content` | `usage_period` | `strUtlTrmCont` |
+| `OriginalTicket` | `passenger_type_division_code` | `passenger_type_code` | `psgTpDvCd` |
+| `OriginalTicketSeat` | `assign_sequence` | `assignment_sequence` | `asgnSqno` |
+| `PassScheduleTrain` | `commuter_use_terminal_code` | `commuter_period_code` | `h_cmtr_utl_trm_cd` |
+| `ProductDetailResponse` | `cancellation_amount` | `cancellation_return_amount` | `strCncRetAmt` |
+| `ProductDetailResponse` | `reservation_status` | `reservation_status_name` | `strRsvSttNm` |
+| `ProductDetailResponse` | `total_amount` | `total_settlement_amount` | `strTotStlAmt` |
+| `ProductReservation` | `payment_deadline` | `settlement_deadline` | `strStlDlnDt` |
+| `ProductReservation` | `payment_status` | `settlement_status_code` | `strStlSttCd` |
+| `ProductReservation` | `reservation_status` | `reservation_status_name` | `strRsvSttNm` |
+| `ReceiptPayment` | `card_no` | `settlement_card_no` | `h_stl_crd_no` |
+| `ReservationHistoryPassenger` | `discount_no` | `discount_proof_no` | `h_dcsp_no` |
+| `ReservationHistoryPassenger` | `discount_no_2` | `discount_proof_no_2` | `h_dcsp_no2` |
+| `ReservationHistoryPassenger` | `passenger_count_per_info` | `passenger_count` | `h_psg_info_per_prnb` |
+| `ReservationHistoryTrain` | `arrival_station` | `arrival_station_name` | `h_arv_rs_stn_nm` |
+| `ReservationHistoryTrain` | `departure_station` | `departure_station_name` | `h_dpt_rs_stn_nm` |
+| `ReservationHistoryTrain` | `prepayment_target_flag` | `pre_settlement_target_flag` | `h_pre_stl_tgt_flg` |
+| `ReservationPaymentTicket` | `return_no` | `ticket_return_no` | `h_tk_ret_no` |
+| `SelfSeatChangeReason` | `reason_text` | `forced_sale_reason_text` | `frcSaleRsnCont` |
+| `SelfSeatChangeStation` | `general_remaining_seats` | `general_remaining_seat_count` | `gnrmRestSeatNum` |
+| `SelfSeatChangeStation` | `special_remaining_seats` | `special_remaining_seat_count` | `sprmRestSeatNum` |
+| `TicketReceipt` | `arrival_station` | `arrival_station_name` | `h_arv_rs_stn_nm` |
+| `TicketReceipt` | `departure_station` | `departure_station_name` | `h_dpt_rs_stn_nm` |
+| `TicketReceipt` | `seat_class_name` | `room_class_name` | `h_psrm_cl_nm` |
+| `TrainScheduleItem` | `remaining_standing_count` | `standing_remaining_seat_count` | `restStndNum` |
+| `TrainScheduleResponse` | `standard_train_class_code` | `settlement_train_class_code` | `stlbTrnClsfCd` |
+| `TrainScheduleStop` | `planned_arrival_date` | `arrival_date` | `arvDt` |
+| `TrainScheduleStop` | `planned_arrival_time` | `arrival_time` | `arvTm` |
+| `TrainScheduleStop` | `planned_departure_date` | `departure_date` | `dptDt` |
+| `TrainScheduleStop` | `planned_departure_time` | `departure_time` | `dptTm` |
+| `TrainSearchMetadata` | `product_no` | `goods_no` | `h_gd_no` |
+
+입력 모델은 보내는 필드의 이름을 그대로 둡니다. 예를 들어 [`AirportBusSeatInventoryQuery`][korail_mobile_api.AirportBusSeatInventoryQuery]의 `train_class_code`, `service_code`는 그대로이며, `from_schedule()`은 운행 편의 `settlement_train_class_code`, `train_group_code`를 옮겨 담습니다.
+
+```text
+print(stop.planned_departure_time, reservation.payment_deadline)
+seat_query = LimousineSeatInventoryQuery(train_class_code=bus.train_class_code, service_code=bus.service_code, ...)
+```
+
+```python
+from korail_mobile_api import AirportBusSeatInventoryQuery
+
+print(stop.departure_time, reservation.settlement_deadline)
+seat_query = AirportBusSeatInventoryQuery.from_schedule(bus)
+```
+
+### 키워드 생성과 `repr` {#dataclasses}
+
+- 모든 입력·응답 모델과 설정 dataclass(`KorailConfig`, `KorailDeviceProfile`, `DynapathConfig`, `DynapathTokenSettings`, `DynapathRequestContext`)는 `frozen=True, kw_only=True`입니다. 위치 인자로 만들면 `TypeError`입니다. 키워드 생성과 `dataclasses.replace()`는 그대로 씁니다.
+- `raw`는 그 필드를 선언한 모델에서 마지막 필드가 됐고 `repr()`에 나오지 않습니다. 비교(`==`)에서 빠지는 것은 같습니다. 응답 모델의 `raw`는 `BaseKorailResponse`에 선언돼 있어 `dataclasses.fields()` 순서에서 봉투 필드 바로 뒤에 그대로 있습니다.
+- 호출자가 넣는 비밀값도 `repr()`에서 숨깁니다: `KorailSession.jsessionid`, `OriginalTicketReference.return_password`, `PaidTicket.return_password`, `StationRefundExecutionRequest`의 `original_return_password`·`customer_phone`·`customer_name`, `StationRefundVerificationRequest.customer_name`, `RefundCompanion`의 `name`·`certificate_no`, `PriceRecalculationRequest.non_member_no`, `DynapathTokenSettings.device_id`, `KorailConfig.advertising_id`. 이미 숨기던 `CardPayment`의 모든 필드, `PaidTicket`의 원표 반환일·동반자 필드, `KorailDeviceProfile.device_id`, `KorailConfig.proxy`도 그대로 숨깁니다.
+- 숨기는 것은 `repr()`·`str()` 출력뿐입니다. 속성 값, `raw` 내용, `dataclasses.asdict()`, pickle은 가리지 않으므로 로그에 남기지 마세요.
+
+```text
+query = TrainSearchQuery("서울", "부산", departure_date, "090000")
+reference = OriginalTicketReference(window, sale_date, sequence, password)
+```
+
+```python
+from korail_mobile_api import OriginalTicketReference, TrainSearchQuery
+
+query = TrainSearchQuery(
+    departure_station="서울", arrival_station="부산", departure_date=departure_date, departure_time="090000"
+)
+reference = OriginalTicketReference(
+    sale_window_no=window, sale_date=sale_date, sale_sequence=sequence, return_password=password
+)
+```
