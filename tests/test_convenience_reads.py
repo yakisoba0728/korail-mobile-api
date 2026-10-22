@@ -526,8 +526,8 @@ def test_bus_seats_copy_schedule_identifiers(scripted_client_factory, config):
         [{"strResult": "SUCC", "seatList": [], "extra": "kept"}], config=config
     )
     schedule = AirportBusSchedule(
-        train_class_code="98",
-        service_code="980",
+        settlement_train_class_code="98",
+        train_group_code="980",
         run_date="20990102",
         train_no="00007",
         departure_station_code="9901",

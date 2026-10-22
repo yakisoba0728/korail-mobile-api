@@ -59,8 +59,8 @@ def build_maas_cancel_fee_form(item: MaasServiceDetail) -> dict[str, str]:
     if not isinstance(item, MaasServiceDetail):
         raise KorailProtocolError("item must be a MaasServiceDetail from list_maas_services")
     return {
-        "addSrvReqNo": _required_text(item.request_no, "request_no"),
-        "addSrvDvCd": _required_text(item.additional_service_division_code, "additional_service_division_code"),
+        "addSrvReqNo": _required_text(item.additional_service_request_no, "additional_service_request_no"),
+        "addSrvDvCd": _required_text(item.additional_service_code, "additional_service_code"),
         "coptEntRsvNo": _required_text(item.partner_reservation_no, "partner_reservation_no"),
     }
 
@@ -82,7 +82,7 @@ def build_maas_cart_status_form(item: CartItem) -> dict[str, str]:
     (BasketTicketViewModel.java:1690-1750), 구분자를 모르므로 이 빌더는 한 행만 받습니다. seletedPos 는 전송되지 않습니다(:93)."""
     row = _maas_cart_item(item)
     return {
-        "addSrvDvCd": _required_text(row.service_code, "service_code"),
+        "addSrvDvCd": _required_text(row.additional_service_code, "additional_service_code"),
         "addSrvReqNo": _required_text(row.virtual_reservation_no, "virtual_reservation_no"),
         "coptEntRsvNo": _required_text(row.partner_reservation_no, "partner_reservation_no"),
         "lumpStlTgtNo": _required_text(row.lump_sum_target_no, "lump_sum_target_no"),

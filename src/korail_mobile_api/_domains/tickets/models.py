@@ -167,12 +167,12 @@ class DelayDiscountTicket:
 class DelayDiscountTicketListResponse(BaseKorailResponse):
     """지연할인권 목록과 페이지 정보를 담습니다.
 
-    페이지 정보(``current_page``, ``total_pages``, ``total_count``, ``row_count``, ``last_page_flag``)는 응답의 ``main_info``
+    페이지 정보(``page_no``, ``total_pages``, ``total_count``, ``row_count``, ``last_page_flag``)는 응답의 ``main_info``
     블록에서 읽습니다. 블록이 없으면 모두 ``None``입니다."""
 
     # main_info 는 앱 DTO 밖의 서버 추가 블록이며 할인권 없는 응답에서만 관측했습니다.
     items: tuple[DelayDiscountTicket, ...] = ()
-    current_page: str | None = wire("h_page_no")
+    page_no: str | None = wire("h_page_no")
     total_pages: str | None = wire("h_tot_page_cnt")
     total_count: str | None = wire("h_tot_cnt")
     row_count: str | None = wire("h_row_cnt")
@@ -184,8 +184,8 @@ class DiscountCoupon:
     """할인쿠폰 한 장의 조건과 유효기간을 담습니다."""
 
     guide: str | None = wire("guide")
-    start_date: str | None = wire("h_fdcert_mg_st_dt")
-    expiration_date: str | None = wire("h_fdcert_mg_cls_dt")
+    management_start_date: str | None = wire("h_fdcert_mg_st_dt")
+    management_close_date: str | None = wire("h_fdcert_mg_cls_dt")
     discount_kind_code: str | None = wire("h_dscp_knd_cd")
     #: 할인율·할인액 구분 코드(``h_disc_rt_amt_dv_cd``)입니다. 코드 값의 의미를 확인하지 못했습니다.
     discount_rate_amount_division_code: str | None = wire("h_disc_rt_amt_dv_cd")
@@ -203,7 +203,7 @@ class DiscountCouponListResponse(BaseKorailResponse):
     """할인쿠폰 목록과 안내를 담습니다."""
 
     items: tuple[DiscountCoupon, ...] = ()
-    current_page: int | None = wire("h_page_no", optional_int, default=None)
+    page_no: int | None = wire("h_page_no", optional_int, default=None)
     total_pages: int | None = wire("h_tot_page_cnt", optional_int, default=None)
     total_count: str | None = wire("h_tot_cnt")
     row_count: str | None = wire("h_row_cnt")
@@ -219,7 +219,7 @@ class ReceiptPayment:
     amount: int = wire("h_stl_amt", required_int)
     account_no: str = wire("h_acnt_no", required_str)
     approval_no: str = wire("h_apv_no", required_str)
-    card_no: str = wire("h_stl_crd_no", required_str)
+    settlement_card_no: str = wire("h_stl_crd_no", required_str)
     point_no: str = wire("h_xpot_no", required_str)
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
@@ -244,16 +244,16 @@ class TicketReceipt:
     """승차권 영수증의 이용 내역과 결제 정보를 담습니다."""
 
     travel_date: str = wire("h_abrd_dt", required_str)
-    departure_station: str = wire("h_dpt_rs_stn_nm", required_str)
+    departure_station_name: str = wire("h_dpt_rs_stn_nm", required_str)
     departure_time: str = wire("h_dpt_tm", required_str)
-    arrival_station: str = wire("h_arv_rs_stn_nm", required_str)
+    arrival_station_name: str = wire("h_arv_rs_stn_nm", required_str)
     arrival_time: str = wire("h_arv_tm", required_str)
     commuter_kind_code: str = wire("h_cmtr_knd_cd", required_str)
     journey_type_code: str = wire("h_jrny_tp_cd", required_str)
     printed_discount_name: str = wire("h_prt_disc_knd_nm", required_str)
     printed_discount_kind_code: str = wire("h_prt_disc_knd_cd", required_str)
     print_type: str = wire("h_prt_type", required_str)
-    seat_class_name: str = wire("h_psrm_cl_nm", required_str)
+    room_class_name: str = wire("h_psrm_cl_nm", required_str)
     ticket_kind_code: str = wire("h_tk_knd_cd", required_str)
     ticket_kind_name: str = wire("h_tk_knd_nm", required_str)
     ticket_status_code: str = wire("h_tk_stt_cd", required_str)
@@ -404,7 +404,7 @@ class CustomerTripInfo:
     registration_sequence: str | None = wire("regSqno")
     registered_by: str | None = wire("regUsrId")
     trip_day_no: str | None = wire("tripDno")
-    train_classification_code: str | None = wire("trnClsfCd")
+    train_class_code: str | None = wire("trnClsfCd")
     train_connection_flag: str | None = wire("trnCnecFlg")
     train_group_code: str | None = wire("trnGpCd")
     usage_day_no: str | None = wire("utlDno")
@@ -446,8 +446,8 @@ class SelfSeatChangeStation:
     arrival_time: str | None = wire("arvTm")
     departure_construction_order: str | None = wire("dptStnConsOrdr")
     departure_run_order: str | None = wire("dptStnRunOrdr")
-    general_remaining_seats: str | None = wire("gnrmRestSeatNum")
-    special_remaining_seats: str | None = wire("sprmRestSeatNum")
+    general_remaining_seat_count: str | None = wire("gnrmRestSeatNum")
+    special_remaining_seat_count: str | None = wire("sprmRestSeatNum")
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
@@ -460,7 +460,7 @@ class SelfSeatChangeReason:
 
     query_code: str | None = wire("qryCode")
     query_order: str | None = wire("qryOrdr")
-    reason_text: str | None = wire("frcSaleRsnCont")
+    forced_sale_reason_text: str | None = wire("frcSaleRsnCont")
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
@@ -489,7 +489,7 @@ class OriginalTicketSeat:
     """변경 기준인 원표의 좌석 정보를 담습니다."""
 
     passenger_sequence: str | None = wire("psgSqno")
-    assign_sequence: str | None = wire("asgnSqno")
+    assignment_sequence: str | None = wire("asgnSqno")
     passenger_type_code: str | None = wire("psgTpDvCd")
     room_class_code: str | None = wire("psrmClCd")
     car_no: str | None = wire("scarNo")
@@ -551,7 +551,7 @@ class OriginalTicket:
     adult_count: str | None = wire("adulCnt")
     child_count: str | None = wire("chilCnt")
     group_discount_count: str | None = wire("grpDcntCnt")
-    passenger_type_division_code: str | None = wire("psgTpDvCd")
+    passenger_type_code: str | None = wire("psgTpDvCd")
     received_amount: str | None = wire("rcvdAmt")
     received_fare: str | None = wire("rcvdFare")
     received_price: str | None = wire("rcvdPrc")

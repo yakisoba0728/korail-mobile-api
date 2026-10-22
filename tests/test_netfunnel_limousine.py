@@ -778,8 +778,8 @@ SCHEDULE_FIELDS = {
     "restStndNum": "standing_remaining_seat_count",
     "runDt": "run_date",
     "sprmRestSeatNum": "special_remaining_seat_count",
-    "stlbTrnClsfCd": "train_class_code",
-    "trnGpCd": "service_code",
+    "stlbTrnClsfCd": "settlement_train_class_code",
+    "trnGpCd": "train_group_code",
     "trnNo": "train_no",
     "ymsAplFlg": "yms_application_flag",
     "trnOrdrNo": "train_order_no",
@@ -947,8 +947,8 @@ def schedule() -> AirportBusSchedule:
         departure_time="120000",
         general_remaining_seat_count="09",
         run_date="20990101",
-        train_class_code="99",
-        service_code="980",
+        settlement_train_class_code="99",
+        train_group_code="980",
         train_no="99001",
     )
 
@@ -1086,8 +1086,8 @@ def test_passenger_count_rejections(kwargs: dict[str, Any]) -> None:
     "attr,value",
     [
         ("train_no", None),
-        ("train_class_code", ""),
-        ("service_code", ""),
+        ("settlement_train_class_code", ""),
+        ("train_group_code", ""),
         ("run_date", "2099-01-01"),
         ("departure_date", "2099010"),
         ("departure_time", "1200"),
@@ -1148,8 +1148,8 @@ SEAT_QUERY_REQUIRED = (
 )
 RESERVATION_REQUIRED = (
     "train_no",
-    "train_class_code",
-    "service_code",
+    "settlement_train_class_code",
+    "train_group_code",
     "run_date",
     "departure_date",
     "departure_time",

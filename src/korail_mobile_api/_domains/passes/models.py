@@ -113,9 +113,9 @@ class ProductReservation:
     """여행상품 예약 한 건의 식별자와 상태를 담습니다."""
 
     product_name: str | None = wire("strGdNm")
-    reservation_status: str | None = wire("strRsvSttNm")
-    payment_deadline: str | None = wire("strStlDlnDt")
-    payment_status: str | None = wire("strStlSttCd")
+    reservation_status_name: str | None = wire("strRsvSttNm")
+    settlement_deadline: str | None = wire("strStlDlnDt")
+    settlement_status_code: str | None = wire("strStlSttCd")
     virtual_reservation_no: str | None = wire("strVrRsvNo")
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: 예약 순번(``strVrRsvSqno``)입니다. ``virtual_reservation_no``와 함께 ``get_product_detail``의 ``reservation_sequence``로
@@ -140,12 +140,12 @@ class ProductDetailResponse(BaseKorailResponse):
 
     # wire 필드는 응답의 mainInfo 객체에서 읽습니다.
     product_name: str | None = wire("strGdNm")
-    reservation_status: str | None = wire("strRsvSttNm")
+    reservation_status_name: str | None = wire("strRsvSttNm")
     cancellation_deadline: str | None = wire("strCncDlnDt")
-    cancellation_amount: str | None = wire("strCncRetAmt")
+    cancellation_return_amount: str | None = wire("strCncRetAmt")
     cancellation_fee: str | None = wire("strCncRetFee")
     received_amount: str | None = wire("strRcvdAmt")
-    total_amount: str | None = wire("strTotStlAmt")
+    total_settlement_amount: str | None = wire("strTotStlAmt")
     usage_period: str | None = wire("strUtlTrmCont")
     included_item_names: tuple[str, ...] = ()
     virtual_reservation_no: str | None = wire("strVrRsvNo")
@@ -177,7 +177,7 @@ class PassScheduleTrain:
     arrival_construction_order: str | None = wire("h_arv_stn_cons_ordr")
     car_type_code: str | None = wire("h_car_tp_cd")
     train_class_code: str | None = wire("h_trn_clsf_cd")
-    commuter_use_terminal_code: str | None = wire("h_cmtr_utl_trm_cd")
+    commuter_period_code: str | None = wire("h_cmtr_utl_trm_cd")
     commuter_use_terminal_name: str | None = wire("h_cmtr_utl_trm_nm")
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
@@ -373,8 +373,8 @@ class DiscountCardScheduleTrain:
     departure_station_name: str | None = wire("dptRsStnNm")
     arrival_station_code: str | None = wire("arvRsStnCd")
     arrival_station_name: str | None = wire("arvRsStnNm")
-    departure_station_order: str | None = wire("dptStnConsOrdr")
-    arrival_station_order: str | None = wire("arvStnConsOrdr")
+    departure_construction_order: str | None = wire("dptStnConsOrdr")
+    arrival_construction_order: str | None = wire("arvStnConsOrdr")
     departure_run_order: str | None = wire("dptStnRunOrdr")
     arrival_run_order: str | None = wire("arvStnRunOrdr")
     transfer_train_order_no: str | None = wire("chtnTrnOrdrNo")

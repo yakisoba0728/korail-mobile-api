@@ -238,7 +238,7 @@ class ReservationPaymentTicket:
     sale_date: str | None = wire("h_sale_dt")
     sale_sequence: str | None = wire("h_sale_sqno")
     return_password: str | None = wire("h_tk_ret_pwd")
-    return_no: str | None = wire("h_tk_ret_no")
+    ticket_return_no: str | None = wire("h_tk_ret_no")
     recipient_name: str | None = wire("h_take_name")
     discount_card_no: str | None = wire("h_disc_card_no")
     ticket_price: str | None = wire("h_tk_prc")

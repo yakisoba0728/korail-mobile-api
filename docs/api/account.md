@@ -312,7 +312,7 @@ KorailClient.list_discount_coupons(
 
 **반환값**
 
-[`DiscountCouponListResponse`][korail_mobile_api.DiscountCouponListResponse] — `items`에 쿠폰([`DiscountCoupon`][korail_mobile_api.DiscountCoupon]) 목록이 들어 있습니다. `current_page`와 `total_pages`는 정수, `total_count`와 `row_count`는 문자열이며 응답에 없으면 `None`입니다.
+[`DiscountCouponListResponse`][korail_mobile_api.DiscountCouponListResponse] — `items`에 쿠폰([`DiscountCoupon`][korail_mobile_api.DiscountCoupon]) 목록이 들어 있습니다. `page_no`와 `total_pages`는 정수, `total_count`와 `row_count`는 문자열이며 응답에 없으면 `None`입니다.
 
 **예외**
 
@@ -334,7 +334,7 @@ coupons = client.list_discount_coupons()
 if not coupons.items:
     print(coupons.h_msg_cd, coupons.h_msg_txt)
 for coupon in coupons.items:
-    print(coupon.coupon_no, coupon.start_date, coupon.expiration_date)
+    print(coupon.coupon_no, coupon.management_start_date, coupon.management_close_date)
 ```
 
 <a id="get_delay_discount_tickets"></a>
@@ -352,7 +352,7 @@ KorailClient.list_delay_discount_tickets(
 `departure_date_to`는 앱과 같은 방식으로 `h_page_no`라는 이름으로 보내며, POST 본문이 아니라 URL 쿼리에 싣습니다.
 라이브러리는 ASCII 숫자 8자리인지만 검사하고, 달력에 있는 날짜인지는 검사하지 않습니다.
 
-페이지 정보(`current_page`, `total_pages`, `total_count`, `row_count`, `last_page_flag`)는 응답의 `main_info` 블록에서 읽으며, 블록이 없으면 모두 `None`입니다.
+페이지 정보(`page_no`, `total_pages`, `total_count`, `row_count`, `last_page_flag`)는 응답의 `main_info` 블록에서 읽으며, 블록이 없으면 모두 `None`입니다.
 
 **매개변수**
 
@@ -690,7 +690,7 @@ request = SelfSeatChangeInfoRequest(
 )
 info = client.get_self_seat_change_options(request)
 for station in info.stations:
-    print(station.departure_station_name, station.general_remaining_seats)
+    print(station.departure_station_name, station.general_remaining_seat_count)
 ```
 
 ## `get_delay_certificate`

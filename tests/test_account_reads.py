@@ -215,7 +215,7 @@ CASES = [
         {"page_no": 2, "pnr_no": "TEST-PNR"},
         {"txtSelPage": "2", "pnrNo": "TEST-PNR"},
         success(coupon_infos={"coupon_info": [{"h_cpn_no": "TEST-COUPON", "h_fdcert_mg_cls_dt": DATE}]}),
-        (("items.0.coupon_no", "TEST-COUPON"), ("items.0.expiration_date", DATE)),
+        (("items.0.coupon_no", "TEST-COUPON"), ("items.0.management_close_date", DATE)),
         "NetworkApi.java:328-329; CouponIn.java:52",
     ),
     case(
@@ -457,7 +457,7 @@ CASES = [
         ),
         (
             ("product_name", "TEST-PRODUCT"),
-            ("cancellation_amount", "001200"),
+            ("cancellation_return_amount", "001200"),
             ("included_item_names", ("TEST-ITEM",)),
         ),
         "NetworkApi.java:221-222; ProductDetailIn.java:53",

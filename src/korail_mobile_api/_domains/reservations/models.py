@@ -35,7 +35,7 @@ class ReservationPassengerInfo:
 class CartItem:
     """장바구니의 열차·공항버스 예약 또는 부가서비스 한 행을 담습니다."""
 
-    service_code: str | None = wire("addSrvDvCd")
+    additional_service_code: str | None = wire("addSrvDvCd")
     provider_name: str | None = wire("h_add_srv_mrk_ent_nm")
     product_name: str | None = wire("h_gd_nm")
     item_type: str | None = wire("h_item_dv_nm")
@@ -93,9 +93,9 @@ class ReservationHistoryTrain:
     결제 기한은 ``payment_deadline_date``와 ``payment_deadline_time``에 있으며, 값이 없으면 ``None``입니다. 플래그 필드만으로는
     기한을 알 수 없습니다. 이 모델이 읽지 않는 응답 키도 있으며, 원본은 ``raw``에 남습니다."""
 
-    departure_station: str | None = wire("h_dpt_rs_stn_nm")
+    departure_station_name: str | None = wire("h_dpt_rs_stn_nm")
     departure_time: str | None = wire("h_dpt_tm")
-    arrival_station: str | None = wire("h_arv_rs_stn_nm")
+    arrival_station_name: str | None = wire("h_arv_rs_stn_nm")
     arrival_time: str | None = wire("h_arv_tm")
     run_date: str | None = wire("h_run_dt")
     train_no: str | None = wire("h_trn_no")
@@ -115,7 +115,7 @@ class ReservationHistoryTrain:
     payment_deadline_time: str | None = wire("h_ntisu_lmt_tm")
     payment_message: str | None = wire("h_payment_msg")
     payment_possible_date: str | None = wire("h_ntisu_psb_dt")
-    prepayment_target_flag: str | None = wire("h_pre_stl_tgt_flg")
+    pre_settlement_target_flag: str | None = wire("h_pre_stl_tgt_flg")
     journey_sequence: str | None = wire("h_jrny_sqno")
 
 
@@ -148,11 +148,11 @@ class ReservationHistoryPassenger:
     """예약 이력의 승객 유형별 인원·할인 정보를 담습니다."""
 
     passenger_type_code: str | None = wire("h_psg_tp_cd")
-    passenger_count_per_info: str | None = wire("h_psg_info_per_prnb")
+    passenger_count: str | None = wire("h_psg_info_per_prnb")
     discount_kind_code: str | None = wire("h_dcnt_knd_cd")
     discount_kind_code_2: str | None = wire("h_dcnt_knd_cd2")
-    discount_no: str | None = wire("h_dcsp_no")
-    discount_no_2: str | None = wire("h_dcsp_no2")
+    discount_proof_no: str | None = wire("h_dcsp_no")
+    discount_proof_no_2: str | None = wire("h_dcsp_no2")
     delay_original_window_no: str | None = wire("dlayOgtkWctNo")
     delay_original_sale_date: str | None = wire("dlayOgtkSaleDt")
     delay_original_sale_sequence: str | None = wire("dlayOgtkSaleSqno")

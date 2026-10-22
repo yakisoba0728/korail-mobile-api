@@ -620,7 +620,7 @@ KorailClient.list_product_reservations(
 page = client.list_product_reservations()
 print(page.total_count, "건")
 for reservation in page.items:
-    print(reservation.product_name, reservation.reservation_status, reservation.payment_deadline)
+    print(reservation.product_name, reservation.reservation_status_name, reservation.settlement_deadline)
 ```
 
 ## `get_product_detail`
@@ -648,7 +648,7 @@ KorailClient.get_product_detail(
 
 **반환값**
 
-[`ProductDetailResponse`][korail_mobile_api.ProductDetailResponse] — 상품 이름, 예약 상태, 취소 기한(`cancellation_deadline`), 취소 반환 금액(`cancellation_amount`), 취소 수수료(`cancellation_fee`), 받은 금액(`received_amount`), 총 결제 금액(`total_amount`), 구성 항목 이름(`included_item_names`), 취소에 쓰는 `virtual_reservation_no`와 `goods_sequence`를 담습니다. 서버 응답에 상세 블록이 없으면 이 필드들은 `None`이거나 비어 있습니다.
+[`ProductDetailResponse`][korail_mobile_api.ProductDetailResponse] — 상품 이름, 예약 상태, 취소 기한(`cancellation_deadline`), 취소 반환 금액(`cancellation_return_amount`), 취소 수수료(`cancellation_fee`), 받은 금액(`received_amount`), 총 결제 금액(`total_settlement_amount`), 구성 항목 이름(`included_item_names`), 취소에 쓰는 `virtual_reservation_no`와 `goods_sequence`를 담습니다. 서버 응답에 상세 블록이 없으면 이 필드들은 `None`이거나 비어 있습니다.
 
 **예외**
 
@@ -672,7 +672,7 @@ detail = client.get_product_detail(
     reservation.reservation_sequence,
 )
 print(detail.product_name, detail.included_item_names)
-print("취소 수수료:", detail.cancellation_fee, "반환 금액:", detail.cancellation_amount)
+print("취소 수수료:", detail.cancellation_fee, "반환 금액:", detail.cancellation_return_amount)
 ```
 
 ## `cancel_product_reservation`
@@ -687,7 +687,7 @@ KorailClient.cancel_product_reservation(
 
 [`get_product_detail`](#get_product_detail)이 돌려준 응답을 넘기면, 그 안의 `virtual_reservation_no`와 `goods_sequence`로 취소를 요청합니다.
 
-같은 요청이 결제 전 예약의 취소와 결제한 예약의 환불에 모두 쓰입니다. 결제한 예약은 수수료가 붙을 수 있으므로 호출하기 전에 상세의 `cancellation_fee`와 `cancellation_amount`를 확인하세요.
+같은 요청이 결제 전 예약의 취소와 결제한 예약의 환불에 모두 쓰입니다. 결제한 예약은 수수료가 붙을 수 있으므로 호출하기 전에 상세의 `cancellation_fee`와 `cancellation_return_amount`를 확인하세요.
 7.0.8에서는 조회 가능한 여행상품 1건이 이미 고객 취소 상태라 취소 요청을 실행하지 않았습니다. 7.0.6 시기에는 결제 전 예약 취소를 확인했으며, 결제한 예약의 환불은 확인하지 못했습니다.
 
 **매개변수**
@@ -723,7 +723,7 @@ detail = client.get_product_detail(
     reservation.virtual_reservation_no,
     reservation.reservation_sequence,
 )
-print("취소 수수료:", detail.cancellation_fee, "반환 금액:", detail.cancellation_amount)
+print("취소 수수료:", detail.cancellation_fee, "반환 금액:", detail.cancellation_return_amount)
 result = client.cancel_product_reservation(detail)
 print(result.str_result, result.h_msg_cd)
 ```

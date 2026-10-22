@@ -376,7 +376,7 @@ class AirportBusResource:
     ) -> AirportBusSeatInventoryResponse:
         """조회한 편의 식별값으로 좌석 배치를 읽습니다. 필수값이 없으면 요청 전에 거절합니다."""
         if not isinstance(schedule, AirportBusSchedule):
-            raise TypeError("schedule must be a AirportBusSchedule")
+            raise TypeError("schedule must be an AirportBusSchedule")
         _passenger_count(passenger_count, "passenger_count")
         return self._client.get_airport_bus_seat_inventory(
             AirportBusSeatInventoryQuery.from_schedule(schedule, passenger_count=passenger_count)

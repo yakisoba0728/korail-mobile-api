@@ -101,7 +101,7 @@ KorailClient.get_airport_bus_seat_inventory(
 ```
 
 조회 조건은 [`AirportBusSeatInventoryQuery`][korail_mobile_api.AirportBusSeatInventoryQuery]로 만듭니다.
-열차 종류·운행 그룹 코드, 운행일, 편 번호, 출발·도착 정류장 코드와 순서는 [`list_airport_bus_schedules`](#list_airport_bus_schedules)가 반환한 [`AirportBusSchedule`][korail_mobile_api.AirportBusSchedule]의 같은 이름 필드(`train_class_code`, `service_code`, `run_date`, `train_no`, `departure_station_code`, `arrival_station_code`, `departure_run_order`, `arrival_run_order`)에서 옮깁니다.
+열차 종류·운행 그룹 코드, 운행일, 편 번호, 출발·도착 정류장 코드와 순서는 [`list_airport_bus_schedules`](#list_airport_bus_schedules)가 반환한 [`AirportBusSchedule`][korail_mobile_api.AirportBusSchedule]의 필드(`settlement_train_class_code`, `train_group_code`, `run_date`, `train_no`, `departure_station_code`, `arrival_station_code`, `departure_run_order`, `arrival_run_order`)에서 옮깁니다.
 [`reserve_airport_bus`](#reserve_airport_bus)은 호차 번호를 항상 `"0001"`로 보내므로 좌석도 같은 호차(`car_no="0001"`)로 조회하세요.
 
 `passenger_count`는 인원 수이며, 이 조회에서는 1~9 범위를 검사하지 않습니다. `product_no`가 `None`(기본값)이면 보내지 않고, `is_arrow`는 `"true"`나 `"false"`로 보냅니다(기본값 `False`).
@@ -135,8 +135,8 @@ from korail_mobile_api import AirportBusSeatInventoryQuery
 
 bus = schedules.schedules[0]
 seat_query = AirportBusSeatInventoryQuery(
-    train_class_code=bus.train_class_code,
-    service_code=bus.service_code,
+    train_class_code=bus.settlement_train_class_code,
+    service_code=bus.train_group_code,
     run_date=bus.run_date,
     train_no=bus.train_no,
     car_no="0001",
@@ -173,7 +173,7 @@ KorailClient.reserve_airport_bus(
 
 요청을 보내기 전에 다음을 검사합니다.
 
-- `schedule`의 `train_no`, `train_class_code`, `service_code`가 비어 있지 않은지
+- `schedule`의 `train_no`, `settlement_train_class_code`, `train_group_code`가 비어 있지 않은지
 - `run_date`, `departure_date`가 숫자 8자리이고 `departure_time`이 숫자 6자리인지
 - 출발·도착 정류장 코드와 순서가 숫자인지
 - `general_remaining_seat_count`가 9자리 이하 숫자일 때 인원 수보다 적지 않은지(더 길면 알 수 없는 값으로 봅니다)

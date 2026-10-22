@@ -28,16 +28,16 @@ from .models import (
     AirportBusSchedule,
 )
 
-# 좌석 조회가 운행 편에서 그대로 옮기는 식별값입니다.
+# 좌석 조회가 운행 편에서 그대로 옮기는 식별값입니다(조회 필드, 운행 편 필드).
 _SCHEDULE_IDENTIFIERS = (
-    "train_class_code",
-    "service_code",
-    "run_date",
-    "train_no",
-    "departure_station_code",
-    "arrival_station_code",
-    "departure_run_order",
-    "arrival_run_order",
+    ("train_class_code", "settlement_train_class_code"),
+    ("service_code", "train_group_code"),
+    ("run_date", "run_date"),
+    ("train_no", "train_no"),
+    ("departure_station_code", "departure_station_code"),
+    ("arrival_station_code", "arrival_station_code"),
+    ("departure_run_order", "departure_run_order"),
+    ("arrival_run_order", "arrival_run_order"),
 )
 
 
@@ -112,9 +112,9 @@ class AirportBusSeatInventoryQuery:
     ) -> AirportBusSeatInventoryQuery:
         """조회한 편의 식별값과 공항버스 호차·객실 등급·좌석 속성으로 좌석 조회 조건을 만듭니다."""
         if not isinstance(schedule, AirportBusSchedule):
-            raise KorailInvalidInputError("schedule must be a AirportBusSchedule")
+            raise KorailInvalidInputError("schedule must be an AirportBusSchedule")
         return cls(
-            **{name: getattr(schedule, name) for name in _SCHEDULE_IDENTIFIERS},
+            **{name: getattr(schedule, source) for name, source in _SCHEDULE_IDENTIFIERS},
             car_no=AIRPORT_BUS_CAR_NO,
             room_class_code=AIRPORT_BUS_ROOM_CLASS_CODE,
             seat_attribute_code=AIRPORT_BUS_SEAT_ATTRIBUTE_CODE,
@@ -167,8 +167,8 @@ def build_limousine_seat_inventory_form(
 # (전송 키, AirportBusSchedule 필드, 형식) — 예약 여정 키의 순서입니다.
 _RESERVATION_JOURNEY: tuple[tuple[str, str, re.Pattern[str] | None], ...] = (
     ("txtTrnNo1", "train_no", None),
-    ("txtTrnClsfCd1", "train_class_code", None),
-    ("txtTrnGpCd1", "service_code", None),
+    ("txtTrnClsfCd1", "settlement_train_class_code", None),
+    ("txtTrnGpCd1", "train_group_code", None),
     ("txtRunDt1", "run_date", _DATE_RE),
     ("txtDptDt1", "departure_date", _DATE_RE),
     ("txtDptTm1", "departure_time", _TIME_RE),
@@ -188,7 +188,7 @@ def build_limousine_reservation_form(
 ) -> dict[str, str]:
     """열차 예약 DTO 를 쓰되 구성순서·변경 플래그는 보내지 않습니다. 보호된 기본값은 실서버에서 받아들여진 값입니다."""
     if not isinstance(schedule, AirportBusSchedule):
-        raise KorailInvalidInputError("KORAIL airport bus reservation requires a AirportBusSchedule")
+        raise KorailInvalidInputError("KORAIL airport bus reservation requires an AirportBusSchedule")
     passengers = _passenger_counts(passengers)
     if passengers.total - passengers.adult - passengers.child:
         raise KorailInvalidInputError("KORAIL airport bus passengers can only be adults and children")

@@ -269,7 +269,7 @@ KorailClient.get_train_schedule(run_date: str, train_no: str) -> TrainScheduleRe
 
 운행일과 열차 번호로 조회합니다. 조회 결과 행의 `run_date`와 `train_no`를 그대로 넘기면 됩니다.
 열차 번호는 다섯 자리가 되도록 앞에 0을 채워 보냅니다.
-정차역마다 계획 시각(`planned_arrival_time`, `planned_departure_time`)과 실제 시각(`actual_arrival_time`, `actual_departure_time`)이 [`TrainScheduleStop`][korail_mobile_api.TrainScheduleStop]으로 들어 있습니다.
+정차역마다 계획 시각(`arrival_time`, `departure_time`)과 실제 시각(`actual_arrival_time`, `actual_departure_time`)이 [`TrainScheduleStop`][korail_mobile_api.TrainScheduleStop]으로 들어 있습니다.
 응답 필드는 모두 선택값이라 서버가 보내지 않으면 `None`입니다.
 
 **매개변수**
@@ -299,7 +299,7 @@ KorailClient.get_train_schedule(run_date: str, train_no: str) -> TrainScheduleRe
 train = result.trains[0]  # search_trains 결과의 첫 열차
 schedule = client.get_train_schedule(train.run_date, train.train_no)
 for stop in schedule.stops:
-    print(stop.station_name, stop.planned_departure_time, stop.actual_departure_time)
+    print(stop.station_name, stop.departure_time, stop.actual_departure_time)
 ```
 
 <a id="get_seat_cars"></a>

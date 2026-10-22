@@ -104,6 +104,67 @@ def test_mutation_responses_keep_shallow_raw_copies(parser) -> None:
     assert "later" not in response.raw
 
 
+# 3.0: every model field that reads one of these wire keys carries the same attribute name.
+CANONICAL_WIRE_NAMES = {
+    "addSrvDvCd": "additional_service_code",
+    "addSrvReqNo": "additional_service_request_no",
+    "arvDt": "arrival_date",
+    "dptDt": "departure_date",
+    "arvTm": "arrival_time",
+    "dptTm": "departure_time",
+    "arvStnConsOrdr": "arrival_construction_order",
+    "dptStnConsOrdr": "departure_construction_order",
+    "asgnSqno": "assignment_sequence",
+    "frcSaleRsnCont": "forced_sale_reason_text",
+    "gdTripArNm": "area_name",
+    "gnrmRestSeatNum": "general_remaining_seat_count",
+    "sprmRestSeatNum": "special_remaining_seat_count",
+    "restStndNum": "standing_remaining_seat_count",
+    "h_arv_rs_stn_nm": "arrival_station_name",
+    "h_dpt_rs_stn_nm": "departure_station_name",
+    "h_cmtr_utl_trm_cd": "commuter_period_code",
+    "h_dcsp_no": "discount_proof_no",
+    "h_dcsp_no2": "discount_proof_no_2",
+    "h_fdcert_mg_st_dt": "management_start_date",
+    "h_fdcert_mg_cls_dt": "management_close_date",
+    "h_page_no": "page_no",
+    "h_pre_stl_tgt_flg": "pre_settlement_target_flag",
+    "h_psg_info_per_prnb": "passenger_count",
+    "h_psrm_cl_nm": "room_class_name",
+    "psgTpDvCd": "passenger_type_code",
+    "stlbTrnClsfCd": "settlement_train_class_code",
+    "strCncDlnDt": "cancellation_deadline",
+    "strCncRetAmt": "cancellation_return_amount",
+    "strCncRetFee": "cancellation_fee",
+    "strRsvSttNm": "reservation_status_name",
+    "strStlDlnDt": "settlement_deadline",
+    "strStlSttCd": "settlement_status_code",
+    "strTotStlAmt": "total_settlement_amount",
+    "strUtlTrmCont": "usage_period",
+    "trnClsfCd": "train_class_code",
+    "trnGpCd": "train_group_code",
+    "h_tk_ret_no": "ticket_return_no",
+    "h_stl_crd_no": "settlement_card_no",
+}
+
+
+def test_same_wire_key_reads_into_one_attribute_name() -> None:
+    models = {
+        model
+        for module in DOMAIN_MODULES
+        for model in vars(module).values()
+        if inspect.isclass(model) and is_dataclass(model)
+    }
+    names = {
+        (model.__name__, item.name, CANONICAL_WIRE_NAMES[item.metadata["wire"]])
+        for model in models
+        for item in fields(model)
+        if item.metadata.get("wire") in CANONICAL_WIRE_NAMES
+    }
+    assert len(names) > 80
+    assert {(model, name) for model, name, canonical in names if name != canonical} == set()
+
+
 def test_unknown_response_codes_remain_strings() -> None:
     raw = {"h_trn_no": "00001", "h_trn_gp_cd": "FUTURE-GROUP", "h_gen_rsv_cd": "FUTURE-STATE"}
     train = TrainSummary.from_raw(raw)

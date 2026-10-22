@@ -1435,7 +1435,7 @@ PAYMENT_ROWS = {
             "sale_date": "h_sale_dt",
             "sale_sequence": "h_sale_sqno",
             "return_password": "h_tk_ret_pwd",
-            "return_no": "h_tk_ret_no",
+            "ticket_return_no": "h_tk_ret_no",
             "recipient_name": "h_take_name",
             "discount_card_no": "h_disc_card_no",
             "ticket_price": "h_tk_prc",

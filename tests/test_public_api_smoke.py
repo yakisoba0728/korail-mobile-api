@@ -114,8 +114,8 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         arrival_station_code="9903",
         departure_run_order="1",
         arrival_run_order="3",
-        train_class_code="80",
-        service_code="800",
+        settlement_train_class_code="80",
+        train_group_code="800",
         train_no="90001",
         general_remaining_seat_count="2",
     )
