@@ -35,7 +35,7 @@ class PbpAcceptanceSeat:
     # 앱 DTO 가 int 라 정수입니다. 그대로 되돌려 보내는 SelfCheckInSeat.car_no 는 문자열로 둡니다.
     car_no: int = wire("scarNo", required_int)
     seat_no: str = wire("seatNo", required_str)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -51,8 +51,8 @@ class PbpAcceptanceJourney:
     registered_date: str = wire("regDt", required_str)
     withdrawal_possible_flag: str = wire("wdrwPsbFlg", required_str)
     seats: tuple[PbpAcceptanceSeat, ...] = ()
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     member_card_no: str = wire("mbCrdNo", required_str)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -65,10 +65,10 @@ class PbpAcceptanceTicket:
     sale_window_no: str = wire("saleWctNo", required_str)
     return_password: str = wire("tkRetPwd", required_str)
     journeys: tuple[PbpAcceptanceJourney, ...] = ()
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceSpecificationResponse(BaseKorailResponse):
     """승차권별 대리수령 내역 목록을 담습니다.
 
@@ -87,10 +87,10 @@ class RecentDeliveryRecipient:
     acceptance_customer_phone: str = wire("acepCustTeln", required_str)
     acceptance_customer_phone_2: str = wire("acepCustTeln2", required_str)
     member_card_no: str = wire("mbCrdNo", required_str)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RecentDeliveryHistoryResponse(BaseKorailResponse):
     """최근 승차권 전달 수령자 목록을 담습니다."""
 
@@ -99,7 +99,7 @@ class RecentDeliveryHistoryResponse(BaseKorailResponse):
     recipients: tuple[RecentDeliveryRecipient, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelfCheckInSeat:
     """셀프 체크인할 수 있는 좌석 한 행을 담습니다.
 
@@ -123,10 +123,10 @@ class SelfCheckInSeat:
     departure_datetime: str = wire("dptDttm", required_str)
     arrival_datetime: str = wire("arvDttm", required_str)
     cps_no: str = wire("cpsNo", required_str)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelfCheckInSeatCheckResponse(BaseKorailResponse):
     """셀프 체크인 좌석 확인 결과를 담습니다.
 
@@ -136,7 +136,7 @@ class SelfCheckInSeatCheckResponse(BaseKorailResponse):
     seats: tuple[SelfCheckInSeat, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelfCheckInInfoResponse(BaseKorailResponse):
     """셀프 체크인한 좌석 정보를 담습니다.
 
@@ -155,7 +155,7 @@ class SelfCheckInInfoResponse(BaseKorailResponse):
     checkin_division_code: str | None = wire("chcknDvCd", present_str, default=None)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelfCheckInRegisterResponse(BaseKorailResponse):
     """셀프 체크인 등록 결과를 담습니다.
 
@@ -165,7 +165,7 @@ class SelfCheckInRegisterResponse(BaseKorailResponse):
     message_id: str | None = wire("msgId", present_str, default=None)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelfCheckInCancelResponse(BaseKorailResponse):
     """셀프 체크인 취소 결과를 담습니다.
 
@@ -174,7 +174,7 @@ class SelfCheckInCancelResponse(BaseKorailResponse):
     message_id: str | None = wire("msgId")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DeliveredTicketRetrievalResponse(BaseKorailResponse):
     """대리수령으로 전달한 승차권을 회수한 결과를 담습니다.
 

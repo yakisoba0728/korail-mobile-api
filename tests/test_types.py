@@ -179,7 +179,13 @@ def test_unknown_response_codes_remain_strings() -> None:
 def test_self_seat_change_preserves_room_codes(room_class_code: str | None) -> None:
     """SeatAvailabilityIn.java:26-30,55: String, no allowlist (PsrmType.java:19-29 literals are protected);
     SelfSeatChangeOptionViewModel.java:342-344: psrmClCd only when the room value is not null."""
-    request = api.SelfSeatChangeInfoRequest("20261007", "00001", "TEST-A", "TEST-B", room_class_code)
+    request = api.SelfSeatChangeInfoRequest(
+        run_date="20261007",
+        train_no="00001",
+        departure_station_code="TEST-A",
+        arrival_station_code="TEST-B",
+        room_class_code=room_class_code,
+    )
     form = build_self_seat_change_info_form(request)
     if room_class_code is None:
         assert "psrmClCd" not in form
@@ -190,7 +196,13 @@ def test_self_seat_change_preserves_room_codes(room_class_code: str | None) -> N
 @pytest.mark.parametrize("room_class_code", [1, True, object(), "", " "])
 def test_self_seat_change_rejects_invalid_room_codes(room_class_code: object) -> None:
     with pytest.raises(api.KorailProtocolError, match="room_class_code must not be empty"):
-        api.SelfSeatChangeInfoRequest("20261007", "00001", "TEST-A", "TEST-B", room_class_code)  # type: ignore[arg-type]
+        api.SelfSeatChangeInfoRequest(
+            run_date="20261007",
+            train_no="00001",
+            departure_station_code="TEST-A",
+            arrival_station_code="TEST-B",
+            room_class_code=room_class_code,
+        )  # type: ignore[arg-type]
 
 
 def test_commuter_passenger_request_requires_factory() -> None:
@@ -214,13 +226,13 @@ from korail_mobile_api import KorailSelfSeatChangeRoomClassCode, SelfSeatChangeI
 
 server_code: KorailSelfSeatChangeRoomClassCode = "FUTURE"
 for room_code in ("1", "2", server_code, None):
-    request = SelfSeatChangeInfoRequest("20261007", "00001", "TEST-A", "TEST-B", room_code)
+    request = SelfSeatChangeInfoRequest(run_date="20261007", train_no="00001", departure_station_code="TEST-A", arrival_station_code="TEST-B", room_class_code=room_code)
     assert_type(request.room_class_code, str | None)
 
 # Strict mypy checks that these ignores are necessary, proving each argument is rejected.
-SelfSeatChangeInfoRequest("20261007", "00001", "TEST-A", "TEST-B", 1)  # type: ignore[arg-type]
-SelfSeatChangeInfoRequest("20261007", "00001", "TEST-A", "TEST-B", True)  # type: ignore[arg-type]
-SelfSeatChangeInfoRequest("20261007", "00001", "TEST-A", "TEST-B", object())  # type: ignore[arg-type]
+SelfSeatChangeInfoRequest(run_date="20261007", train_no="00001", departure_station_code="TEST-A", arrival_station_code="TEST-B", room_class_code=1)  # type: ignore[arg-type]
+SelfSeatChangeInfoRequest(run_date="20261007", train_no="00001", departure_station_code="TEST-A", arrival_station_code="TEST-B", room_class_code=True)  # type: ignore[arg-type]
+SelfSeatChangeInfoRequest(run_date="20261007", train_no="00001", departure_station_code="TEST-A", arrival_station_code="TEST-B", room_class_code=object())  # type: ignore[arg-type]
 """,
         encoding="utf-8",
     )

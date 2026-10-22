@@ -428,7 +428,7 @@ finally:
 
 !!! danger "원본과 모델은 마스킹하지 않습니다"
     응답 모델과 예외의 `raw`에는 서버가 보낸 응답이 가공 없이 들어 있습니다. 이름, 전화번호, 고객번호, 예약 번호, 결제 정보 같은 개인정보가 포함될 수 있습니다.
-    응답 모델을 `print`하거나 로그에 남기면 `raw`를 포함한 모든 필드가 그대로 출력됩니다. [`KorailSession`][korail_mobile_api.KorailSession]에는 세션 쿠키 값과 로그인 ID도 들어 있습니다.
+    3.0부터 모델의 `repr`(`print` 출력)에는 `raw`와 호출자가 넣은 비밀값(세션 쿠키, 반환 비밀번호, 카드 정보, 입력 모델의 이름·전화번호·생년월일·고객번호, 기기 식별자)이 나오지 않지만, 그 밖의 응답 필드는 그대로 출력되고 속성 값 자체는 가리지 않습니다. [`KorailSession`][korail_mobile_api.KorailSession]에는 세션 쿠키 값과 로그인 ID도 들어 있습니다.
     모델이 바꿀 수 없는(frozen) dataclass여도 `raw` 안의 사전과 목록은 복사하거나 고정하지 않습니다.
     오류를 기록할 때는 예외의 클래스 이름과 `code`처럼 필요한 값만 남기고, `raw`와 모델 전체를 로그나 오류 보고에 넣지 마세요.
     2.6.2부터 네트워크 오류로 `KorailTransportError.__cause__`에 붙는 `httpx` 예외에는 메서드와 쿼리를 뺀 URL만 남고 요청 본문·쿠키·DynaPath 토큰은 지웁니다. 응답 모델, `raw`, `dataclasses.asdict`와 pickle 결과는 여전히 마스킹하지 않습니다.

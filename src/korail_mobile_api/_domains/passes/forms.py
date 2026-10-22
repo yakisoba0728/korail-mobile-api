@@ -36,7 +36,7 @@ KORAIL_DISCOUNT_CARD_DISCOUNT_CODE = "153"
 KORAIL_DISCOUNT_CARD_MENU_ID = "A2"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassScheduleRequest:
     """정기권으로 이용 가능한 열차 조회 조건을 구성합니다."""
 
@@ -88,7 +88,7 @@ def build_trip_menu_form(config: KorailConfig) -> dict[str, str]:
     }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DiscountCardScheduleRequest:
     """N카드 한 구간의 이용 가능한 열차 조회 조건을 구성합니다.
 
@@ -194,7 +194,7 @@ def _exact_server_pass_data(pass_data: PassMenuData) -> str:
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CommuterInitialRequest:
     """정기권 예매의 초기 조건 조회 입력을 구성합니다."""
 
@@ -204,7 +204,7 @@ class CommuterInitialRequest:
         _exact_server_pass_data(self.pass_data)
 
 
-@dataclass(frozen=True, init=False)
+@dataclass(frozen=True, kw_only=True, init=False)
 class CommuterPassengerRequest:
     """정기권 예매의 승객·인원 조건 조회 입력을 ``from_response()``로 구성합니다."""
 
@@ -253,7 +253,7 @@ def _validate_commuter_passenger_request(
     return tuple(validated_age_codes)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CommuterTicketInquiryRequest:
     """정기권 예매의 원표 조회 입력을 구성합니다."""
 

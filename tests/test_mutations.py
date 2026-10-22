@@ -169,13 +169,13 @@ def test_card_rejects_malformed_strings_without_echoing_them(field: str) -> None
 
 def ticket() -> PaidTicket:
     return PaidTicket(
-        PNR,
-        "20991230",
-        "SYNTH-ORIGINAL-WINDOW",
-        "SYNTH-ORIGINAL-SEQ",
-        "SYNTH-RETURN-PWD",
-        "90001",
-        "SYNTH-PBP",
+        pnr_no=PNR,
+        sale_date="20991230",
+        sale_window_no="SYNTH-ORIGINAL-WINDOW",
+        sale_sequence="SYNTH-ORIGINAL-SEQ",
+        return_password="SYNTH-RETURN-PWD",
+        train_no="90001",
+        pbp_acceptance_target_flag="SYNTH-PBP",
         return_sale_date="1229",
     )
 
@@ -193,7 +193,12 @@ def bound_commission(**changes: Any) -> RefundCommissionResponse:
     ) as client:
         client.session.current = KorailSession(jsessionid="SYNTH-SESSION")
         result = client.get_refund_fee(
-            OriginalTicketReference("SYNTH-ORIGINAL-WINDOW", "1229", "SYNTH-ORIGINAL-SEQ", "SYNTH-RETURN-PWD")
+            OriginalTicketReference(
+                sale_window_no="SYNTH-ORIGINAL-WINDOW",
+                sale_date="1229",
+                sale_sequence="SYNTH-ORIGINAL-SEQ",
+                return_password="SYNTH-RETURN-PWD",
+            )
         )
     return replace(result, **changes)
 
@@ -347,7 +352,13 @@ def refund_form(**changes: str) -> dict[str, Any]:
 
 
 def verification_request() -> StationRefundVerificationRequest:
-    return StationRefundVerificationRequest("SYNTH-CUSTOMER", "SYNTH-A", "SYNTH-B", "SYNTH-C", "SYNTH-D")
+    return StationRefundVerificationRequest(
+        customer_name="SYNTH-CUSTOMER",
+        return_no_1="SYNTH-A",
+        return_no_2="SYNTH-B",
+        return_no_3="SYNTH-C",
+        return_no_4="SYNTH-D",
+    )
 
 
 def verification_raw() -> dict[str, Any]:
@@ -375,18 +386,18 @@ def verification_raw() -> dict[str, Any]:
 
 def execution_request() -> StationRefundExecutionRequest:
     return StationRefundExecutionRequest(
-        PNR,
-        "20991230",
-        "SYNTH-ORIGINAL-WINDOW",
-        "SYNTH-ORIGINAL-SEQ",
-        "SYNTH-RETURN-PWD",
-        "SYNTH-DIV",
-        "SYNTH-REASON",
-        "SYNTH-KIND",
-        "00000000000",
-        "1100",
-        "100",
-        "SYNTH-CUSTOMER",
+        pnr_no=PNR,
+        original_sale_date="20991230",
+        original_sale_window_no="SYNTH-ORIGINAL-WINDOW",
+        original_sale_sequence="SYNTH-ORIGINAL-SEQ",
+        original_return_password="SYNTH-RETURN-PWD",
+        refund_division_code="SYNTH-DIV",
+        refund_reason_code="SYNTH-REASON",
+        ticket_kind_code="SYNTH-KIND",
+        customer_phone="00000000000",
+        refund_amount="1100",
+        refund_fee="100",
+        customer_name="SYNTH-CUSTOMER",
     )
 
 
@@ -411,10 +422,24 @@ def execution_form() -> dict[str, Any]:
 
 def recalc_request(**changes: Any) -> PriceRecalculationRequest:
     return PriceRecalculationRequest(
-        PNR,
-        (
-            PriceRecalculationRow("1", "1", "000", "", "", ""),
-            PriceRecalculationRow("3", "2", "SYNTH-OLD", "SYNTH-NEW", "SYNTH-CERT", "SYNTH-FAMILY"),
+        pnr_no=PNR,
+        rows=(
+            PriceRecalculationRow(
+                passenger_type_code="1",
+                room_class_code="1",
+                discount_kind_code="000",
+                requested_discount_code="",
+                certificate_no="",
+                family_sequence_no="",
+            ),
+            PriceRecalculationRow(
+                passenger_type_code="3",
+                room_class_code="2",
+                discount_kind_code="SYNTH-OLD",
+                requested_discount_code="SYNTH-NEW",
+                certificate_no="SYNTH-CERT",
+                family_sequence_no="SYNTH-FAMILY",
+            ),
         ),
         **changes,
     )
@@ -636,7 +661,7 @@ def cases() -> list[Case]:
         # is read as discount_additions.
         Case(
             "add_to_cart",
-            lambda c: c.add_to_cart(CartAddRequest(PNR)),
+            lambda c: c.add_to_cart(CartAddRequest(pnr_no=PNR)),
             "POST",
             ("cart.addCartList",),
             {**COMMON, "hidPnrNo": PNR},
@@ -654,7 +679,10 @@ def cases() -> list[Case]:
             "extend_discount_card",
             lambda c: c.extend_discount_card(
                 OriginalTicketReference(
-                    "SYNTH-ORIGINAL-WINDOW", "20991230", "SYNTH-ORIGINAL-SEQ", "SYNTH-RETURN-PWD"
+                    sale_window_no="SYNTH-ORIGINAL-WINDOW",
+                    sale_date="20991230",
+                    sale_sequence="SYNTH-ORIGINAL-SEQ",
+                    return_password="SYNTH-RETURN-PWD",
                 )
             ),
             "POST",
@@ -744,8 +772,22 @@ CHECKIN_DETAIL = RefundTicketDetailResponse(
     journeys=(RefundTicketJourney(journey_sequence="001"),),
 )
 CHECKIN_SEAT = SelfCheckInSeat(
-    *("SYNTH-PNR", "002", "01", "20991230", "00101", "1", "0001", "5", "0020", "11", "100", "0017", "5A"),
-    *("20991230100000", "20991230120000", "SYNTH-CPS"),
+    pnr_no="SYNTH-PNR",
+    journey_sequence="002",
+    assignment_sequence="01",
+    run_date="20991230",
+    train_no="00101",
+    departure_construction_order="1",
+    departure_station_code="0001",
+    arrival_construction_order="5",
+    arrival_station_code="0020",
+    ticket_kind_code="11",
+    train_group_code="100",
+    car_no="0017",
+    seat_no="5A",
+    departure_datetime="20991230100000",
+    arrival_datetime="20991230120000",
+    cps_no="SYNTH-CPS",
 )
 DELIVERED_TICKET = PbpAcceptanceTicket(
     pnr_no=PNR,
@@ -1278,7 +1320,7 @@ def test_teenager_reservation_rejected_before_queue_or_http(
 
     client = f8_client_factory(handler)
     seats = (
-        tuple(KorailSeatAssignment(1, f"{i + 1}A") for i in range(passengers.total))
+        tuple(KorailSeatAssignment(car_no=1, seat_no=f"{i + 1}A") for i in range(passengers.total))
         if job_type is Job.SEAT_DESIGNATED
         else None
     )
@@ -1357,7 +1399,10 @@ def test_transfer_seat_and_attribute_indexing(mutation_client) -> None:
     client.reserve_transfer(
         [train(), train(True)],
         job_type=Job.SEAT_DESIGNATED,
-        seats=[(KorailSeatAssignment(1, "1A"),), (KorailSeatAssignment(2, "2B"),)],
+        seats=[
+            (KorailSeatAssignment(car_no=1, seat_no="1A"),),
+            (KorailSeatAssignment(car_no=2, seat_no="2B"),),
+        ],
         seat_attribute_codes=["021", "028"],
     )
 
@@ -1551,7 +1596,7 @@ def test_recalculation_sends_one_request_and_the_caller_adds_the_cart(mutation_c
     recalculated = client.recalculate_price(recalc_request())
     assert recalculated.received_amount == "1200" and len(requests) == 1
     assert recalculated.pnr_no is not None
-    assert client.add_to_cart(CartAddRequest(recalculated.pnr_no)).h_msg_cd == "SYNTH-CART"
+    assert client.add_to_cart(CartAddRequest(pnr_no=recalculated.pnr_no)).h_msg_cd == "SYNTH-CART"
     assert len(requests) == 2
 
 
@@ -1569,10 +1614,22 @@ def test_recalculation_rows_come_from_the_first_journey_seats_like_the_app() -> 
     )
     held = hold(journeys=journeys)
     assert PriceRecalculationRequest.for_hold(held, ["", "SYNTH-NEW"]) == PriceRecalculationRequest(
-        PNR,
-        (
-            PriceRecalculationRow("1", "1", "000", "", ""),
-            PriceRecalculationRow("3", "2", "SYNTH-OLD", "SYNTH-NEW", "SYNTH-CERT"),
+        pnr_no=PNR,
+        rows=(
+            PriceRecalculationRow(
+                passenger_type_code="1",
+                room_class_code="1",
+                discount_kind_code="000",
+                requested_discount_code="",
+                certificate_no="",
+            ),
+            PriceRecalculationRow(
+                passenger_type_code="3",
+                room_class_code="2",
+                discount_kind_code="SYNTH-OLD",
+                requested_discount_code="SYNTH-NEW",
+                certificate_no="SYNTH-CERT",
+            ),
         ),
     )
     with pytest.raises(KorailProtocolError, match="one requested code per seat"):
@@ -1601,7 +1658,15 @@ def test_recalculation_rows_read_only_strings_and_json_integers(value: Any, expe
             PriceRecalculationRequest.for_hold(held, ["SYNTH-NEW"])
     else:
         request = PriceRecalculationRequest.for_hold(held, ["SYNTH-NEW"])
-        assert request.rows == (PriceRecalculationRow(expected, "1", "000", "SYNTH-NEW", ""),)
+        assert request.rows == (
+            PriceRecalculationRow(
+                passenger_type_code=expected,
+                room_class_code="1",
+                discount_kind_code="000",
+                requested_discount_code="SYNTH-NEW",
+                certificate_no="",
+            ),
+        )
 
 
 def test_recalculation_form_keeps_the_retrofit_field_order(mutation_client) -> None:
@@ -1686,7 +1751,10 @@ def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order
         config,
         [train(), train(True)],
         job_type=Job.SEAT_DESIGNATED,
-        seats=((KorailSeatAssignment(3, "SYNTH-5A"),), (KorailSeatAssignment(4, "SYNTH-6B"),)),
+        seats=(
+            (KorailSeatAssignment(car_no=3, seat_no="SYNTH-5A"),),
+            (KorailSeatAssignment(car_no=4, seat_no="SYNTH-6B"),),
+        ),
     )
     assert list(form) == [
         *APP_HEAD[:7],

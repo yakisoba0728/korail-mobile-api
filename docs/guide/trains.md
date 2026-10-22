@@ -116,7 +116,12 @@ departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
 
 client = KorailClient()
 try:
-    query = TrainSearchQuery("서울", "부산", departure_date, "060000")
+    query = TrainSearchQuery(
+        departure_station="서울",
+        arrival_station="부산",
+        departure_date=departure_date,
+        departure_time="060000",
+    )
     result = client.search_trains(query)
     trains = list(result.trains)
     for _ in range(4):  # 최대 네 페이지 더
@@ -150,7 +155,12 @@ departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
 
 client = KorailClient()
 try:
-    query = TrainSearchQuery("강릉", "목포", departure_date, "080000")
+    query = TrainSearchQuery(
+        departure_station="강릉",
+        arrival_station="목포",
+        departure_date=departure_date,
+        departure_time="080000",
+    )
     result = client.search_transfer_trains(query)
     for itinerary in result.itineraries:
         first, second = itinerary.legs
@@ -187,7 +197,12 @@ departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
 
 client = KorailClient()
 try:
-    query = TrainSearchQuery("강릉", "목포", departure_date, "080000")
+    query = TrainSearchQuery(
+        departure_station="강릉",
+        arrival_station="목포",
+        departure_date=departure_date,
+        departure_time="080000",
+    )
     result = client.search_trains_with_transfer_fallback(query)
     if isinstance(result, TransferSearchResult):
         print("직통 없음, 환승 여정", len(result.itineraries), "개")
@@ -236,7 +251,14 @@ departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
 client = KorailClient()
 try:
     client.login(input("회원번호·전화번호·이메일: "), getpass("비밀번호: "))
-    train = client.search_trains(TrainSearchQuery("서울", "부산", departure_date, "090000")).trains[0]
+    train = client.search_trains(
+        TrainSearchQuery(
+            departure_station="서울",
+            arrival_station="부산",
+            departure_date=departure_date,
+            departure_time="090000",
+        )
+    ).trains[0]
 
     cars = client.list_seat_cars(train, room_class_code=KorailSeatClass.GENERAL)
     for car in cars.cars:
@@ -291,7 +313,12 @@ departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
 
 client = KorailClient()
 try:
-    query = TrainSearchQuery("강릉", "목포", departure_date, "080000")
+    query = TrainSearchQuery(
+        departure_station="강릉",
+        arrival_station="목포",
+        departure_date=departure_date,
+        departure_time="080000",
+    )
     itinerary = client.search_transfer_trains(query).itineraries[0]
     request = PriceFareQuoteRequest(legs=tuple(PriceFareLeg.from_train(train) for train in itinerary.legs))
     for fare in client.get_fare_quote(request).fares:

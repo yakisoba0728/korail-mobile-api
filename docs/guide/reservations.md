@@ -203,7 +203,13 @@ from korail_mobile_api import KorailPassengerCounts, TrainSearchQuery
 
 departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
-transfer_query = TrainSearchQuery("강릉", "목포", departure_date, "080000", passengers=2)
+transfer_query = TrainSearchQuery(
+    departure_station="강릉",
+    arrival_station="목포",
+    departure_date=departure_date,
+    departure_time="080000",
+    passengers=2,
+)
 transfer = client.search_transfer_trains(transfer_query)
 itinerary = transfer.itineraries[0]
 transfer_hold = client.reserve_transfer(itinerary.legs, passengers=KorailPassengerCounts(adult=2))

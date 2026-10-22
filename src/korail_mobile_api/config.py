@@ -69,7 +69,7 @@ def enabled_dynapath_config() -> DynapathConfig:
     return DynapathConfig(enabled=True, token_provider=_DiagnosticTokenProvider())
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class KorailConfig:
     """API·대기열·기기·인증 토큰의 요청 설정을 구성합니다.
 
@@ -88,7 +88,7 @@ class KorailConfig:
     device_width: int = KORAIL_DEFAULT_DEVICE_WIDTH
     device_height: int = KORAIL_DEFAULT_DEVICE_HEIGHT
     android_sdk_int: int = KORAIL_DEFAULT_ANDROID_SDK_INT
-    advertising_id: str = ""
+    advertising_id: str = field(default="", repr=False)
     netfunnel_url: str = KORAIL_NETFUNNEL_URL
     netfunnel_timeout: float = KORAIL_NETFUNNEL_TIMEOUT_SECONDS
     #: 대기열 요청의 ``User-Agent`` 헤더입니다. 앱의 대기열 요청은 안드로이드 기본 ``User-Agent``(``Dalvik/2.1.0 (...)``)를
@@ -148,7 +148,7 @@ class KorailConfig:
         object.__setattr__(self, "dynapath", enabled_dynapath_config())
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class KorailDeviceProfile:
     """호출자가 보유한 기기값입니다. ``device_id``는 출력 표현에서 숨깁니다.
 

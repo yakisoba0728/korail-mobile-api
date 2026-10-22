@@ -26,7 +26,12 @@ from korail_mobile_api._domains.payments.parsers import parse_refund_commission_
 
 
 def _reference():
-    return OriginalTicketReference("SYNTH-WINDOW-A", "1017", "SYNTH-SEQUENCE-A", "SYNTH-PASSWORD-A")
+    return OriginalTicketReference(
+        sale_window_no="SYNTH-WINDOW-A",
+        sale_date="1017",
+        sale_sequence="SYNTH-SEQUENCE-A",
+        return_password="SYNTH-PASSWORD-A",
+    )
 
 
 def _ticket(**changes):
@@ -230,7 +235,7 @@ def test_quote_for_a_cannot_refund_mismatching_ticket(binding_client, changes):
     raw = _fee_raw()
     unchanged = deepcopy(raw)
     client, requests = binding_client(fee_raw=raw)
-    companion = RefundCompanion("SYNTH-COMPANION-A", "20991231")
+    companion = RefundCompanion(name="SYNTH-COMPANION-A", certificate_no="20991231")
     commission = client.get_refund_fee(_reference(), companion=companion)
     ticket = _ticket(companion_name=companion.name, companion_certificate_no=companion.certificate_no)
     changed = replace(ticket, **changes)
@@ -320,7 +325,7 @@ def test_direct_responses_cannot_forge_binding_from_server_raw(binding_client, s
 def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion(binding_client, original_date):
     """MyTicketDetailViewModel.java:277,1521 (7.0.6, field by field): the fee lookup uses the original return date,
     the refund the current sale date; a reissued ticket's sale_date differs from the original's."""
-    companion = RefundCompanion("SYNTH-COMPANION-A", "20991231")
+    companion = RefundCompanion(name="SYNTH-COMPANION-A", certificate_no="20991231")
     detail = RefundTicketDetailResponse(
         str_result="SUCC",
         pnr_no="SYNTH-PNR-A",
@@ -370,7 +375,8 @@ def test_new_ticket_identity_fields_are_keyword_only_and_hidden_from_repr(bindin
 
     client, requests = binding_client()
     commission = client.get_refund_fee(
-        _reference(), companion=RefundCompanion(ticket.companion_name, ticket.companion_certificate_no)
+        _reference(),
+        companion=RefundCompanion(name=ticket.companion_name, certificate_no=ticket.companion_certificate_no),
     )
     # Quote raw has no request identity. Attaching local context must not expose it via repr.
     for secret in ("SYNTH-WINDOW-A", "1017", "SYNTH-SEQUENCE-A", "SYNTH-PASSWORD-A", "20991231"):
@@ -405,7 +411,7 @@ def test_refund_failure_after_quote_is_never_retried(binding_client, failure):
 def test_ticket_facade_forwards_companion_and_preserves_binding_checks(binding_client, mismatch):
     client, requests = binding_client()
     tickets = TicketResource(client)
-    companion = RefundCompanion("SYNTH-COMPANION-A", "20991231")
+    companion = RefundCompanion(name="SYNTH-COMPANION-A", certificate_no="20991231")
     commission = tickets.refund_quote(_reference(), companion=companion)
     ticket = _ticket(companion_name=companion.name, companion_certificate_no=companion.certificate_no)
 

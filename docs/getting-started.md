@@ -130,7 +130,12 @@ from korail_mobile_api import KorailClient, TrainSearchQuery
 departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 client = KorailClient()
 try:
-    query = TrainSearchQuery("서울", "부산", departure_date, "090000")
+    query = TrainSearchQuery(
+        departure_station="서울",
+        arrival_station="부산",
+        departure_date=departure_date,
+        departure_time="090000",
+    )
     result = client.search_trains(query)
     continuation = result.next_page()
     if continuation is not None:

@@ -51,7 +51,7 @@ def _text(value: object, name: str, *, allow_blank: bool = False) -> str:
     return value
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AirportBusScheduleQuery:
     """공항버스 운행 스케줄 조회 조건을 구성합니다.
 
@@ -73,7 +73,7 @@ class AirportBusScheduleQuery:
             _text(getattr(self, item.name), item.name, allow_blank=item.name in _OPTIONAL_SCHEDULE_FILTERS)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AirportBusSeatInventoryQuery:
     """공항버스 한 호차의 좌석 조회 조건을 구성합니다.
 
@@ -276,7 +276,7 @@ def build_maas_station_form(additional_service_code: str) -> dict[str, str]:
     return {"addSrvDvCd": additional_service_code}
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MaasServiceDetailQuery:
     """부가서비스 이용 내역의 조회 기간을 구성합니다."""
 

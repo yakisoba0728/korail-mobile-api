@@ -70,7 +70,7 @@ def _optional_count(data: Mapping[str, object], key: str, context: str) -> int |
     return _typed_optional_int(data, key)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TrainScheduleStop:
     """열차의 정차역 한 곳과 도착·출발 정보를 담습니다."""
 
@@ -98,11 +98,12 @@ class TrainScheduleStop:
     service_flag: str | None = wire("saodFlg")
     raw: Mapping[str, object] = field(
         default_factory=dict[str, object],
+        repr=False,
         compare=False,
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TrainScheduleResponse(BaseKorailResponse):
     """열차 한 편의 정차역 목록을 담습니다."""
 
@@ -131,7 +132,7 @@ class TrainScheduleResponse(BaseKorailResponse):
     up_down_division_code: str | None = wire("upDnDvCd")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TransferStation:
     """환승 가능한 역 한 곳을 나타냅니다."""
 
@@ -139,18 +140,19 @@ class TransferStation:
     station_name: str | None = wire("chtnRsStnNm")
     raw: Mapping[str, object] = field(
         default_factory=dict[str, object],
+        repr=False,
         compare=False,
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TransferStationListResponse(BaseKorailResponse):
     """환승 가능한 역 목록을 담습니다."""
 
     stations: tuple[TransferStation, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TrainSearchQuery:
     """직통·환승 열차의 조회 조건을 구성합니다.
 
@@ -185,7 +187,7 @@ class TrainSearchQuery:
     include_nearby_stations: bool = False
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TrainSummary:
     """열차 한 편의 식별자·예약 상태·운임 표시를 담습니다.
 
@@ -201,7 +203,6 @@ class TrainSummary:
     departure_date: str | None = wire("h_dpt_dt", _or_alias("dptDt"), default=None)
     departure_time: str | None = wire("h_dpt_tm", _or_alias("dptTm"), default=None)
     arrival_time: str | None = wire("h_arv_tm", _or_alias("arvTm"), default=None)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     departure_station_name: str | None = wire("h_dpt_rs_stn_nm", _or_alias("dptRsStnNm"), default=None)
     arrival_station_name: str | None = wire("h_arv_rs_stn_nm", _or_alias("arvRsStnNm"), default=None)
     run_date: str | None = wire("h_run_dt", _or_alias("runDt"), default=None)
@@ -256,6 +257,7 @@ class TrainSummary:
     standing_availability_name: str | None = wire("h_stnd_rsv_nm")
     free_availability_name: str | None = wire("h_free_rsv_nm")
     arrival_date: str | None = wire("h_arv_dt")
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
     def has_general_seat(self) -> bool:
         """일반실 예약 코드가 가용 값 ``"11"``인지 확인합니다."""
@@ -320,7 +322,7 @@ class TrainSummary:
         return wire_model(cls, raw, "train", raw=raw)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SeatAttribute:
     """좌석 속성 코드와 표시 이름을 담습니다."""
 
@@ -328,7 +330,7 @@ class SeatAttribute:
     code: str | None = wire("seatAttCd")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SeatCar:
     """좌석 조회에 사용할 호차 번호와 좌석 속성을 담습니다."""
 
@@ -342,7 +344,7 @@ class SeatCar:
     total_seat_count: int | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SeatCarListResponse(BaseKorailResponse):
     """열차 한 편의 조회 가능한 호차 목록을 담습니다."""
 
@@ -355,7 +357,7 @@ class SeatCarListResponse(BaseKorailResponse):
     car_count: str | None = wire("h_scar_num")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PhysicalSeat:
     """좌석표 한 자리의 식별자·표시·판매 가능 여부를 담습니다.
 
@@ -376,7 +378,7 @@ class PhysicalSeat:
     visual_message_division_code: str | None = wire("vz_msg_dv_cd", nullable_str)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SeatWindow:
     """좌석 배치도의 창문 위치 비율을 담습니다.
 
@@ -386,7 +388,7 @@ class SeatWindow:
     close_location_ratio: float | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SeatInventoryResponse(BaseKorailResponse):
     """한 호차의 좌석 재고와 창문 위치를 담습니다.
 
@@ -410,7 +412,7 @@ class SeatInventoryResponse(BaseKorailResponse):
     up_down_division_code: str | None = wire("up_dn_dv_cd")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TrainSearchMetadata:
     """열차 조회 결과의 공통 조건과 페이지 커서를 담습니다.
 
@@ -432,15 +434,16 @@ class TrainSearchMetadata:
     first_seat_count: str | None = wire("h_seat_cnt_first")
     second_seat_count: str | None = wire("h_seat_cnt_second")
     first_departure_time: str | None = wire("txtGoHour_first")
-    raw: Mapping[str, object] = field(
-        default_factory=dict[str, object],
-        compare=False,
-    )
     agreement_text: str | None = wire("h_agree_txt")
     remaining_seat_count: str | None = wire("h_rest_seat_cnt")
+    raw: Mapping[str, object] = field(
+        default_factory=dict[str, object],
+        repr=False,
+        compare=False,
+    )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TrainSearchContinuation:
     """다음 열차 조회에 전달할 세 개의 커서 값을 담습니다.
 
@@ -479,7 +482,7 @@ def _train_search_continuation(
         return None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TrainSearchResult:
     """직통 열차 조회 한 페이지와 후속 조회 정보를 담습니다.
 
@@ -487,10 +490,10 @@ class TrainSearchResult:
 
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
     #: 간편 검색 필터를 적용하기 전의 열차 목록입니다. 필터를 쓰지 않았으면 ``None``입니다.
     unfiltered_trains: list[TrainSummary] | None = field(default=None, repr=False, compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
     def next_page(self) -> TrainSearchContinuation | None:
         """다음 조회에 넘길 ``TrainSearchContinuation``을 반환합니다.
@@ -523,7 +526,7 @@ class TrainSearchResult:
         return replace(query, departure_date=date, departure_time=time)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TransferItinerary:
     """응답에서 묶인 두 구간의 환승 여정을 담습니다.
 
@@ -568,15 +571,15 @@ def pair_transfer_itineraries(
     ]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TransferSearchResult:
     """환승 조회의 전체 열차 행과 두 구간으로 묶은 여정을 담습니다."""
 
     itineraries: list[TransferItinerary]
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
     def next_page(self) -> TrainSearchContinuation | None:
         """다음 조회에 넘길 ``TrainSearchContinuation``을 반환합니다.
@@ -598,7 +601,7 @@ class TransferSearchResult:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class FreeSeatCarResponse(BaseKorailResponse):
     """열차의 자유석 호차와 안내 문구를 담습니다."""
 
@@ -608,7 +611,7 @@ class FreeSeatCarResponse(BaseKorailResponse):
     content: str | None = wire("fresCont")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class GuideSeatConditionResponse(BaseKorailResponse):
     """도우미석 이용 조건과 서버 안내를 담습니다.
 
@@ -619,7 +622,7 @@ class GuideSeatConditionResponse(BaseKorailResponse):
     time_stamp: int | None = wire("timeStamp", optional_int, default=None)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TrainScheduleItem:
     """좌석배정·병합 조회에 사용하는 열차 정보를 담습니다.
 
@@ -677,12 +680,12 @@ class TrainScheduleItem:
     first_remaining_seat_count: str | None = wire("h_fst_rest_seat_cnt")
     merge_target_flag: str | None = wire("h_yms_apl_flg")
     train_suspended_flag: str | None = wire("h_trn_sps_flg")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     special_reservation_name: str | None = wire("h_spe_rsv_nm")
     free_seat_reservation_name: str | None = wire("h_free_rsv_nm")
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SeatAssignmentScheduleResponse(BaseKorailResponse):
     """좌석배정 예매 화면의 열차 목록과 조회 조건을 담습니다.
 
@@ -709,17 +712,17 @@ class SeatAssignmentScheduleResponse(BaseKorailResponse):
     trains: tuple[TrainScheduleItem, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class IntermediateStation:
     """좌석 병합 구간이 나뉘는 중간역을 담습니다."""
 
     code: str | None = wire("rsStnCd")
     name: str | None = wire("rsStnNm")
     run_order: str | None = wire("runOrdr")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MergeSeatsInquiryResponse(BaseKorailResponse):
     """병합 가능한 열차와 중간역 목록을 담습니다."""
 
@@ -732,7 +735,7 @@ class MergeSeatsInquiryResponse(BaseKorailResponse):
     trains: tuple[TrainScheduleItem, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PriceFare:
     """열차 한 구간의 운임 정보를 담습니다."""
 
@@ -745,10 +748,10 @@ class PriceFare:
     #: 합계 금액(``sumAmt``)입니다.
     total_amount: str | None = wire("sumAmt")
     train_no: str | None = wire("trnNo")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PriceFareQuoteResponse(BaseKorailResponse):
     """예매 전 운임 조회 결과를 담습니다."""
 

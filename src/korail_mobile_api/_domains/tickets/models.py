@@ -14,7 +14,7 @@ from ..airport_bus.models import MaasServiceDetail
 from ..common.models import BaseKorailResponse
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TicketListTrain:
     """승차권 한 장에 포함된 열차 구간 정보를 담습니다.
 
@@ -41,10 +41,10 @@ class TicketListTrain:
     buyer_name: str | None = wire("h_buy_ps_nm")
     passenger_name: str | None = wire("h_abrd_ps_nm")
     train_suspension_flag: str | None = wire("trnSpsFlg")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TicketListTicket:
     """승차권 한 장의 식별자·상태와 열차 구간을 담습니다."""
 
@@ -59,7 +59,6 @@ class TicketListTicket:
     ticket_kind_code: str | None = wire("h_tk_knd_cd")
     ticket_kind_name: str | None = wire("h_tk_knd_nm")
     train_info: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     ticket_sequence: str | None = wire("h_tk_sqno")
     #: 승차권 상태 이름(``h_tk_stt_nm``)입니다. 서버가 보낸 이름을 그대로 담으며 ``ticket_status_code``를 따로 번역하지 않습니다.
     ticket_status_name: str | None = wire("h_tk_stt_nm")
@@ -72,9 +71,10 @@ class TicketListTicket:
     #: ``refund``의 ``pbp_acceptance_target_flag``로 넘기세요.
     pbp_acceptance_target_flag: str | None = wire("h_pbp_acep_tgt_flg")
     trains: tuple[TicketListTrain, ...] = ()
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TicketListReservation:
     """예약 하나에 속한 승차권 목록과 부가서비스를 담습니다.
 
@@ -97,15 +97,15 @@ class TicketListReservation:
     is_transfer: bool | None = wire("isTransfer", optional_bool, default=None)
     is_wheelchair_member: bool | None = wire("isWheelchairMember", optional_bool, default=None)
     is_rail_police_enabled: bool | None = wire("isRailPoliceEnabled", optional_bool, default=None)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # addSrvInfo 는 MaaS 상세와 같은 앱 타입이라 모델을 공유합니다.
     additional_service: MaasServiceDetail | None = None
     #: 승차권 종류(``ticketKind``)입니다. 서버가 보낸 문자열을 그대로 담으며, 값의 의미는 앱 내부 값이 공개돼 있지 않아 확인하지
     #: 못했습니다.
     ticket_kind: str | None = wire("ticketKind")
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TicketListResponse(BaseKorailResponse):
     """현재 승차권 또는 구매 이력을 예약별로 묶어 담습니다."""
 
@@ -114,23 +114,23 @@ class TicketListResponse(BaseKorailResponse):
     total_count: str | None = wire("h_total_cnt")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DepositBank:
     """입금 가능한 은행의 코드와 이름을 담습니다."""
 
     code: str | None = wire("dptnBankCd", required_str, default=None)
     display_name: str | None = wire("dptnBankNm", required_str, default=None)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DepositBankListResponse(BaseKorailResponse):
     """입금 가능한 은행 목록을 담습니다."""
 
     items: tuple[DepositBank, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DelayDiscountTicket:
     """지연할인권 한 장의 식별자·사용 조건을 담습니다.
 
@@ -160,10 +160,10 @@ class DelayDiscountTicket:
     buyer_name: str | None = wire("h_buy_ps_nm")
     passenger_name: str | None = wire("h_abrd_ps_nm")
     page_no: str | None = wire("h_page_no")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DelayDiscountTicketListResponse(BaseKorailResponse):
     """지연할인권 목록과 페이지 정보를 담습니다.
 
@@ -179,7 +179,7 @@ class DelayDiscountTicketListResponse(BaseKorailResponse):
     last_page_flag: str | None = wire("h_last_page_yn")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DiscountCoupon:
     """할인쿠폰 한 장의 조건과 유효기간을 담습니다."""
 
@@ -195,10 +195,10 @@ class DiscountCoupon:
     weekend_price_discount: str | None = wire("h_wknd_prc_disc_rt_amt")
     remarks: tuple[str, ...] = ()
     coupon_no: str | None = wire("h_cpn_no")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DiscountCouponListResponse(BaseKorailResponse):
     """할인쿠폰 목록과 안내를 담습니다."""
 
@@ -221,7 +221,7 @@ class ReceiptPayment:
     approval_no: str = wire("h_apv_no", required_str)
     settlement_card_no: str = wire("h_stl_crd_no", required_str)
     point_no: str = wire("h_xpot_no", required_str)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -236,7 +236,7 @@ class ReceiptCashPayment:
     cash_receipt_approval_no: str = wire("h_cash_rcet_apv_no", required_str)
     cash_receipt_transaction_division_code: str = wire("h_cash_rcet_txn_dv_cd", required_str)
     total_approved_amount: int = wire("h_tot_apv_amt", required_int)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -270,17 +270,17 @@ class TicketReceipt:
     payments: tuple[ReceiptPayment, ...] = ()
     cash_receipts: tuple[ReceiptCashPayment, ...] = ()
     member_card_no: str = wire("h_stl_mb_crd_no", required_str)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TicketReceiptResponse(BaseKorailResponse):
     """승차권 영수증 조회 결과를 담습니다."""
 
     items: tuple[TicketReceipt, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class KorailPointSummaryResponse(BaseKorailResponse):
     """계정의 포인트·쿠폰·복지 자격 요약을 담습니다.
 
@@ -316,7 +316,7 @@ class KorailPointSummaryResponse(BaseKorailResponse):
     disability_type_name: str | None = wire("h_hdcp_tp_cd_nm")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MileageHistoryEntry:
     """마일리지 적립 또는 사용 내역 한 행을 담습니다."""
 
@@ -327,10 +327,10 @@ class MileageHistoryEntry:
     point_amount: str | None = wire("pontAmt")
     saved_point_value: str | None = wire("savePontValNum")
     settlement_amount: str | None = wire("stlAmt")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MileageHistoryResponse(BaseKorailResponse):
     """마일리지 내역 한 페이지와 적립·사용 합계를 담습니다.
 
@@ -350,7 +350,7 @@ class MileageHistoryResponse(BaseKorailResponse):
     entries: tuple[MileageHistoryEntry, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MultiChildDiscountTarget:
     """다자녀 할인 대상으로 등록된 가족 한 명을 담습니다."""
 
@@ -362,17 +362,17 @@ class MultiChildDiscountTarget:
     passenger_type_name: str | None = wire("psgTpNm")
     room_class_code: str | None = wire("psrmClCd")
     requested_discount_kind_code: str | None = wire("rqDcntKndCd")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MultiChildDiscountTargetResponse(BaseKorailResponse):
     """다자녀 할인 대상 가족 목록을 담습니다."""
 
     targets: tuple[MultiChildDiscountTarget, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CustomerTripInfo:
     """계정에 저장된 여행 편의설정을 담습니다."""
 
@@ -410,17 +410,17 @@ class CustomerTripInfo:
     usage_day_no: str | None = wire("utlDno")
     #: 상품 번호입니다. 추정한 응답 키(``gdNo``)로 읽으며, 실제 키 이름은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
     goods_no: str | None = wire("gdNo")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CustomerTripInfoResponse(BaseKorailResponse):
     """여행 편의설정 조회 결과를 담습니다."""
 
     trips: tuple[CustomerTripInfo, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TripChangeDateResponse(BaseKorailResponse):
     """승차권을 변경할 수 있는 날짜 목록을 담습니다.
 
@@ -432,7 +432,7 @@ class TripChangeDateResponse(BaseKorailResponse):
     trip_change_dates: tuple[str, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelfSeatChangeStation:
     """자율 좌석변경이 가능한 승차역과 잔여석을 담습니다.
 
@@ -448,10 +448,10 @@ class SelfSeatChangeStation:
     departure_run_order: str | None = wire("dptStnRunOrdr")
     general_remaining_seat_count: str | None = wire("gnrmRestSeatNum")
     special_remaining_seat_count: str | None = wire("sprmRestSeatNum")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelfSeatChangeReason:
     """자율 좌석변경 시 선택할 변경 사유를 담습니다.
 
@@ -461,10 +461,10 @@ class SelfSeatChangeReason:
     query_code: str | None = wire("qryCode")
     query_order: str | None = wire("qryOrdr")
     forced_sale_reason_text: str | None = wire("frcSaleRsnCont")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelfSeatChangeInfoResponse(BaseKorailResponse):
     """자율 좌석변경의 대상 역·사유·열차 정보를 담습니다."""
 
@@ -484,7 +484,7 @@ class SelfSeatChangeInfoResponse(BaseKorailResponse):
     reasons: tuple[SelfSeatChangeReason, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class OriginalTicketSeat:
     """변경 기준인 원표의 좌석 정보를 담습니다."""
 
@@ -503,10 +503,10 @@ class OriginalTicketSeat:
     smoking_seat_attribute_code: str | None = wire("smkSeatAttCd")
     additional_seat_attribute_code: str | None = wire("addSeatAttCd")
     etc_seat_attribute_code: str | None = wire("etcSeatAttCd")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class OriginalTicketJourney:
     """변경 기준인 원표의 구간과 좌석 목록을 담습니다."""
 
@@ -531,10 +531,10 @@ class OriginalTicketJourney:
     general_change_allowed_flag: str | None = wire("genChgAllwFlg")
     single_ticket_flag: str | None = wire("snglTkFlg")
     seats: tuple[OriginalTicketSeat, ...] = ()
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class OriginalTicket:
     """변경 기준인 원표의 식별자·상태·여정을 담습니다.
 
@@ -559,17 +559,17 @@ class OriginalTicket:
     sms_send_flag: str | None = wire("smsSndFlg")
     forced_sale_reason_text: str | None = wire("frcSaleRsnCont")
     journeys: tuple[OriginalTicketJourney, ...] = ()
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class OriginalTicketInquiryResponse(BaseKorailResponse):
     """변경 기준인 원표 목록을 담습니다."""
 
     tickets: tuple[OriginalTicket, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DelayCertificateRow:
     """지연확인증 한 행을 담습니다.
 
@@ -587,10 +587,10 @@ class DelayCertificateRow:
     # runDt 는 마스크상 필수이지만 실서버 응답에는 없었습니다.
     #: 운행일(``runDt``)입니다. 응답에 없으면 ``None``이며, 운행일은 ``run_day``에도 있습니다(예: 요일이 붙은 날짜).
     run_date: str | None = wire("runDt")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DelayCertificateResponse(BaseKorailResponse):
     """지연확인증의 행을 담습니다.
 
@@ -599,7 +599,7 @@ class DelayCertificateResponse(BaseKorailResponse):
     delays: tuple[DelayCertificateRow, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DelayReturnReceiptResponse(BaseKorailResponse):
     """지연료 반환 영수증을 담습니다.
 

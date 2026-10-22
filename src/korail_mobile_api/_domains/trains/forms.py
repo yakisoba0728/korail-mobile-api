@@ -245,7 +245,7 @@ def build_train_schedule_form(
     }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class FreeSeatCarRequest:
     """열차 한 편의 자유석 호차 조회 조건을 구성합니다.
 
@@ -268,16 +268,20 @@ class FreeSeatCarRequest:
         if not isinstance(train, TrainSummary):
             raise KorailInvalidInputError("train must be a TrainSummary")
         return cls(
-            _required_text(train.run_date, "run_date"),
-            train.train_no,
-            _required_text(train.departure_construction_order, "departure_construction_order"),
-            _required_text(train.arrival_construction_order, "arrival_construction_order"),
-            _required_text(train.departure_run_order, "departure_run_order"),
-            _required_text(train.arrival_run_order, "arrival_run_order"),
+            run_date=_required_text(train.run_date, "run_date"),
+            train_no=train.train_no,
+            departure_construction_order=_required_text(
+                train.departure_construction_order, "departure_construction_order"
+            ),
+            arrival_construction_order=_required_text(
+                train.arrival_construction_order, "arrival_construction_order"
+            ),
+            departure_run_order=_required_text(train.departure_run_order, "departure_run_order"),
+            arrival_run_order=_required_text(train.arrival_run_order, "arrival_run_order"),
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class GuideSeatConditionRequest:
     """도우미석 이용 안내 조회 조건을 구성합니다.
 
@@ -287,7 +291,7 @@ class GuideSeatConditionRequest:
     seat_attribute_code: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SeatAssignmentScheduleRequest:
     """좌석배정 화면의 열차 조회 조건을 구성합니다."""
 
@@ -308,7 +312,7 @@ class SeatAssignmentScheduleRequest:
         _passenger_count(self.passenger_count, "passenger_count")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MergeSeatsInquiryRequest:
     """병합 가능한 좌석과 중간역 조회 조건을 구성합니다.
 
@@ -354,15 +358,17 @@ class MergeSeatsInquiryRequest:
             train.departure_time, "departure_time"
         )
         return cls(
-            departure,
-            departure,
-            train.train_no,
-            _required_text(train.departure_station_name, "departure_station_name"),
-            _required_text(train.arrival_station_name, "arrival_station_name"),
-            selected_station_name,
-            room_class_code,
-            seat_attribute_code if seat_attribute_code is not None else train.seat_attribute_code or "015",
-            passenger_count,
+            boarding_datetime=departure,
+            run_datetime=departure,
+            train_no=train.train_no,
+            departure_station_name=_required_text(train.departure_station_name, "departure_station_name"),
+            arrival_station_name=_required_text(train.arrival_station_name, "arrival_station_name"),
+            selected_station_name=selected_station_name,
+            room_class_code=room_class_code,
+            seat_attribute_code=seat_attribute_code
+            if seat_attribute_code is not None
+            else train.seat_attribute_code or "015",
+            passenger_count=passenger_count,
         )
 
 
@@ -425,7 +431,7 @@ def build_merge_seats_inquiry_form(
     return form
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PriceFareLeg:
     """예매 전 운임을 조회할 열차 한 구간을 구성합니다.
 
@@ -472,7 +478,7 @@ class PriceFareLeg:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PriceFareQuoteRequest:
     """한두 구간의 운임 조회 조건과 메뉴를 구성합니다.
 

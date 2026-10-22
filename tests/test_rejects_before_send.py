@@ -41,8 +41,20 @@ EXECUTION: api.StationRefundExecutionRequest = F8["refund_station_ticket"]["requ
 RECALC: api.PriceRecalculationRequest = F8["recalculate_price"]["request"]
 FARE_LEG: api.PriceFareLeg = F8["get_fare_quote"]["request"].legs[0]
 QUERY: api.TrainSearchQuery = F8["search_trains"]["query"]
-SEAT = api.KorailSeatAssignment(1, "1A")
-SEAT_ROW = api.PhysicalSeat("1A", "Y", "0", None, "015", None, "1A", "1", "", "", None)
+SEAT = api.KorailSeatAssignment(car_no=1, seat_no="1A")
+SEAT_ROW = api.PhysicalSeat(
+    seat_no="1A",
+    sale_possible="Y",
+    direction_code="0",
+    other_attribute_code=None,
+    requested_attribute_code="015",
+    floor=None,
+    specification="1A",
+    sequence_no="1",
+    message_code="",
+    message="",
+    visual_message_division_code=None,
+)
 # A hold whose first journey carries the seat rows PriceRecalculationRequest.for_hold copies.
 SEATED_HOLD = replace(
     HOLD,
@@ -108,7 +120,14 @@ def _refund_with_quote(c: api.KorailClient, **quote: Any) -> object:
 
 def _station_refund(c: api.KorailClient, **verification: Any) -> object:
     original = api.StationRefundOriginalTicket(
-        "SYNTHETIC-PNR", F8_DATE, "SYNTHETIC-WINDOW", "1", "SYNTHETIC-RETURN", "1", "1", "1"
+        pnr_no="SYNTHETIC-PNR",
+        original_sale_date=F8_DATE,
+        original_sale_window_no="SYNTHETIC-WINDOW",
+        original_sale_sequence="1",
+        original_return_password="SYNTHETIC-RETURN",
+        ticket_kind_code="1",
+        refund_division_code="1",
+        refund_reason_code="1",
     )
     values = {"str_result": "SUCC", "refund_amount": "1000", "refund_fee": "0", "original_tickets": (original,)}
     response = api.StationRefundVerificationResponse(**{**values, **verification})
@@ -158,12 +177,20 @@ ROWS = [
     Row("designated-seat-type", lambda c: _designated(c, (1, "1A")), "exact KorailSeatAssignment"),
     Row(
         "designated-seat-count",
-        lambda c: _designated(c, SEAT, api.KorailSeatAssignment(1, "1B")),
+        lambda c: _designated(c, SEAT, api.KorailSeatAssignment(car_no=1, seat_no="1B")),
         "one seat per",
     ),
     Row("designated-same-seat-twice", lambda c: _designated(c, SEAT, SEAT, adults=2), "same seat twice"),
-    Row("seat-car-zero", lambda c: _designated(c, api.KorailSeatAssignment(0, "1A")), "car_no must be"),
-    Row("seat-no-blank", lambda c: _designated(c, api.KorailSeatAssignment(1, "")), "seat_no must be"),
+    Row(
+        "seat-car-zero",
+        lambda c: _designated(c, api.KorailSeatAssignment(car_no=0, seat_no="1A")),
+        "car_no must be",
+    ),
+    Row(
+        "seat-no-blank",
+        lambda c: _designated(c, api.KorailSeatAssignment(car_no=1, seat_no="")),
+        "seat_no must be",
+    ),
     Row(
         "seat-inventory-type", lambda c: api.KorailSeatAssignment.from_inventory({}, SEAT_ROW), "inventory must"
     ),
@@ -265,15 +292,21 @@ ROWS = [
     Row("cancel-journey-count-text", lambda c: c.cancel_unpaid_hold(_hold(journey_count="abc")), "unpaid hold"),
     Row("cancel-journey-count-zero", lambda c: c.cancel_unpaid_hold(_hold(journey_count="0")), "unpaid hold"),
     Row("cancel-journey-count-none", lambda c: c.cancel_unpaid_hold(_hold(journey_count=None)), "unpaid hold"),
-    Row("cancel-reference-blank-pnr", lambda c: c.cancel_unpaid_hold(api.HoldReference(" ", "1")), "pnr_no"),
+    Row(
+        "cancel-reference-blank-pnr",
+        lambda c: c.cancel_unpaid_hold(api.HoldReference(pnr_no=" ", journey_count="1")),
+        "pnr_no",
+    ),
     Row(
         "cancel-reference-journey-count-zero",
-        lambda c: c.cancel_unpaid_hold(api.HoldReference("SYNTHETIC-PNR", "0")),
+        lambda c: c.cancel_unpaid_hold(api.HoldReference(pnr_no="SYNTHETIC-PNR", journey_count="0")),
         "unpaid hold",
     ),
     Row(
         "cancel-reference-sequence-type",
-        lambda c: c.cancel_unpaid_hold(api.HoldReference("SYNTHETIC-PNR", "1", 7)),  # type: ignore[arg-type]
+        lambda c: c.cancel_unpaid_hold(
+            api.HoldReference(pnr_no="SYNTHETIC-PNR", journey_count="1", journey_sequence=7)
+        ),  # type: ignore[arg-type]
         "journey_sequence",
     ),
     # Card payment charges the hold's received_amount, and only a fresh payable hold.
@@ -309,7 +342,13 @@ ROWS = [
     ),
     Row(
         "refund-ticket-blank-on-build",
-        lambda c: api.PaidTicket(" ", F8_DATE, "SYNTHETIC-WINDOW", "1", "SYNTHETIC-RETURN"),
+        lambda c: api.PaidTicket(
+            pnr_no=" ",
+            sale_date=F8_DATE,
+            sale_window_no="SYNTHETIC-WINDOW",
+            sale_sequence="1",
+            return_password="SYNTHETIC-RETURN",
+        ),
         "non-empty PaidTicket.pnr_no",
     ),
     Row(
@@ -514,7 +553,9 @@ ROWS = [
     Row(
         "self-seat-change-train-no",
         lambda c: c.get_self_seat_change_options(
-            api.SelfSeatChangeInfoRequest(F8_DATE, "900001", "9901", "9903")
+            api.SelfSeatChangeInfoRequest(
+                run_date=F8_DATE, train_no="900001", departure_station_code="9901", arrival_station_code="9903"
+            )
         ),
         "at most 5 digits",
     ),
@@ -543,32 +584,36 @@ ROWS = [
     ),
     Row(
         "commuter-inquiry-type",
-        lambda c: c.get_commuter_info(api.CommuterTicketInquiryRequest(TICKET, inquiry_type="2")),
+        lambda c: c.get_commuter_info(
+            api.CommuterTicketInquiryRequest(original_ticket=TICKET, inquiry_type="2")
+        ),
         "inquiry_type must be",
     ),
     Row(
         "commuter-ticket-type",
-        lambda c: c.get_commuter_info(api.CommuterTicketInquiryRequest({})),
+        lambda c: c.get_commuter_info(api.CommuterTicketInquiryRequest(original_ticket={})),
         "original_ticket must be",
     ),
     Row("commuter-request-type", lambda c: c.get_commuter_info({}), "commuter request variant"),
     Row(
         "fare-legs-text",
-        lambda c: c.get_fare_quote(api.PriceFareQuoteRequest("x")),
+        lambda c: c.get_fare_quote(api.PriceFareQuoteRequest(legs="x")),
         "one or two",
         INVALID,
     ),
-    Row("fare-no-legs", lambda c: c.get_fare_quote(api.PriceFareQuoteRequest(())), "one or two", INVALID),
+    Row("fare-no-legs", lambda c: c.get_fare_quote(api.PriceFareQuoteRequest(legs=())), "one or two", INVALID),
     Row(
         "fare-leg-type",
-        lambda c: c.get_fare_quote(api.PriceFareQuoteRequest(("x",))),
+        lambda c: c.get_fare_quote(api.PriceFareQuoteRequest(legs=("x",))),
         "PriceFareLeg",
         INVALID,
     ),
     Row("fare-request-type", lambda c: c.get_fare_quote({}), "must be a PriceFareQuoteRequest", INVALID),
     Row(
         "fare-goods-no-on-one-leg",
-        lambda c: c.get_fare_quote(api.PriceFareQuoteRequest((replace(FARE_LEG, goods_no="G1"), FARE_LEG))),
+        lambda c: c.get_fare_quote(
+            api.PriceFareQuoteRequest(legs=(replace(FARE_LEG, goods_no="G1"), FARE_LEG))
+        ),
         "every leg or on none",
         INVALID,
     ),

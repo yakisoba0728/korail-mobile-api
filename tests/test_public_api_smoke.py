@@ -62,7 +62,12 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         general_reservation_code="11",
         general_reservation_flag="Y",
     )
-    query = api.TrainSearchQuery("출발시험역", "도착시험역", F8_DATE, "090000")
+    query = api.TrainSearchQuery(
+        departure_station="출발시험역",
+        arrival_station="도착시험역",
+        departure_date=F8_DATE,
+        departure_time="090000",
+    )
     hold = api.ReservationHoldResponse(
         str_result="SUCC",
         pnr_no="SYNTHETIC-PNR",
@@ -73,7 +78,12 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         total_price="1000",
         received_amount="1000",
     )
-    ticket = api.OriginalTicketReference("SYNTHETIC-WINDOW", F8_DATE, "1", "SYNTHETIC-RETURN")
+    ticket = api.OriginalTicketReference(
+        sale_window_no="SYNTHETIC-WINDOW",
+        sale_date=F8_DATE,
+        sale_sequence="1",
+        return_password="SYNTHETIC-RETURN",
+    )
     detail = api.RefundTicketDetailResponse(
         sale_date=F8_DATE,
         original_sale_date="0102",
@@ -83,8 +93,22 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         journeys=(api.RefundTicketJourney(journey_sequence="001"),),
     )
     checkin_seat = api.SelfCheckInSeat(
-        *("SYNTHETIC-PNR", "001", "01", F8_DATE, "90001", "1", "9901", "3", "9903", "11", "100", "0017", "5A"),
-        *(F8_DATE + "090000", F8_DATE + "110000", "SYNTHETIC-CPS"),
+        pnr_no="SYNTHETIC-PNR",
+        journey_sequence="001",
+        assignment_sequence="01",
+        run_date=F8_DATE,
+        train_no="90001",
+        departure_construction_order="1",
+        departure_station_code="9901",
+        arrival_construction_order="3",
+        arrival_station_code="9903",
+        ticket_kind_code="11",
+        train_group_code="100",
+        car_no="0017",
+        seat_no="5A",
+        departure_datetime=F8_DATE + "090000",
+        arrival_datetime=F8_DATE + "110000",
+        cps_no="SYNTHETIC-CPS",
     )
     delivered = api.PbpAcceptanceTicket(
         pnr_no="SYNTHETIC-PNR",
@@ -132,16 +156,43 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         "get_train_calendar": {},
         "list_seat_cars": {"train": train},
         "get_seat_inventory": {"train": train, "car_no": 1},
-        "get_free_seat_cars": {"request": api.FreeSeatCarRequest(F8_DATE, "90001", "1", "3", "1", "3")},
-        "get_guide_seat_condition": {"request": api.GuideSeatConditionRequest("015")},
+        "get_free_seat_cars": {
+            "request": api.FreeSeatCarRequest(
+                run_date=F8_DATE,
+                train_no="90001",
+                departure_construction_order="1",
+                arrival_construction_order="3",
+                departure_run_order="1",
+                arrival_run_order="3",
+            )
+        },
+        "get_guide_seat_condition": {"request": api.GuideSeatConditionRequest(seat_attribute_code="015")},
         "get_merge_seat_options": {
             "request": api.MergeSeatsInquiryRequest(
-                F8_DATE + "090000", F8_DATE + "090000", "90001", "출발시험역", "도착시험역", None, "1", "015", 1
+                boarding_datetime=F8_DATE + "090000",
+                run_datetime=F8_DATE + "090000",
+                train_no="90001",
+                departure_station_name="출발시험역",
+                arrival_station_name="도착시험역",
+                selected_station_name=None,
+                room_class_code="1",
+                seat_attribute_code="015",
+                passenger_count=1,
             )
         },
         "get_fare_quote": {
             "request": api.PriceFareQuoteRequest(
-                (api.PriceFareLeg("9901", "9903", F8_DATE, "90001", "015", "100", "00"),)
+                legs=(
+                    api.PriceFareLeg(
+                        departure_station_code="9901",
+                        arrival_station_code="9903",
+                        run_date=F8_DATE,
+                        train_no="90001",
+                        requested_seat_attribute_code="015",
+                        train_group_code="100",
+                        train_class_code="00",
+                    ),
+                )
             )
         },
         "get_station_list_version": {},
@@ -152,39 +203,44 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         "get_service_status": {"timestamp_ms": 1},
         "list_maas_menus": {},
         "list_maas_stations": {"additional_service_code": "SYNTHETIC-SERVICE"},
-        "list_maas_services": {"query": api.MaasServiceDetailQuery(F8_DATE, F8_DATE)},
+        "list_maas_services": {"query": api.MaasServiceDetailQuery(start_date=F8_DATE, end_date=F8_DATE)},
         "list_cart_items": {"pnr_no": "SYNTHETIC-PNR"},
         "list_deposit_banks": {},
         "list_delay_discount_tickets": {"departure_date_to": F8_DATE},
         "list_discount_coupons": {"page_no": 1, "pnr_no": "SYNTHETIC-PNR"},
         "get_point_summary": {},
-        "get_mileage_history": {"request": api.MileageHistoryRequest(F8_DATE, F8_DATE)},
+        "get_mileage_history": {"request": api.MileageHistoryRequest(start_date=F8_DATE, end_date=F8_DATE)},
         "list_discount_card_usages": {"card_no": "SYNTHETIC-CARD"},
         "get_discount_card_schedule": {
-            "request": api.DiscountCardScheduleRequest("SYNTHETIC-KIND", "출발시험역", "도착시험역", F8_DATE)
+            "request": api.DiscountCardScheduleRequest(
+                card_kind_management_no="SYNTHETIC-KIND",
+                departure_station_name="출발시험역",
+                arrival_station_name="도착시험역",
+                departure_date=F8_DATE,
+            )
         },
         "get_pass_availability": {"kind_code": "SYNTHETIC-KIND", "period_code": "1", "age_code": "1"},
         "get_pass_schedule": {
             "request": api.PassScheduleRequest(
-                "100",
-                F8_DATE,
-                "090000",
-                "1",
-                "SYNTHETIC-KIND",
-                "1",
-                "1",
-                "1",
-                "10",
-                "출발시험역",
-                "도착시험역",
-                "N",
+                selected_train_code="100",
+                departure_date=F8_DATE,
+                departure_time="090000",
+                transfer_type_code="1",
+                pass_kind_code="SYNTHETIC-KIND",
+                pass_period_code="1",
+                pass_age_code="1",
+                page_no="1",
+                page_size="10",
+                departure_station_name="출발시험역",
+                arrival_station_name="도착시험역",
+                weekend_use_flag="N",
             )
         },
         "get_trip_menu": {},
         "get_pass_menu": {"menu_no": "SYNTHETIC-MENU"},
         "list_crew_request_reasons": {"timestamp_ms": 1},
         "get_commuter_kind_menu": {"commuter_kind_code": "SYNTHETIC-KIND"},
-        "get_commuter_info": {"request": api.CommuterTicketInquiryRequest(ticket)},
+        "get_commuter_info": {"request": api.CommuterTicketInquiryRequest(original_ticket=ticket)},
         "list_product_reservations": {"page_no": 1, "page_size": 10},
         "get_product_detail": {"reservation_no": "SYNTHETIC-RESERVATION", "reservation_sequence": "1"},
         "get_ticket_receipt": {
@@ -196,21 +252,36 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         "list_reservations": {},
         "get_seat_assignment_schedule": {
             "request": api.SeatAssignmentScheduleRequest(
-                "11", F8_DATE, "090000", "출발시험역", "도착시험역", "100", "1", "015", 1, "N", "1", ""
+                menu_id="11",
+                departure_date=F8_DATE,
+                departure_time="090000",
+                departure_station_name="출발시험역",
+                arrival_station_name="도착시험역",
+                train_group_code="100",
+                room_class_code="1",
+                seat_attribute_code="015",
+                passenger_count=1,
+                standing_detour_division_name="N",
+                transfer_type_code="1",
+                connection_arrival_station_name="",
             )
         },
         "list_multi_child_discount_targets": {"departure_date": F8_DATE},
         "get_trip_preferences": {},
         "list_trip_change_dates": {"departure_date": F8_DATE},
         "get_delivery_recipient": {"ticket": ticket},
-        "check_ticket_duplication": {"request": api.TicketDuplicationCheckRequest("SYNTHETIC-PNR")},
+        "check_ticket_duplication": {"request": api.TicketDuplicationCheckRequest(pnr_no="SYNTHETIC-PNR")},
         "list_pbp_acceptances": {"tickets": (ticket,)},
         "get_original_tickets": {"tickets": (ticket,)},
         "get_self_seat_change_options": {
-            "request": api.SelfSeatChangeInfoRequest(F8_DATE, "90001", "9901", "9903")
+            "request": api.SelfSeatChangeInfoRequest(
+                run_date=F8_DATE, train_no="90001", departure_station_code="9901", arrival_station_code="9903"
+            )
         },
         "list_recent_delivery_recipients": {},
-        "get_ticket_reservation_detail": {"request": api.TicketReservationDetailRequest("SYNTHETIC-PNR")},
+        "get_ticket_reservation_detail": {
+            "request": api.TicketReservationDetailRequest(pnr_no="SYNTHETIC-PNR")
+        },
         "get_reservation_hold": {"pnr_no": "SYNTHETIC-PNR"},
         "get_refund_fee": {"ticket": ticket},
         "get_refund_ticket_detail": {"ticket": ticket},
@@ -262,55 +333,88 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
                 virtual_reservation_no="SYNTHETIC-RESERVATION", goods_sequence="1"
             )
         },
-        "pay_with_card": {"hold": hold, "card": api.CardPayment("0" * 16, "00", "9912", "000101")},
+        "pay_with_card": {
+            "hold": hold,
+            "card": api.CardPayment(
+                card_number="0" * 16, card_password="00", card_expire="9912", birthday="000101"
+            ),
+        },
         "refund": {
             "ticket": api.PaidTicket(
-                "SYNTHETIC-PNR",
-                F8_DATE,
-                ticket.sale_window_no,
-                ticket.sale_sequence,
-                ticket.return_password,
-                "90001",
+                pnr_no="SYNTHETIC-PNR",
+                sale_date=F8_DATE,
+                sale_window_no=ticket.sale_window_no,
+                sale_sequence=ticket.sale_sequence,
+                return_password=ticket.return_password,
+                train_no="90001",
                 return_sale_date=ticket.sale_date,
             ),
             "commission": _f8_bound_commission(ticket) if method_name == "refund" else None,
         },
         "check_station_ticket_refund": {
             "request": api.StationRefundVerificationRequest(
-                "SYNTHETIC-NAME", "00000", "00000000", "0000000", "00000"
+                customer_name="SYNTHETIC-NAME",
+                return_no_1="00000",
+                return_no_2="00000000",
+                return_no_3="0000000",
+                return_no_4="00000",
             )
         },
         "refund_station_ticket": {
             "request": api.StationRefundExecutionRequest(
-                "SYNTHETIC-PNR",
-                F8_DATE,
-                "SYNTHETIC-WINDOW",
-                "1",
-                "SYNTHETIC-RETURN",
-                "1",
-                "1",
-                "1",
-                "00000000000",
-                "1000",
-                "0",
-                "SYNTHETIC-NAME",
+                pnr_no="SYNTHETIC-PNR",
+                original_sale_date=F8_DATE,
+                original_sale_window_no="SYNTHETIC-WINDOW",
+                original_sale_sequence="1",
+                original_return_password="SYNTHETIC-RETURN",
+                refund_division_code="1",
+                refund_reason_code="1",
+                ticket_kind_code="1",
+                customer_phone="00000000000",
+                refund_amount="1000",
+                refund_fee="0",
+                customer_name="SYNTHETIC-NAME",
             )
         },
-        "add_to_cart": {"request": api.CartAddRequest("SYNTHETIC-PNR")},
+        "add_to_cart": {"request": api.CartAddRequest(pnr_no="SYNTHETIC-PNR")},
         "extend_discount_card": {"ticket": ticket},
         "recalculate_price": {
             "request": api.PriceRecalculationRequest(
-                "SYNTHETIC-PNR", (api.PriceRecalculationRow("1", "1", "000"),)
+                pnr_no="SYNTHETIC-PNR",
+                rows=(
+                    api.PriceRecalculationRow(
+                        passenger_type_code="1", room_class_code="1", discount_kind_code="000"
+                    ),
+                ),
             )
         },
         "list_airport_bus_schedules": {
             "query": api.AirportBusScheduleQuery(
-                F8_DATE, "9901", "9903", "800", "1", "090000", "90001", "015", "1"
+                departure_date=F8_DATE,
+                departure_station_code="9901",
+                arrival_station_code="9903",
+                service_code="800",
+                room_class_code="1",
+                departure_time="090000",
+                train_no="90001",
+                seat_attribute_code="015",
+                reservation_sale_division_code="1",
             )
         },
         "get_airport_bus_seat_inventory": {
             "query": api.AirportBusSeatInventoryQuery(
-                "80", "800", F8_DATE, "90001", "0001", "1", "9901", "9903", "015", "1", "3", 1
+                train_class_code="80",
+                service_code="800",
+                run_date=F8_DATE,
+                train_no="90001",
+                car_no="0001",
+                room_class_code="1",
+                departure_station_code="9901",
+                arrival_station_code="9903",
+                seat_attribute_code="015",
+                departure_run_order="1",
+                arrival_run_order="3",
+                passenger_count=1,
             )
         },
         "reserve_airport_bus": {"schedule": schedule, "seat_nos": ("1A",)},

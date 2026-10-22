@@ -13,16 +13,16 @@ from ..._core.parsing import optional_int, wire
 from ..common.models import BaseKorailResponse
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassOffice:
     """패스 조회의 발권처 코드와 표시 이름을 담습니다."""
 
     code: str | None = wire("eng_cd_val")
     display_name: str | None = wire("kor_cd_val")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassOpenDate:
     """패스 사용 개시일 한 행과 그 항목 일련번호·PNR을 담습니다.
 
@@ -33,10 +33,10 @@ class PassOpenDate:
     open_date: str | None = wire("h_use_open_dt")
     item_sequence: str | None = wire("h_item_sqno")
     pnr_no: str | None = wire("h_pnr_no")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassAvailabilityMainInfo:
     """패스 사용일 조회의 중첩 상태와 건수를 담습니다.
 
@@ -47,10 +47,10 @@ class PassAvailabilityMainInfo:
     total_count: str | None = wire("h_tot_cnt")
     row_count: str | None = wire("h_row_cnt")
     selected_page_no: str | None = wire("h_sel_pg_no")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassAvailabilityResponse(BaseKorailResponse):
     """패스의 사용 개시일·발권 가능일·창구 목록을 담습니다."""
 
@@ -62,7 +62,7 @@ class PassAvailabilityResponse(BaseKorailResponse):
     main_info: PassAvailabilityMainInfo | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TripMenuContent:
     """여행상품 메뉴의 안내 한 행과 패스 조건을 담습니다."""
 
@@ -74,7 +74,6 @@ class TripMenuContent:
     info: str | None = wire("passInfo")
     image: str | None = wire("contImage")
     url: str | None = wire("contUrl")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: 정기권 종류 코드(``cmtrKndCd``)입니다. ``get_commuter_kind_menu``의 ``commuter_kind_code``로 넘깁니다. 정기권 메뉴가 아닌
     #: 행에서는 ``None``일 수 있습니다.
     commuter_kind_code: str | None = wire("cmtrKndCd")
@@ -82,9 +81,10 @@ class TripMenuContent:
     pass_type: str | None = wire("passType")
     #: 정기권 조회에 필요한 연령·기간 선택지 묶음(``passData``)입니다. 없으면 ``None``입니다.
     pass_data: PassMenuData | None = None
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TripMenuItem:
     """여행상품 메뉴 한 항목과 그 안내 목록을 담습니다."""
 
@@ -94,13 +94,13 @@ class TripMenuItem:
     button: str | None = wire("menuBtn")
     contents: tuple[TripMenuContent, ...] = ()
     url: str | None = wire("menuUrl")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # String 선언이지만 실서버에서 JSON 정수로 와서 정수로 읽습니다.
     #: 안내 행 개수(``contCount``)입니다. 정수나 숫자 문자열을 정수로 읽으며, 그 밖의 값이면 ``None``입니다.
     content_count: int | None = wire("contCount", optional_int, default=None)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TripMenuResponse(BaseKorailResponse):
     """여행상품 메뉴 목록을 담습니다."""
 
@@ -108,7 +108,7 @@ class TripMenuResponse(BaseKorailResponse):
     popup_message: str | None = wire("poppMsg")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ProductReservation:
     """여행상품 예약 한 건의 식별자와 상태를 담습니다."""
 
@@ -117,15 +117,15 @@ class ProductReservation:
     settlement_deadline: str | None = wire("strStlDlnDt")
     settlement_status_code: str | None = wire("strStlSttCd")
     virtual_reservation_no: str | None = wire("strVrRsvNo")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: 예약 순번(``strVrRsvSqno``)입니다. ``virtual_reservation_no``와 함께 ``get_product_detail``의 ``reservation_sequence``로
     #: 넘깁니다.
     reservation_sequence: str | None = wire("strVrRsvSqno")
     #: 예약 상태 코드(``strRsvSttCd``)입니다. 코드 값의 의미는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
     reservation_status_code: str | None = wire("strRsvSttCd")
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ProductReservationListResponse(BaseKorailResponse):
     """여행상품 예약 목록 한 페이지를 담습니다."""
 
@@ -134,7 +134,7 @@ class ProductReservationListResponse(BaseKorailResponse):
     total_count: int | None = wire("strTotCnt", optional_int, default=None)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ProductDetailResponse(BaseKorailResponse):
     """여행상품 예약의 상세·금액·취소 조건을 담습니다."""
 
@@ -155,7 +155,7 @@ class ProductDetailResponse(BaseKorailResponse):
     goods_sequence: str | None = wire("strGdSqno")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassScheduleTrain:
     """정기권으로 이용할 수 있는 열차 한 편을 담습니다."""
 
@@ -179,10 +179,10 @@ class PassScheduleTrain:
     train_class_code: str | None = wire("h_trn_clsf_cd")
     commuter_period_code: str | None = wire("h_cmtr_utl_trm_cd")
     commuter_use_terminal_name: str | None = wire("h_cmtr_utl_trm_nm")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassAgeOption:
     """패스 예매에 사용할 연령 선택 항목을 담습니다."""
 
@@ -190,18 +190,18 @@ class PassAgeOption:
     display_name: str | None = wire("h_comn_cd_nm")
     minimum_age: str | None = wire("h_min_age")
     maximum_age: str | None = wire("h_max_age")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassScheduleInfo:
     """정기권 열차 조회의 조건과 부가 정보를 담습니다."""
 
     trains: tuple[PassScheduleTrain, ...] = ()
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassScheduleMainInfo:
     """정기권 열차 조회의 중첩 상태와 조건을 담습니다."""
 
@@ -220,19 +220,19 @@ class PassScheduleMainInfo:
     next_page_flag: str | None = wire("h_next_pg_flg")
     change_train_division_code: str | None = wire("h_chg_trn_dv_cd")
     page_no: str | None = wire("h_page_no")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassPeriodOption:
     """패스 예매에 사용할 기간 선택 항목을 담습니다."""
 
     commuter_period_code: str | None = wire("h_cmtr_utl_trm_cd")
     display_name: str | None = wire("h_comn_cd_nm")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassMenuData:
     """패스 메뉴의 역 선택 조건과 상품 코드를 담습니다."""
 
@@ -241,10 +241,10 @@ class PassMenuData:
     station_selection: str | None = None
     age_options: tuple[PassAgeOption, ...] = ()
     period_options: tuple[PassPeriodOption, ...] = ()
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassPassengerInfo:
     """패스의 승객 종류별 인원 조건을 담습니다."""
 
@@ -252,10 +252,10 @@ class PassPassengerInfo:
     h_cls_prnb: int | None = wire("h_cls_prnb", optional_int, default=None)
     h_dcnt_knd_cd: str | None = wire("h_dcnt_knd_cd")
     h_st_prnb: int | None = wire("h_st_prnb", optional_int, default=None)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassPassengerInfos:
     """패스 승객 조건 목록을 담습니다."""
 
@@ -263,19 +263,19 @@ class PassPassengerInfos:
     h_max_cnt: str | None = wire("h_max_cnt")
     h_min_cnt: str | None = wire("h_min_cnt")
     psg_info: tuple[PassPassengerInfo, ...] = ()
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassGoodsInfo:
     """패스 메뉴에 연결된 상품 정보를 담습니다."""
 
     h_cnd_flg_disc_no: str | None = wire("h_cnd_flg_disc_no")
     psg_infos: PassPassengerInfos | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassMenuItem:
     """정기권·패스 메뉴 한 항목과 안내를 담습니다."""
 
@@ -302,17 +302,17 @@ class PassMenuItem:
     pass_data: PassMenuData | None = None
     # 항목 안의 webData 객체에서 읽습니다.
     url: str | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassMenuResponse(BaseKorailResponse):
     """정기권·패스 메뉴 목록을 담습니다."""
 
     items: tuple[PassMenuItem, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CommuterKindMenuResponse(BaseKorailResponse):
     """정기권 종류별 안내와 예매 조건을 담습니다."""
 
@@ -323,7 +323,7 @@ class CommuterKindMenuResponse(BaseKorailResponse):
     pass_data: PassMenuData | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassScheduleResponse(BaseKorailResponse):
     """정기권으로 이용 가능한 열차 목록을 담습니다."""
 
@@ -331,7 +331,7 @@ class PassScheduleResponse(BaseKorailResponse):
     schedules: tuple[PassScheduleInfo, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DiscountCardUsage:
     """N카드를 사용한 여행 내역 한 행을 담습니다.
 
@@ -344,16 +344,16 @@ class DiscountCardUsage:
     run_date: str | None = wire("runDt1")
     #: 추가 사용자 여부 플래그(``apdUsrFlg``)입니다. 값의 의미는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
     additional_user_flag: str | None = wire("apdUsrFlg")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: 이 사용 건의 발매 일자(``saleDt``)입니다.
     sale_date: str | None = wire("saleDt")
     #: 발매 일련번호(``saleSqno``)입니다.
     sale_sequence: str | None = wire("saleSqno")
     #: 발매 창구번호(``saleWctNo``)입니다.
     sale_window_no: str | None = wire("saleWctNo")
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DiscountCardUsageListResponse(BaseKorailResponse):
     """N카드 한 장의 사용 내역 목록을 담습니다.
 
@@ -362,7 +362,7 @@ class DiscountCardUsageListResponse(BaseKorailResponse):
     items: tuple[DiscountCardUsage, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DiscountCardScheduleTrain:
     """N카드로 이용 가능한 열차 한 편을 담습니다."""
 
@@ -386,17 +386,17 @@ class DiscountCardScheduleTrain:
     detour_code: str | None = wire("dturCd")
     detour_name: str | None = wire("dturNm")
     route_code: str | None = wire("routCd")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DiscountCardScheduleResponse(BaseKorailResponse):
     """N카드로 이용 가능한 열차 목록을 담습니다. 이 응답에는 다음 페이지 신호가 없습니다."""
 
     trains: tuple[DiscountCardScheduleTrain, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CommuterPassengerOption:
     """정기권 승객 종류의 인원·연령 범위를 담습니다."""
 
@@ -410,10 +410,10 @@ class CommuterPassengerOption:
     passenger_count_from: int | None = 0
     #: 최대 인원(``psgPrnbTo``)입니다. 키가 없거나 ``null``이면 ``0``, 정수로 읽을 수 없는 값이면 ``None``입니다.
     passenger_count_to: int | None = 0
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CommuterInfoResponse(BaseKorailResponse):
     """정기권 예매 단계별 조건·승객·원표 정보를 담습니다."""
 
@@ -435,7 +435,7 @@ class CommuterInfoResponse(BaseKorailResponse):
     passenger_options: tuple[CommuterPassengerOption, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ProductCancelResponse(BaseKorailResponse):
     """여행상품 예약의 실제 취소 결과를 담습니다."""
 

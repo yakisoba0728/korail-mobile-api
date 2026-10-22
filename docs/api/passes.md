@@ -267,7 +267,7 @@ KorailClient.get_commuter_info(request: CommuterInfoRequest) -> CommuterInfoResp
 ```python
 from korail_mobile_api import CommuterInitialRequest, CommuterPassengerRequest
 
-initial = client.get_commuter_info(CommuterInitialRequest(pass_data))
+initial = client.get_commuter_info(CommuterInitialRequest(pass_data=pass_data))
 counts = (1,) + (0,) * (len(initial.passenger_options) - 1)
 request = CommuterPassengerRequest.from_response(pass_data, initial, counts)
 passengers = client.get_commuter_info(request)
@@ -620,7 +620,9 @@ KorailClient.list_product_reservations(
 page = client.list_product_reservations()
 print(page.total_count, "건")
 for reservation in page.items:
-    print(reservation.product_name, reservation.reservation_status_name, reservation.settlement_deadline)
+    print(
+        reservation.product_name, reservation.reservation_status_name, reservation.settlement_deadline
+    )
 ```
 
 ## `get_product_detail`

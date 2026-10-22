@@ -14,21 +14,21 @@ from ..._core.parsing import _envelope, defaulted_str, required_str, wire
 from ...errors import KorailProtocolError, resolve_error_message
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class KorailSession:
     """로그인 쿠키와 계정 식별자를 보관합니다.
 
-    고객번호(``customer_no``)와 회원번호(``member_no``)는 서로 다른 값입니다. ``raw``와 ``repr()``은 개인정보를 가리지
-    않으므로 로그에 남기지 마세요."""
+    고객번호(``customer_no``)와 회원번호(``member_no``)는 서로 다른 값입니다. ``repr()``은 ``jsessionid``와 ``raw``를
+    숨기지만 속성 값은 가리지 않으므로 로그에 남기지 마세요."""
 
-    jsessionid: str | None = None
+    jsessionid: str | None = field(default=None, repr=False)
     member_no: str | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     member_card_no: str | None = None
     customer_no: str | None = None
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class BaseKorailResponse:
     """응답의 공통 상태·메시지와 원본을 담습니다.
 
@@ -38,7 +38,7 @@ class BaseKorailResponse:
     h_msg_cd: str | None = None
     h_msg_txt: str | None = None
     str_result: str | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
     @property
     def display_message(self) -> str | None:
@@ -64,7 +64,7 @@ class BaseKorailResponse:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AppVersionInfo:
     """앱 버전과 업데이트 안내 주소를 담습니다."""
 
@@ -74,7 +74,7 @@ class AppVersionInfo:
     store_url: str | None = wire("CNTAURL")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AppDataResponse(BaseKorailResponse):
     """앱 메인 캐시의 버전·공지 정보를 담습니다."""
 
@@ -84,7 +84,7 @@ class AppDataResponse(BaseKorailResponse):
     notice: NoticeResponse | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class NoticeResponse(BaseKorailResponse):
     """앱 메인 화면의 공지를 담습니다."""
 
@@ -94,14 +94,14 @@ class NoticeResponse(BaseKorailResponse):
     post_content: str | None = wire("PtwtCont")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class UuidResponse(BaseKorailResponse):
     """서버가 발급한 단말 검증값을 담습니다."""
 
     verification_code: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class KorailStation:
     """역 코드·이름과 역별 안내 정보를 담습니다."""
 
@@ -109,7 +109,6 @@ class KorailStation:
     name: str = wire("stn_nm", defaulted_str)
     longitude: str | None = wire("longitude")
     latitude: str | None = wire("latitude")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     group: str | None = wire("group")
     major: str | None = wire("major")
     #: 역 안내 팝업의 종류(``popupType``)입니다. 서버가 정수로 보내도 문자열로 담습니다.
@@ -119,16 +118,17 @@ class KorailStation:
     popup_link_url: str | None = wire("popupLinkUrl")
     area: str | None = wire("area")
     stop: str | None = wire("stop")
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class StationDataResponse(BaseKorailResponse):
     """전체 역 목록을 담습니다."""
 
     stations: tuple[KorailStation, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class StationInfoResponse(BaseKorailResponse):
     """역 데이터의 판본과 역 수를 담습니다."""
 
@@ -137,7 +137,7 @@ class StationInfoResponse(BaseKorailResponse):
     map_version: str | None = wire("map_version", required_str, default=None)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TrainCalendarDay:
     """열차 운행일 한 날짜와 예매 조건을 담습니다."""
 
@@ -156,11 +156,12 @@ class TrainCalendarDay:
     x_train_operation_flag: str | None = wire("xTrnOpFlg")
     raw: Mapping[str, object] = field(
         default_factory=dict[str, object],
+        repr=False,
         compare=False,
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TrainCalendarResponse(BaseKorailResponse):
     """예매 가능한 운행일 달력을 담습니다."""
 
@@ -170,25 +171,25 @@ class TrainCalendarResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class LoginCryptoInfo:
     idx: str = ""
-    key: str = ""
+    key: str = field(default="", repr=False)
     pwd_aes_cphd: str = "N"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ServiceStatusResponse(BaseKorailResponse):
     """예매 서비스의 운영 상태 응답을 담습니다."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CrewRequestOption:
     """승무원 호출 시 선택할 요청 사유를 담습니다."""
 
     message_code: str | None = wire("intgMsgCd")
     content: str | None = wire("prsCont")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CrewRequestListResponse(BaseKorailResponse):
     """승무원 호출 사유 목록을 담습니다."""
 

@@ -63,7 +63,9 @@ ROW = {
     "h_trn_seq": "A",
 }
 TRAIN = TrainSummary.from_raw(ROW)
-QUERY = TrainSearchQuery("SYNTH_DEP", "SYNTH_ARR", DATE, "090000")
+QUERY = TrainSearchQuery(
+    departure_station="SYNTH_DEP", arrival_station="SYNTH_ARR", departure_date=DATE, departure_time="090000"
+)
 SEARCH_FORM = {
     **COMMON,
     "txtMenuId": "11",
@@ -184,12 +186,35 @@ APP = {
     "railplus_cardinfo": "SYNTH_CARDINFO",
     "unknown": {"retained": True},
 }
-FREE_REQUEST = FreeSeatCarRequest(DATE, "7", "1", "3", "1", "3")
-MERGE_REQUEST = MergeSeatsInquiryRequest(
-    DATE + "090000", DATE + "090000", "7", "SYNTH_DEP", "SYNTH_ARR", "SYNTH_MID", "1", "015", 2
+FREE_REQUEST = FreeSeatCarRequest(
+    run_date=DATE,
+    train_no="7",
+    departure_construction_order="1",
+    arrival_construction_order="3",
+    departure_run_order="1",
+    arrival_run_order="3",
 )
-FARE_LEG = PriceFareLeg("0001", "0099", DATE, "00007", "015", "101", "00")
-FARE_REQUEST = PriceFareQuoteRequest((FARE_LEG,))
+MERGE_REQUEST = MergeSeatsInquiryRequest(
+    boarding_datetime=DATE + "090000",
+    run_datetime=DATE + "090000",
+    train_no="7",
+    departure_station_name="SYNTH_DEP",
+    arrival_station_name="SYNTH_ARR",
+    selected_station_name="SYNTH_MID",
+    room_class_code="1",
+    seat_attribute_code="015",
+    passenger_count=2,
+)
+FARE_LEG = PriceFareLeg(
+    departure_station_code="0001",
+    arrival_station_code="0099",
+    run_date=DATE,
+    train_no="00007",
+    requested_seat_attribute_code="015",
+    train_group_code="101",
+    train_class_code="00",
+)
+FARE_REQUEST = PriceFareQuoteRequest(legs=(FARE_LEG,))
 FARE_FORM = {
     **COMMON,
     "txtMenuId": "11",
@@ -318,7 +343,7 @@ CASES = [
     # TrainOptionViewModel.java:270 sends SeatType.HELPER's code (protected); the request takes it explicitly.
     (
         "get_guide_seat_condition",
-        (GuideSeatConditionRequest("015"),),
+        (GuideSeatConditionRequest(seat_attribute_code="015"),),
         {},
         P + "reservation.guideSeatCnd.do",
         {**COMMON, "rqSeatAttCd": "015"},
@@ -790,9 +815,13 @@ def test_next_page_empty_page_and_cursor_choice(name, empty, rig):
     if empty:
         assert cursor is None
     elif name == "search_trains":
-        assert cursor == TrainSearchContinuation("9", "00008", "")
+        assert cursor == TrainSearchContinuation(
+            query_station_no="9", query_train_no="00008", query_train_no2=""
+        )
     else:
-        assert cursor == TrainSearchContinuation("9", "00009", "00010")
+        assert cursor == TrainSearchContinuation(
+            query_station_no="9", query_train_no="00009", query_train_no2="00010"
+        )
 
 
 @pytest.mark.parametrize("name", ["search_trains", "search_transfer_trains"])
@@ -815,7 +844,7 @@ def test_numeric_zero_cursor_survives_parsing(rig):
     raw = {**SEARCH, "h_qry_st_no_next": 0, "h_trn_no_next": 0}
     client, _, _ = rig([raw])
     cursor = client.search_trains(QUERY).next_page()
-    assert cursor == TrainSearchContinuation("0", "0", "")
+    assert cursor == TrainSearchContinuation(query_station_no="0", query_train_no="0", query_train_no2="")
 
 
 def test_transfer_incomplete_cursor_policy_is_not_app_proof(rig):
@@ -823,7 +852,9 @@ def test_transfer_incomplete_cursor_policy_is_not_app_proof(rig):
     raw = {**TRANSFER, "h_ectb_trn_no_next": None}
     client, _, _ = rig([raw])
     cursor = client.search_transfer_trains(QUERY).next_page()
-    assert cursor == TrainSearchContinuation("9", "00008", "")  # retained library-only rule
+    assert cursor == TrainSearchContinuation(
+        query_station_no="9", query_train_no="00008", query_train_no2=""
+    )  # retained library-only rule
 
 
 def test_interleaved_transfer_grouping_uses_h_trn_seq_not_change_seq(rig):
@@ -888,7 +919,9 @@ def test_exact_form_options_and_three_continuation_fields(special, rig):
     client, calls, _ = rig([SEARCH], auth=True)
     client.session.current = KorailSession(jsessionid="SYNTH-SESSION", member_card_no="SYNTH-MEMBER")
     client.search_trains(
-        query, continuation=TrainSearchContinuation("S", "A", "B"), use_special_schedule=special
+        query,
+        continuation=TrainSearchContinuation(query_station_no="S", query_train_no="A", query_train_no2="B"),
+        use_special_schedule=special,
     )
     form = {
         **SEARCH_FORM,
@@ -926,7 +959,9 @@ def test_special_search_sends_the_normal_form_byte_for_byte(rig):
         client.session.current = KorailSession(jsessionid="SYNTH-SESSION", member_card_no=member_card_no)
         for special in (False, True):
             client.search_transfer_trains(
-                query, continuation=TrainSearchContinuation("S", "A"), use_special_schedule=special
+                query,
+                continuation=TrainSearchContinuation(query_station_no="S", query_train_no="A"),
+                use_special_schedule=special,
             )
     assert [call.url.path for call in calls] == [
         P + "seatMovie.ScheduleView",
@@ -1128,9 +1163,18 @@ def test_two_leg_fare_and_goods_column_order(rig):
     The comma literals here deliberately freeze library policy, not decryption claims.
     """
     first = replace(FARE_LEG, goods_no="SYNTH-G1")
-    second = PriceFareLeg("0099", "0100", DATE, "00008", "031", "102", "01", "SYNTH-G2")
+    second = PriceFareLeg(
+        departure_station_code="0099",
+        arrival_station_code="0100",
+        run_date=DATE,
+        train_no="00008",
+        requested_seat_attribute_code="031",
+        train_group_code="102",
+        train_class_code="01",
+        goods_no="SYNTH-G2",
+    )
     client, calls, _ = rig([ENVELOPE])
-    client.get_fare_quote(PriceFareQuoteRequest((first, second)))
+    client.get_fare_quote(PriceFareQuoteRequest(legs=(first, second)))
     form = {
         **COMMON,
         "txtMenuId": "11",
@@ -1154,10 +1198,18 @@ def test_price_fare_quote_sends_empty_goods_numbers_like_the_app(rig):
     """TrainOpInfoViewModel.java:794 passes null gdNo, so both legs carry the empty default and the joined
     column is just the separator. TrainOpInfoViewModel.java:941-962: the quote is a display fare; payment uses the
     hold's received_amount."""
-    second = PriceFareLeg("0099", "0100", DATE, "00008", "031", "102", "01")
+    second = PriceFareLeg(
+        departure_station_code="0099",
+        arrival_station_code="0100",
+        run_date=DATE,
+        train_no="00008",
+        requested_seat_attribute_code="031",
+        train_group_code="102",
+        train_class_code="01",
+    )
     client, calls, _ = rig([ENVELOPE, ENVELOPE])
-    client.get_fare_quote(PriceFareQuoteRequest((FARE_LEG,)))
-    client.get_fare_quote(PriceFareQuoteRequest((FARE_LEG, second)))
+    client.get_fare_quote(PriceFareQuoteRequest(legs=(FARE_LEG,)))
+    client.get_fare_quote(PriceFareQuoteRequest(legs=(FARE_LEG, second)))
     sent = [dict(parse_qsl(call.content.decode(), keep_blank_values=True)) for call in calls]
     assert sent[0]["gdNo"] == "" and sent[1]["gdNo"] == ","
 
@@ -1165,9 +1217,9 @@ def test_price_fare_quote_sends_empty_goods_numbers_like_the_app(rig):
 def test_fare_quote_rejects_goods_numbers_on_one_leg_at_construction():
     """F2 B7: a request whose legs disagree on goods_no used to construct fine and fail only when sent."""
     with pytest.raises(KorailInvalidInputError, match="every leg or on none"):
-        PriceFareQuoteRequest((replace(FARE_LEG, goods_no="SYNTH-G1"), FARE_LEG))
+        PriceFareQuoteRequest(legs=(replace(FARE_LEG, goods_no="SYNTH-G1"), FARE_LEG))
     with pytest.raises(KorailInvalidInputError, match="every leg or on none"):
-        PriceFareQuoteRequest((FARE_LEG, replace(FARE_LEG, goods_no="SYNTH-G2")))
+        PriceFareQuoteRequest(legs=(FARE_LEG, replace(FARE_LEG, goods_no="SYNTH-G2")))
 
 
 @pytest.mark.parametrize("method", ["list_seat_cars", "get_seat_inventory"])
@@ -1225,7 +1277,7 @@ def test_optional_long_on_guidance_is_lenient(value, rig):
     raw = {**ENVELOPE, "timeStamp": 1}
     put(raw, "timeStamp", value)
     client, _, _ = rig([raw])
-    result = client.get_guide_seat_condition(GuideSeatConditionRequest("015"))
+    result = client.get_guide_seat_condition(GuideSeatConditionRequest(seat_attribute_code="015"))
     assert result.time_stamp is None and result.raw == raw
 
 

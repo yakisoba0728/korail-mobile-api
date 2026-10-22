@@ -138,7 +138,7 @@ def build_dynapath_prefix(
     return f"{chr(table_index + 97)}{table[2]}{table[37]}{table[i11]}{table[i12 - 1]}"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DynapathRequestContext:
     """DynaPath 토큰 공급자에게 전달할 요청 메타데이터를 담습니다."""
 
@@ -180,11 +180,11 @@ class _DiagnosticTokenProvider:
         return token
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DynapathTokenSettings:
     """DynaPath 토큰 생성에 사용할 기기값과 시각 공급자를 구성합니다."""
 
-    device_id: str
+    device_id: str = field(repr=False)
     as_value: str
     app_start_ts: str
     os_version: str
@@ -231,7 +231,7 @@ def build_default_token_settings() -> DynapathTokenSettings:
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DynapathConfig:
     """DynaPath 활성화 여부와 토큰 공급 방식을 구성합니다."""
 

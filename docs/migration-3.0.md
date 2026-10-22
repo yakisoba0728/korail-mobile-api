@@ -107,9 +107,13 @@ client.extend_discount_card(DiscountCardTicket(window, sale_date, sequence, pass
 from korail_mobile_api import CartAddRequest, OriginalTicketReference
 
 recalculated = client.recalculate_price(request)
-cart = client.add_to_cart(CartAddRequest(recalculated.pnr_no))
+cart = client.add_to_cart(CartAddRequest(pnr_no=recalculated.pnr_no))
 notice = client.get_app_data().notice
-client.extend_discount_card(OriginalTicketReference(window, sale_date, sequence, password))
+client.extend_discount_card(
+    OriginalTicketReference(
+        sale_window_no=window, sale_date=sale_date, sale_sequence=sequence, return_password=password
+    )
+)
 ```
 
 ## 추가한 API {#added}

@@ -50,7 +50,7 @@ KORAIL_MERGE_SEAT_FLAGS_BY_CABIN = {
 KORAIL_MAX_JOURNEY_LEGS = 2
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class KorailPassengerCounts:
     """승객 종류별 검색·예약 인원을 구성합니다.
 
@@ -107,7 +107,7 @@ def _passenger_counts(passengers: KorailPassengerCounts | None) -> KorailPasseng
     return passengers
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class KorailSeatAssignment:
     """호차 번호와 좌석 식별자로 좌석 지정 입력을 구성합니다.
 
@@ -154,7 +154,7 @@ class KorailSeatAssignment:
         return cls(car_no=car_no, seat_no=seat.seat_no)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CartAddRequest:
     """홀드를 장바구니에 추가할 PNR 입력을 구성합니다.
 
@@ -163,7 +163,7 @@ class CartAddRequest:
     pnr_no: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TicketDuplicationCheckRequest:
     """PNR 기준 중복 예약 확인 입력을 구성합니다."""
 
@@ -181,7 +181,7 @@ def build_ticket_duplication_check_form(
     return {"pnrNo": request.pnr_no}
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TicketReservationDetailRequest:
     """PNR 기준 예약 상세 조회 입력을 구성합니다.
 

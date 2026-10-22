@@ -298,7 +298,11 @@ class MembershipResource:
             start = self._date(start_date, end)
         return self._client.get_mileage_history(
             MileageHistoryRequest(
-                start.isoformat().replace("-", ""), end.isoformat().replace("-", ""), ledger, movement, page_no
+                start_date=start.isoformat().replace("-", ""),
+                end_date=end.isoformat().replace("-", ""),
+                ledger=ledger,
+                movement=movement,
+                page_no=page_no,
             )
         )
 
@@ -359,15 +363,15 @@ class AirportBusResource:
             codes.append(matches[0].code)
         return self._client.list_airport_bus_schedules(
             AirportBusScheduleQuery(
-                moment.strftime("%Y%m%d"),
-                codes[0],
-                codes[1],
-                service_code,
-                AIRPORT_BUS_ROOM_CLASS_CODE,
-                moment.strftime("%H%M%S"),
-                "",
-                AIRPORT_BUS_SEAT_ATTRIBUTE_CODE,
-                reservation_sale_division_code,
+                departure_date=moment.strftime("%Y%m%d"),
+                departure_station_code=codes[0],
+                arrival_station_code=codes[1],
+                service_code=service_code,
+                room_class_code=AIRPORT_BUS_ROOM_CLASS_CODE,
+                departure_time=moment.strftime("%H%M%S"),
+                train_no="",
+                seat_attribute_code=AIRPORT_BUS_SEAT_ATTRIBUTE_CODE,
+                reservation_sale_division_code=reservation_sale_division_code,
             )
         )
 
@@ -440,7 +444,7 @@ class ReservationResource:
         pnr_no = hold.pnr_no if isinstance(hold, ReservationHoldResponse) else hold
         if not pnr_no:
             raise KorailInvalidInputError("a successful hold with a PNR is required")
-        return self._client.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no))
+        return self._client.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no=pnr_no))
 
     def all(self) -> ReservationHistoryResponse:
         """기존 예약 이력 응답을 보존합니다."""

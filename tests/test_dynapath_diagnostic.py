@@ -31,7 +31,27 @@ def test_default_client_uses_diagnostic_header_without_extra_requests(f8_client_
     assert client.config.dynapath.token_settings is None
     restored = pickle.loads(pickle.dumps(client.config))
     assert restored == client.config
-    assert restored.dynapath.token_provider(DynapathRequestContext(*("synthetic",) * 9)) == expected
+    assert (
+        restored.dynapath.token_provider(
+            DynapathRequestContext(
+                **dict.fromkeys(
+                    (
+                        "method",
+                        "path",
+                        "url",
+                        "device",
+                        "version",
+                        "key",
+                        "user_agent",
+                        "device_name",
+                        "os_version",
+                    ),
+                    "synthetic",
+                )
+            )
+        )
+        == expected
+    )
 
 
 def test_explicit_legacy_settings_still_select_v1(f8_client_factory):
@@ -48,7 +68,13 @@ def test_explicit_legacy_settings_still_select_v1(f8_client_factory):
         dynapath=DynapathConfig(enabled=True, token_settings=settings),
     )
     config = build_config_from_profile(
-        KorailDeviceProfile("synthetic-install", "synthetic-model", "16", "synthetic-build"), base=config
+        KorailDeviceProfile(
+            device_id="synthetic-install",
+            model="synthetic-model",
+            android_release="16",
+            build_id="synthetic-build",
+        ),
+        base=config,
     )
     assert config.dynapath.token_settings.device_id == "synthetic-install"
     client = f8_client_factory(handler, config=config)

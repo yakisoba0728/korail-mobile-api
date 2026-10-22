@@ -74,15 +74,17 @@ def test_observed_app_contract_subset(f8_client_factory, app_version, lang):
     assert ("Key", "") in bank
     assert "lang" not in dict(bank)
 
-    original = OriginalTicketReference("SYNTH-WINDOW", "0102", "1", "SYNTH-PASSWORD")
-    companion = RefundCompanion("SYNTH-NAME", "20990101")
+    original = OriginalTicketReference(
+        sale_window_no="SYNTH-WINDOW", sale_date="0102", sale_sequence="1", return_password="SYNTH-PASSWORD"
+    )
+    companion = RefundCompanion(name="SYNTH-NAME", certificate_no="20990101")
     commission = client.get_refund_fee(original, companion)
     ticket = PaidTicket(
-        "SYNTH-PNR",
-        "20990103",  # Current sale date is deliberately not the original MMDD.
-        original.sale_window_no,
-        original.sale_sequence,
-        original.return_password,
+        pnr_no="SYNTH-PNR",
+        sale_date="20990103",  # Current sale date is deliberately not the original MMDD.
+        sale_window_no=original.sale_window_no,
+        sale_sequence=original.sale_sequence,
+        return_password=original.return_password,
         return_sale_date=original.sale_date,
         companion_name=companion.name,
         companion_certificate_no=companion.certificate_no,

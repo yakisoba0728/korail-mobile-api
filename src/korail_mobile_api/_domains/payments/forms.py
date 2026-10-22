@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""결제·환불 입력과 폼입니다. 입력 모델의 생성은 전송하지 않습니다. CardPayment 출력은 숨기며 다른 raw·repr은 마스킹하지 않습니다.
+"""결제·환불 입력과 폼입니다. 입력 모델의 생성은 전송하지 않습니다. repr은 카드 정보와 호출자가 넣은 반환 비밀번호·이름·전화번호·생년월일·고객번호를 숨기지만 속성 값은 가리지 않습니다.
 
 DTO 필드·배열 순서와 빈 값 생략은 실제 전송에 영향을 주므로 유지합니다."""
 
@@ -40,14 +40,14 @@ def _require_every_field(
             raise KorailInvalidInputError(f"KORAIL station refund {step} requires {field_.name}")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class StationRefundVerificationRequest:
     """역에서 발권한 승차권의 환불 확인에 필요한 이름과 반환 식별자를 구성합니다.
 
     ``return_no_1``~``return_no_4``에는 반환번호 네 칸을 차례로 넣습니다. 모든 필드는 비어 있지 않은
     문자열이어야 하며, 아니면 ``KorailInvalidInputError``가 발생합니다."""
 
-    customer_name: str
+    customer_name: str = field(repr=False)
     return_no_1: str
     return_no_2: str
     return_no_3: str
@@ -57,7 +57,7 @@ class StationRefundVerificationRequest:
         _require_every_field(self, "verification")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class StationRefundExecutionRequest:
     """역에서 발권한 승차권의 환불 실행 입력을 구성합니다.
 
@@ -69,14 +69,14 @@ class StationRefundExecutionRequest:
     original_sale_date: str
     original_sale_window_no: str
     original_sale_sequence: str
-    original_return_password: str
+    original_return_password: str = field(repr=False)
     refund_division_code: str
     refund_reason_code: str
     ticket_kind_code: str
-    customer_phone: str
+    customer_phone: str = field(repr=False)
     refund_amount: str
     refund_fee: str
-    customer_name: str
+    customer_name: str = field(repr=False)
 
     def __post_init__(self) -> None:
         _require_every_field(self, "execution")
@@ -139,7 +139,7 @@ _CARD_AUTH_FORMATS = {"J": re.compile(r"[0-9]{6}"), "S": re.compile(r"[0-9]{10}"
 _CARD_EXPIRY_MESSAGE = "KORAIL payment card has expired or has an invalid month"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CardPayment:
     """예약 결제에 사용할 카드 정보를 구성합니다.
 
@@ -174,7 +174,7 @@ class CardPayment:
             raise KorailInvalidInputError(_CARD_EXPIRY_MESSAGE)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PaidTicket:
     """환불할 발권 승차권 한 장의 PNR과 반환 식별자를 구성합니다.
 
@@ -188,7 +188,7 @@ class PaidTicket:
     sale_date: str
     sale_window_no: str
     sale_sequence: str
-    return_password: str
+    return_password: str = field(repr=False)
     #: 환불 요청에 함께 싣는 열차 번호입니다. 빈 문자열이면 보내지 않습니다. ``from_refund_detail()``은 따로 주지 않으면
     #: 첫 여정의 열차 번호를 넣습니다.
     train_no: str = ""
@@ -197,11 +197,11 @@ class PaidTicket:
     pbp_acceptance_target_flag: str | None = None
     #: 수수료를 조회한 원표의 반환일입니다. 현재 판매일(``sale_date``)과 구분하며 환불 전에 필요합니다.
     #: ``from_refund_detail()``은 상세의 ``original_sale_date``를 복사합니다.
-    return_sale_date: str | None = field(default=None, repr=False, kw_only=True)
+    return_sale_date: str | None = field(default=None, repr=False)
     #: 수수료 조회에 사용한 동반자 이름입니다. 동반자가 없으면 빈 문자열입니다.
-    companion_name: str = field(default="", repr=False, kw_only=True)
+    companion_name: str = field(default="", repr=False)
     #: 수수료 조회에 사용한 동반자 증빙값입니다. 상세 팩토리는 동반자 생년월일을 복사합니다.
-    companion_certificate_no: str = field(default="", repr=False, kw_only=True)
+    companion_certificate_no: str = field(default="", repr=False)
 
     def __post_init__(self) -> None:
         for name in ("pnr_no", "sale_date", "sale_window_no", "sale_sequence", "return_password"):
@@ -249,7 +249,7 @@ class PaidTicket:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PriceRecalculationRow:
     """예약 할인 재계산에 사용할 승객 한 행을 구성합니다.
 
@@ -267,7 +267,7 @@ class PriceRecalculationRow:
     family_sequence_no: str = ""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PriceRecalculationRequest:
     """PNR 한 건의 할인 재계산 조건을 구성합니다.
 
@@ -277,7 +277,7 @@ class PriceRecalculationRequest:
     pnr_no: str
     rows: tuple[PriceRecalculationRow, ...] = ()
     #: 비회원 고객번호입니다. 값이 있으면 비회원 구분과 함께 보내고, ``None``이면 보내지 않습니다.
-    non_member_no: str | None = None
+    non_member_no: str | None = field(default=None, repr=False)
     cabin_class_code: str | None = None
     seat_attribute_code_2: str | None = None
     #: 좌석 속성 코드 4번 칸(``txtSeatAttCd4``)입니다. 재계산 요청에서의 의미는 확인하지 못했습니다. ``None``이면 보내지
@@ -337,26 +337,26 @@ class PriceRecalculationRequest:
 
         rows = tuple(
             PriceRecalculationRow(
-                text(seat, "h_psg_tp_cd"),
-                text(seat, "h_psrm_cl_cd"),
-                text(seat, "h_dcnt_knd_cd1"),
-                code,
-                text(seat, "dcnt_reld_no"),
+                passenger_type_code=text(seat, "h_psg_tp_cd"),
+                room_class_code=text(seat, "h_psrm_cl_cd"),
+                discount_kind_code=text(seat, "h_dcnt_knd_cd1"),
+                requested_discount_code=code,
+                certificate_no=text(seat, "dcnt_reld_no"),
             )
             for seat, code in zip(seats, requested_discount_codes, strict=True)
         )
-        return cls(pnr_no, rows)
+        return cls(pnr_no=pnr_no, rows=rows)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RefundCompanion:
     """환불 수수료 조회에 사용할 동반자 이름과 생년월일을 구성합니다.
 
     이름은 ``name``, 생년월일은 ``certificate_no``에 넣습니다. 동반자가 없으면 기본값(빈 문자열)을 그대로 두세요. 빈 값은
     요청에 싣지 않습니다."""
 
-    name: str = ""
-    certificate_no: str = ""
+    name: str = field(default="", repr=False)
+    certificate_no: str = field(default="", repr=False)
 
     def __post_init__(self) -> None:
         _optional_text(self.name, "name")

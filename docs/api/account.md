@@ -622,7 +622,12 @@ from korail_mobile_api import OriginalTicketReference
 
 reservation = client.list_tickets().reservations[0]
 references = [  # 판매일은 return_sale_date(MMDD)
-    OriginalTicketReference(t.sale_window_no, t.return_sale_date, t.sale_sequence, t.return_password)
+    OriginalTicketReference(
+        sale_window_no=t.sale_window_no,
+        sale_date=t.return_sale_date,
+        sale_sequence=t.sale_sequence,
+        return_password=t.return_password,
+    )
     for t in reservation.tickets
 ]
 result = client.get_original_tickets(references)

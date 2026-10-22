@@ -44,7 +44,9 @@ COMMON = [
 ]
 DATE = "20300102"
 STAMP = 1_800_000_000_125
-REFERENCE = api.OriginalTicketReference("TEST-WINDOW", "0102", "TEST-SEQUENCE", "TEST-RETURN")
+REFERENCE = api.OriginalTicketReference(
+    sale_window_no="TEST-WINDOW", sale_date="0102", sale_sequence="TEST-SEQUENCE", return_password="TEST-RETURN"
+)
 
 FULL_REFERENCE = replace(REFERENCE, sale_date=DATE)
 SECOND_REFERENCE = replace(FULL_REFERENCE, sale_sequence="TEST-SEQUENCE-2")
@@ -230,7 +232,7 @@ CASES = [
     case(
         "get_mileage_history",
         "mlg.amtSpec.do",
-        {"request": api.MileageHistoryRequest(DATE, "20300203", page_no=2)},
+        {"request": api.MileageHistoryRequest(start_date=DATE, end_date="20300203", page_no=2)},
         {
             "pontTpVal": "1",
             "qryDvVal": "0",
@@ -257,10 +259,10 @@ CASES = [
         "research.dcntCrdScheduleView.do",
         {
             "request": api.DiscountCardScheduleRequest(
-                "TEST-MANAGEMENT",
-                "TEST-FROM",
-                "TEST-TO",
-                DATE,
+                card_kind_management_no="TEST-MANAGEMENT",
+                departure_station_name="TEST-FROM",
+                arrival_station_name="TEST-TO",
+                departure_date=DATE,
                 usable_trip_count="2",
                 usage_period_days="30",
                 page_no="3",
@@ -301,18 +303,18 @@ CASES = [
         "pass.passScheduleInfoList",
         {
             "request": api.PassScheduleRequest(
-                "TEST-TRAIN",
-                DATE,
-                "120000",
-                "TEST-TRANSFER",
-                "TEST-KIND",
-                "TEST-PERIOD",
-                "TEST-AGE",
-                "2",
-                "3",
-                "TEST-FROM",
-                "TEST-TO",
-                "TEST-WEEKEND",
+                selected_train_code="TEST-TRAIN",
+                departure_date=DATE,
+                departure_time="120000",
+                transfer_type_code="TEST-TRANSFER",
+                pass_kind_code="TEST-KIND",
+                pass_period_code="TEST-PERIOD",
+                pass_age_code="TEST-AGE",
+                page_no="2",
+                page_size="3",
+                departure_station_name="TEST-FROM",
+                arrival_station_name="TEST-TO",
+                weekend_use_flag="TEST-WEEKEND",
             )
         },
         {
@@ -401,7 +403,7 @@ CASES = [
     case(
         "get_commuter_info",
         "research.cmtrInfo.do",
-        {"request": api.CommuterInitialRequest(PASS_DATA)},
+        {"request": api.CommuterInitialRequest(pass_data=PASS_DATA)},
         {"jobDvCd": "a", "cmtrKndCd": "TEST-KIND", "psgCnt": "0"},
         success(
             psgList=[
@@ -509,18 +511,18 @@ CASES = [
         "research.assignScheduleView.do",
         {
             "request": api.SeatAssignmentScheduleRequest(
-                "TEST-MENU",
-                DATE,
-                "120000",
-                "TEST-FROM",
-                "TEST-TO",
-                "TEST-GROUP",
-                "TEST-ROOM",
-                "TEST-SEAT",
-                2,
-                "TEST-DETOUR",
-                "TEST-TRANSFER",
-                "TEST-CONNECTION",
+                menu_id="TEST-MENU",
+                departure_date=DATE,
+                departure_time="120000",
+                departure_station_name="TEST-FROM",
+                arrival_station_name="TEST-TO",
+                train_group_code="TEST-GROUP",
+                room_class_code="TEST-ROOM",
+                seat_attribute_code="TEST-SEAT",
+                passenger_count=2,
+                standing_detour_division_name="TEST-DETOUR",
+                transfer_type_code="TEST-TRANSFER",
+                connection_arrival_station_name="TEST-CONNECTION",
             )
         },
         {
@@ -585,7 +587,7 @@ CASES = [
     case(
         "check_ticket_duplication",
         "ticket.ticketDupCheck.do",
-        {"request": api.TicketDuplicationCheckRequest("TEST-PNR")},
+        {"request": api.TicketDuplicationCheckRequest(pnr_no="TEST-PNR")},
         {"pnrNo": "TEST-PNR"},
         success(rsvCnt="0002"),
         (("reservation_count", "0002"),),
@@ -635,7 +637,15 @@ CASES = [
     case(
         "get_self_seat_change_options",
         "self.seatChgInfo.do",
-        {"request": api.SelfSeatChangeInfoRequest(DATE, "00999", "TEST-FROM", "TEST-TO", "1")},
+        {
+            "request": api.SelfSeatChangeInfoRequest(
+                run_date=DATE,
+                train_no="00999",
+                departure_station_code="TEST-FROM",
+                arrival_station_code="TEST-TO",
+                room_class_code="1",
+            )
+        },
         {"runDt": DATE, "trnNo": "00999", "dptRsStnCd": "TEST-FROM", "arvRsStnCd": "TEST-TO", "psrmClCd": "1"},
         success(
             trnNo="00999", chgStnList=[{"dptRsStnNm": "TEST-STATION"}], chgRsnList=[{"qryCode": "TEST-REASON"}]
@@ -663,7 +673,7 @@ CASES = [
     case(
         "get_ticket_reservation_detail",
         "certification.ReservationList",
-        {"request": api.TicketReservationDetailRequest("TEST-PNR")},
+        {"request": api.TicketReservationDetailRequest(pnr_no="TEST-PNR")},
         {"hidPnrNo": "TEST-PNR"},
         success(
             h_pnr_no="TEST-PNR",
@@ -689,7 +699,10 @@ CASES = [
     case(
         "get_refund_fee",
         "refunds.CommissionView",
-        {"ticket": REFERENCE, "companion": api.RefundCompanion("TEST-COMPANION", "TEST-CERTIFICATE")},
+        {
+            "ticket": REFERENCE,
+            "companion": api.RefundCompanion(name="TEST-COMPANION", certificate_no="TEST-CERTIFICATE"),
+        },
         {
             "h_orgtk_ret_sale_dt": "0102",
             "h_orgtk_wct_no": "TEST-WINDOW",
@@ -890,7 +903,7 @@ def test_forms_follow_the_app_dto_order(name, expected, make_client) -> None:
     if name == "list_tickets":
         kwargs.update(boarding_date_from="20300101", boarding_date_to="20300131")
     else:
-        kwargs["companion"] = api.RefundCompanion("TEST-NAME", "TEST-CERT")
+        kwargs["companion"] = api.RefundCompanion(name="TEST-NAME", certificate_no="TEST-CERT")
     getattr(client, name)(**kwargs)
     assert [key for key, _ in wire_pairs(calls[0])] == expected.split()
 
@@ -1248,7 +1261,14 @@ def test_optional_invalid_values_remain_raw(make_client) -> None:
         ),
         (
             BY_NAME["get_self_seat_change_options"],
-            {"request": api.SelfSeatChangeInfoRequest(DATE, "00999", "TEST-FROM", "TEST-TO")},
+            {
+                "request": api.SelfSeatChangeInfoRequest(
+                    run_date=DATE,
+                    train_no="00999",
+                    departure_station_code="TEST-FROM",
+                    arrival_station_code="TEST-TO",
+                )
+            },
             {"runDt": DATE, "trnNo": "00999", "dptRsStnCd": "TEST-FROM", "arvRsStnCd": "TEST-TO"},
         ),
         (
@@ -1311,7 +1331,7 @@ def test_reservation_detail_run_date_preserves_raw(value, expected, make_client)
     else:
         journey["h_run_dt"] = value
     client, _ = make_client(payload)
-    result = client.get_ticket_reservation_detail(api.TicketReservationDetailRequest("TEST-PNR"))
+    result = client.get_ticket_reservation_detail(api.TicketReservationDetailRequest(pnr_no="TEST-PNR"))
     assert result.journeys[0].run_date == expected
     assert result.journeys[0].raw == journey
 
@@ -1344,7 +1364,7 @@ def test_commuter_passengers_repeat_age_per_person(make_client) -> None:
 def test_commuter_original_ticket_stage(make_client) -> None:
     """CommutationInfoIn.java:64; SeatAssignViewModel.java:291: original-ticket query only."""
     client, calls = make_client(BY_NAME["get_commuter_info"].response, lang=None)
-    client.get_commuter_info(api.CommuterTicketInquiryRequest(REFERENCE, "1"))
+    client.get_commuter_info(api.CommuterTicketInquiryRequest(original_ticket=REFERENCE, inquiry_type="1"))
     assert wire_pairs(calls[0]) == COMMON + [
         ("jobDvCd", "c"),
         ("psgCnt", "0"),
@@ -1446,14 +1466,16 @@ def test_pass_schedule_request_blank_field_is_still_omitted(make_client) -> None
     "request_with,changes,message",
     [
         (
-            api.CommuterInitialRequest(PASS_DATA),
+            api.CommuterInitialRequest(pass_data=PASS_DATA),
             {"pass_data": api.PassMenuData()},
             "pass_data.commuter_kind_code",
         ),
         (
             api.CommuterPassengerRequest.from_response(
                 PASS_DATA,
-                api.CommuterInfoResponse(passenger_options=(api.CommuterPassengerOption("TEST-AGE"),)),
+                api.CommuterInfoResponse(
+                    passenger_options=(api.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE"),)
+                ),
                 (1,),
             ),
             {"source": api.CommuterInfoResponse(passenger_options=(api.CommuterPassengerOption(),))},
@@ -1481,7 +1503,7 @@ def test_commuter_int_fields_default_to_zero(value, expected, make_client) -> No
     if value is not ABSENT_LIST:
         row["custAgeFrom"] = payload["avlPrnbFrom"] = value
     client, _ = make_client(payload)
-    result = client.get_commuter_info(api.CommuterInitialRequest(PASS_DATA))
+    result = client.get_commuter_info(api.CommuterInitialRequest(pass_data=PASS_DATA))
     assert result.passenger_options[0].customer_age_from == expected
     assert result.available_passenger_count_from == expected
 

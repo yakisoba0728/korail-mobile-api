@@ -13,6 +13,7 @@ from korail_mobile_api import (
     AirportBusSchedule,
     AirportBusStop,
     BaseKorailResponse,
+    DynapathTokenSettings,
     Korail,
     KorailConfig,
     KorailInvalidInputError,
@@ -22,8 +23,13 @@ from korail_mobile_api import (
     KorailSession,
     KorailTransportError,
     MembershipResource,
+    OriginalTicketReference,
     PaidTicket,
     PriceFareLeg,
+    PriceRecalculationRequest,
+    RefundCompanion,
+    StationRefundExecutionRequest,
+    StationRefundVerificationRequest,
     StationResource,
     TrainResource,
     TrainSummary,
@@ -59,25 +65,92 @@ def test_new_resources_do_not_request_during_construction(config):
         assert isinstance(korail.airport_bus, AirportBusResource)
 
 
+_STATION_REFUND = {
+    "pnr_no": "SYNTHETIC-PNR",
+    "original_sale_date": "20990102",
+    "original_sale_window_no": "0001",
+    "original_sale_sequence": "0001",
+    "original_return_password": "SYNTHETIC-HIDDEN-PASSWORD",
+    "refund_division_code": "1",
+    "refund_reason_code": "1",
+    "ticket_kind_code": "1",
+    "customer_phone": "SYNTHETIC-HIDDEN-PHONE",
+    "refund_amount": "1000",
+    "refund_fee": "0",
+    "customer_name": "SYNTHETIC-HIDDEN-NAME",
+}
+
+
 @pytest.mark.parametrize(
-    "model, marker",
+    "model, attribute",
     [
-        (KorailSession(jsessionid="SYNTHETIC-DEBUG-COOKIE"), "SYNTHETIC-DEBUG-COOKIE"),
-        (BaseKorailResponse(raw={"debug": "SYNTHETIC-DEBUG-RAW"}), "SYNTHETIC-DEBUG-RAW"),
+        (KorailSession(jsessionid="SYNTHETIC-HIDDEN-COOKIE"), "jsessionid"),
+        (KorailSession(raw={"debug": "SYNTHETIC-HIDDEN-RAW"}), "raw"),
+        (BaseKorailResponse(raw={"debug": "SYNTHETIC-HIDDEN-RAW"}), "raw"),
         (
-            PaidTicket("SYNTHETIC-PNR", "20990102", "0001", "0001", "SYNTHETIC-DEBUG-RETURN"),
-            "SYNTHETIC-DEBUG-RETURN",
+            PaidTicket(
+                pnr_no="SYNTHETIC-PNR",
+                sale_date="20990102",
+                sale_window_no="0001",
+                sale_sequence="0001",
+                return_password="SYNTHETIC-HIDDEN-RETURN",
+            ),
+            "return_password",
+        ),
+        (
+            OriginalTicketReference(
+                sale_window_no="0001",
+                sale_date="0102",
+                sale_sequence="0001",
+                return_password="SYNTHETIC-HIDDEN-RETURN",
+            ),
+            "return_password",
+        ),
+        (RefundCompanion(name="SYNTHETIC-HIDDEN-NAME"), "name"),
+        (RefundCompanion(certificate_no="SYNTHETIC-HIDDEN-BIRTH"), "certificate_no"),
+        (
+            StationRefundVerificationRequest(
+                customer_name="SYNTHETIC-HIDDEN-NAME",
+                return_no_1="1",
+                return_no_2="2",
+                return_no_3="3",
+                return_no_4="4",
+            ),
+            "customer_name",
+        ),
+        *(
+            (StationRefundExecutionRequest(**_STATION_REFUND), name)
+            for name in ("original_return_password", "customer_phone", "customer_name")
+        ),
+        (
+            PriceRecalculationRequest(pnr_no="SYNTHETIC-PNR", non_member_no="SYNTHETIC-HIDDEN-NO"),
+            "non_member_no",
+        ),
+        (KorailConfig(advertising_id="SYNTHETIC-HIDDEN-AD-ID"), "advertising_id"),
+        (
+            DynapathTokenSettings(
+                device_id="SYNTHETIC-HIDDEN-DEVICE",
+                as_value="SYNTHETIC",
+                app_start_ts="1",
+                os_version="16",
+                device_model="SYNTHETIC",
+            ),
+            "device_id",
         ),
     ],
 )
-def test_existing_debug_representations_are_not_masked(model, marker):
-    assert marker in repr(model) and marker in str(model)
+def test_caller_secrets_are_hidden_from_debug_representations(model, attribute):
+    """3.0 hides caller-supplied secrets and raw from repr; the attribute itself keeps the real value."""
+    value = getattr(model, attribute)
+    marker = value["debug"] if attribute == "raw" else value
+    assert marker.startswith("SYNTHETIC-HIDDEN")
+    assert marker not in repr(model) and marker not in str(model)
 
 
 @pytest.mark.parametrize("goods", [None, "", "SYNTHETIC-GOODS"])
 def test_fare_factory_copies_identifiers_without_guessing(goods):
     train = TrainSummary(
-        "00007",
+        train_no="00007",
         train_group_code="101",
         train_class_code="00",
         run_date="20990101",
@@ -88,14 +161,14 @@ def test_fare_factory_copies_identifiers_without_guessing(goods):
         goods_no=goods,
     )
     assert PriceFareLeg.from_train(train) == PriceFareLeg(
-        "9901",
-        "9903",
-        "20990101",
-        "00007",
-        "031",
-        "101",
-        "00",
-        goods or None,
+        departure_station_code="9901",
+        arrival_station_code="9903",
+        run_date="20990101",
+        train_no="00007",
+        requested_seat_attribute_code="031",
+        train_group_code="101",
+        train_class_code="00",
+        goods_no=goods or None,
     )
 
 
@@ -135,7 +208,7 @@ def test_fare_factory_rejects_wrong_model():
 @pytest.mark.parametrize("goods", [False, 0, " ", "bad,field"])
 def test_fare_factory_does_not_normalize_invalid_goods_to_missing(goods):
     train = TrainSummary(
-        "00007",
+        train_no="00007",
         train_group_code="101",
         train_class_code="00",
         run_date="20990102",
@@ -434,7 +507,10 @@ def test_bus_stop_cache_refresh_and_name_search(scripted_client_factory, config)
         config=config,
     )
     bus = AirportBusResource(client)
-    assert bus.stops() == (AirportBusStop("9901", "시험출발"), AirportBusStop("9903", "시험도착"))
+    assert bus.stops() == (
+        AirportBusStop(code="9901", name="시험출발"),
+        AirportBusStop(code="9903", name="시험도착"),
+    )
     assert bus.stops() is bus.stops() and len(requests) == 1
     result = bus.search(" 시험출발 ", "9903", service_code="980", depart_after=MOMENT)
     assert result.raw["extra"] == "kept" and result.schedules == ()

@@ -1133,7 +1133,7 @@ class KorailClient:
 
     def get_reservation_hold(self, pnr_no: str) -> ReservationHoldResponse:
         """이미 잡힌 예약을 PNR 로 조회해 카드 결제용 홀드로 가져옵니다. 결제는 하지 않습니다."""
-        detail = self.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no))
+        detail = self.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no=pnr_no))
         return parse_existing_reservation_hold_response(detail.raw, pnr_no=pnr_no)
 
     def get_refund_fee(

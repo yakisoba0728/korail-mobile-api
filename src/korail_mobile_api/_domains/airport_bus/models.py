@@ -20,7 +20,7 @@ AIRPORT_BUS_ROOM_CLASS_CODE = "1"  # evidence: app 7.0.8 AirportBusSeatMapViewMo
 AIRPORT_BUS_SEAT_ATTRIBUTE_CODE = "015"  # evidence: app 7.0.8 AirportBusSeatMapViewModel.java:752-788
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AirportBusStop:
     """공통 코드 조회에서 짝지은 공항버스 정류장 코드와 이름입니다."""
 
@@ -28,7 +28,7 @@ class AirportBusStop:
     name: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AirportBusSchedule:
     """조회된 공항버스 한 편의 구간·운행·운임 정보를 담습니다."""
 
@@ -54,12 +54,12 @@ class AirportBusSchedule:
     train_order_no: str | None = wire("trnOrdrNo")
     # 앱 속성명은 ymsAplFlgYMS 이고, 전송 키 ymsAplFlg 는 실서버 관측입니다.
     yms_application_flag: str | None = wire("ymsAplFlg")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: 표시용 운임 문자열(``rcvdPrc``)입니다.
     received_price: str | None = wire("rcvdPrc")
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AirportBusScheduleResponse(BaseKorailResponse):
     """공항버스 운행 스케줄 한 페이지를 담습니다."""
 
@@ -68,7 +68,7 @@ class AirportBusScheduleResponse(BaseKorailResponse):
     schedules: tuple[AirportBusSchedule, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AirportBusSeat:
     """공항버스 좌석표 한 자리의 식별자와 점유 상태를 담습니다."""
 
@@ -82,10 +82,10 @@ class AirportBusSeat:
     specification: str | None = wire("seat_spec")
     sequence_no: str | None = wire("sqr_no")
     visual_message_division_code: str | None = wire("vz_msg_dv_cd")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AirportBusSeatInventoryResponse(BaseKorailResponse):
     """공항버스 한 호차의 좌석표와 배치 정보를 담습니다.
 
@@ -102,7 +102,7 @@ class AirportBusSeatInventoryResponse(BaseKorailResponse):
     seats: tuple[AirportBusSeat, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MaasMenuItem:
     """부가서비스 메뉴 한 항목과 역 선택 조건을 담습니다."""
 
@@ -117,7 +117,7 @@ class MaasMenuItem:
     popup_image: str | None = wire("poppImg")
     menu_type: str | None = wire("type")
     url: str | None = wire("url")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
     @property
     def uses_station_selection(self) -> bool:
@@ -135,7 +135,7 @@ class MaasMenuItem:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MaasMenuListResponse(BaseKorailResponse):
     """부가서비스 메뉴 목록을 담습니다."""
 
@@ -149,7 +149,7 @@ class MaasMenuListResponse(BaseKorailResponse):
     arrival_baggage_transfer_robot_url: str | None = wire("aBggTrsfRbtUrl")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MaasServiceDetailInfo:
     """부가서비스의 상품·이용·결제 상세를 담습니다."""
 
@@ -184,10 +184,10 @@ class MaasServiceDetailInfo:
     total_settlement_amount: str | None = wire("strTotStlAmt")
     usage_period: str | None = wire("strUtlTrmCont")
     entity_one: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MaasServiceDetail:
     """신청한 부가서비스 한 건과 그 상세를 담습니다."""
 
@@ -213,10 +213,10 @@ class MaasServiceDetail:
     usage_close_date: str | None = wire("utlClsDt")
     usage_start_date: str | None = wire("utlStDt")
     detail_info: MaasServiceDetailInfo | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MaasServiceDetailListResponse(BaseKorailResponse):
     """신청한 부가서비스 목록을 담습니다."""
 

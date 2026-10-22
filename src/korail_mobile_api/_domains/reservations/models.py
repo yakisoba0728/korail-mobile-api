@@ -14,7 +14,7 @@ from ...errors import KorailInvalidInputError, KorailProtocolError
 from ..common.models import BaseKorailResponse
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationPassengerInfo:
     """예약 응답의 승객 유형별 인원과 할인 정보를 담습니다."""
 
@@ -28,10 +28,10 @@ class ReservationPassengerInfo:
     delay_original_sale_date: str | None = wire("dlayOgtkSaleDt")
     delay_original_sale_sequence: str | None = wire("dlayOgtkSaleSqno")
     delay_original_return_password: str | None = wire("dlayOgtkRetPwd")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CartItem:
     """장바구니의 열차·공항버스 예약 또는 부가서비스 한 행을 담습니다."""
 
@@ -52,7 +52,6 @@ class CartItem:
     lump_sum_target_no: str | None = wire("h_lump_stl_tgt_no")
     customer_no: str | None = wire("h_cust_no")
     virtual_reservation_no: str | None = wire("h_vr_rsv_no")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # 중첩 결제 상세 6객체는 모델링하지 않고 raw 에만 둡니다.
     item_type_code: str | None = wire("h_item_dv_cd")
     #: 부가서비스 제공 업체 ID(``h_add_srv_mrk_ent_id``)입니다. 업체 이름은 ``provider_name``에 있습니다.
@@ -77,16 +76,17 @@ class CartItem:
     supervising_station_code: str | None = wire("h_spvs_rs_stn_cd")
     #: 응답의 ``h_filler`` 값을 그대로 담습니다. 의미를 확인하지 못했습니다.
     filler: str | None = wire("h_filler")
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CartListResponse(BaseKorailResponse):
     """로그인 계정의 장바구니 목록을 담습니다."""
 
     items: tuple[CartItem, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationHistoryTrain:
     """예약 이력의 열차와 결제 기한 정보를 담습니다.
 
@@ -110,16 +110,16 @@ class ReservationHistoryTrain:
     seat_count: int | None = wire("h_tot_seat_cnt", optional_int, default=None)
     standing_count: int | None = wire("h_tot_stnd_cnt", optional_int, default=None)
     pnr_no: str | None = wire("h_pnr_no")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     payment_deadline_date: str | None = wire("h_ntisu_lmt_dt")
     payment_deadline_time: str | None = wire("h_ntisu_lmt_tm")
     payment_message: str | None = wire("h_payment_msg")
     payment_possible_date: str | None = wire("h_ntisu_psb_dt")
     pre_settlement_target_flag: str | None = wire("h_pre_stl_tgt_flg")
     journey_sequence: str | None = wire("h_jrny_sqno")
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationHistoryTicket:
     """예약 이력에 중첩된 발권 승차권 한 행을 담습니다."""
 
@@ -129,10 +129,10 @@ class ReservationHistoryTicket:
     ticket_kind_code: str | None = wire("tkKndCd")
     movie_ticket_flag: str | None = wire("mvieTkFlg")
     delay_discount_flag: str | None = wire("dlayDscpFlg")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationHistoryOriginalTicket:
     """예약 이력에 중첩된 원표 한 행을 담습니다."""
 
@@ -140,10 +140,10 @@ class ReservationHistoryOriginalTicket:
     window_no: str | None = wire("ogtkWctNo")
     sale_sequence: str | None = wire("ogtkSaleSqno")
     return_password: str | None = wire("ogtkRetPwd")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationHistoryPassenger:
     """예약 이력의 승객 유형별 인원·할인 정보를 담습니다."""
 
@@ -157,10 +157,10 @@ class ReservationHistoryPassenger:
     delay_original_sale_date: str | None = wire("dlayOgtkSaleDt")
     delay_original_sale_sequence: str | None = wire("dlayOgtkSaleSqno")
     delay_original_return_password: str | None = wire("dlayOgtkRetPwd")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationHistoryReservation:
     """예약 이력에 중첩된 예약·운임·결제 정보를 담습니다.
 
@@ -176,10 +176,10 @@ class ReservationHistoryReservation:
     tickets: tuple[ReservationHistoryTicket, ...] = ()
     original_tickets: tuple[ReservationHistoryOriginalTicket, ...] = ()
     passengers: tuple[ReservationHistoryPassenger, ...] = ()
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationHistoryJourney:
     """예약 이력의 여정 한 개와 열차·부가 정보를 담습니다.
 
@@ -190,10 +190,10 @@ class ReservationHistoryJourney:
     service_infos: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     accompanying_infos: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     reservation: ReservationHistoryReservation | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationHistoryResponse(BaseKorailResponse):
     """현재 예약 이력과 여정별 상세를 담습니다.
 
@@ -220,7 +220,7 @@ class ReservationHistoryResponse(BaseKorailResponse):
         return self.items
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TicketDuplicationCheckResponse(BaseKorailResponse):
     """PNR 기준 중복 예약 확인 결과를 담습니다."""
 
@@ -228,7 +228,7 @@ class TicketDuplicationCheckResponse(BaseKorailResponse):
     reservation_count: str | None = wire("rsvCnt")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationSeatDetail:
     """예약 상세의 좌석·승객·운임 정보를 담습니다."""
 
@@ -244,13 +244,13 @@ class ReservationSeatDetail:
     seat_fare: str | None = wire("h_seat_fare")
     total_discount_amount: str | None = wire("h_tot_disc_amt")
     seat_group_name: str | None = wire("h_sgr_nm")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # 앱 DTO 에는 없고 실서버 응답에서만 관측한 키입니다.
     #: 승객 유형 이름(``h_psg_tp_dv_nm``)입니다. 응답에 따라 없을 수 있으며, 없으면 ``None``입니다.
     passenger_type_name: str | None = wire("h_psg_tp_dv_nm")
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationDetailJourney:
     """홀드(결제 전 예약)의 여정 한 개와 좌석 상세를 담습니다."""
 
@@ -268,10 +268,10 @@ class ReservationDetailJourney:
     train_no: str | None = wire("h_trn_no")
     train_class_name: str | None = wire("h_trn_clsf_nm")
     seats: tuple[ReservationSeatDetail, ...] = ()
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TicketReservationDetailResponse(BaseKorailResponse):
     """PNR로 다시 조회한 예약의 여정·좌석·정산액을 담습니다."""
 
@@ -297,7 +297,7 @@ class TicketReservationDetailResponse(BaseKorailResponse):
     passengers: tuple[ReservationPassengerInfo, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationJourney:
     """예약된 여정 한 개의 열차·구간·변경 식별자를 담습니다."""
 
@@ -315,11 +315,12 @@ class ReservationJourney:
     train_no: str | None = wire("h_trn_no")
     raw: Mapping[str, object] = field(
         default_factory=dict[str, object],
+        repr=False,
         compare=False,
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class HoldReference:
     """미결제 홀드를 취소할 때 쓰는 PNR·여정 식별자를 담습니다.
 
@@ -347,14 +348,14 @@ class HoldReference:
         rows = container.get("jrny_info") if isinstance(container, Mapping) else None
         first = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], Mapping) else {}
         return cls(
-            pnr_no,
-            journey_count,
-            _optional_scalar_string(first, "h_jrny_sqno"),
-            _optional_scalar_string(first, "h_rsv_chg_no"),
+            pnr_no=pnr_no,
+            journey_count=journey_count,
+            journey_sequence=_optional_scalar_string(first, "h_jrny_sqno"),
+            change_no=_optional_scalar_string(first, "h_rsv_chg_no"),
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReservationHoldResponse(BaseKorailResponse):
     """홀드(결제 전 예약)의 식별값과 결제 기한·금액을 담습니다.
 
@@ -407,24 +408,24 @@ class ReservationHoldResponse(BaseKorailResponse):
             raise KorailInvalidInputError("KORAIL hold reference needs a PNR and a journey count")
         first = self.journeys[0] if self.journeys else None
         return HoldReference(
-            self.pnr_no,
-            self.journey_count,
-            first.journey_sequence if first is not None else None,
-            first.reservation_change_no if first is not None else None,
+            pnr_no=self.pnr_no,
+            journey_count=self.journey_count,
+            journey_sequence=first.journey_sequence if first is not None else None,
+            change_no=first.reservation_change_no if first is not None else None,
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CartDiscountAddition:
     """장바구니 추가 결과의 승객별 할인 정보를 담습니다."""
 
     passenger_sequence_no: str | None = wire("h_psg_sqno")
     #: ``h_duty_ref_rcgn_ps_dv_cd`` 값입니다. 의미와 가능한 값을 확인하지 못했습니다.
     duty_reference_recognition_division_code: str | None = wire("h_duty_ref_rcgn_ps_dv_cd")
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CartAddResponse(BaseKorailResponse):
     """장바구니 추가 결과와 승객별 할인 목록을 담습니다.
 

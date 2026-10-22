@@ -76,7 +76,9 @@ def test_filters_are_optional_and_keep_source_response(
         _train(train_no="5", general_reservation_code=None, special_reservation_code=None),
     ]
     raw: dict[str, object] = {"extra": {"preserved": True}}
-    original = TrainSearchResult(trains, BaseKorailResponse(str_result="SUCC", raw=raw), raw=raw)
+    original = TrainSearchResult(
+        trains=trains, response=BaseKorailResponse(str_result="SUCC", raw=raw), raw=raw
+    )
     search = Mock(return_value=original)
     monkeypatch.setattr(korail.client, "search_trains", search)
     result = korail.trains.search(
@@ -101,8 +103,8 @@ def test_filter_preserves_cursor_and_last_server_departure(
     first = _train(general_reservation_code="11" if page == "available" else "13")
     last = _train(train_no="90002", general_reservation_code="13", departure_time="230000")
     original = TrainSearchResult(
-        [] if page == "empty" else [first, last],
-        BaseKorailResponse(str_result="SUCC"),
+        trains=[] if page == "empty" else [first, last],
+        response=BaseKorailResponse(str_result="SUCC"),
         metadata=TrainSearchMetadata(next_page_flag="Y", next_query_station_no="0001", next_train_no="90002"),
     )
     monkeypatch.setattr(korail.client, "search_trains", lambda *args, **kwargs: original)
@@ -110,7 +112,12 @@ def test_filter_preserves_cursor_and_last_server_departure(
         "출발시험역", "도착시험역", depart_after=datetime(2099, 1, 2), include_no_seats=False
     )
     assert result.trains == ([first] if page == "available" else [])
-    query = TrainSearchQuery("출발시험역", "도착시험역", "20990102", "000000")
+    query = TrainSearchQuery(
+        departure_station="출발시험역",
+        arrival_station="도착시험역",
+        departure_date="20990102",
+        departure_time="000000",
+    )
     if page == "empty":
         assert result.next_page() is None
         assert result.next_query_from_last_departure(query) is None
@@ -295,7 +302,7 @@ def test_summary_has_no_raw_data() -> None:
     assert _train(raw={"sensitive": "SYNTHETIC-PRIVATE"}).summary() == (
         "[KTX 90001] 2099-01-02 09:00~2099-01-02 12:30 출발시험역~도착시험역 (3시간 30분)"
     )
-    assert TrainSummary("1").summary() == "[열차 1] ?~? ?~?"
+    assert TrainSummary(train_no="1").summary() == "[열차 1] ?~? ?~?"
 
 
 def test_find_delegates_to_one_direct_hold_lookup(monkeypatch: pytest.MonkeyPatch, korail: Korail) -> None:

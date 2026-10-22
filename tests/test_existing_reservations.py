@@ -143,7 +143,9 @@ def test_read_existing_reservation_then_explicitly_pay(
     assert hold.temporary_job_sequence_2 == ("005678" if sequences_present else None)
     assert hold.journeys[0].reservation_change_no == ("009" if sequences_present else None)
     assert len(calls) == 1  # Reading never reserves, queues, or charges.
-    result = client.pay_with_card(hold, CardPayment("0" * 16, "00", "9912", "000101"))
+    result = client.pay_with_card(
+        hold, CardPayment(card_number="0" * 16, card_password="00", card_expire="9912", birthday="000101")
+    )
     assert result.str_result == payment_result
     assert [request.url.params.get("opcode", request.url.path) for request in calls] == [
         DETAIL_PATH,

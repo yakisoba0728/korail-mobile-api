@@ -104,7 +104,7 @@ from korail_mobile_api import CartAddRequest, PriceRecalculationRequest
 request = PriceRecalculationRequest.for_hold(hold, [input("요청할 할인 코드: ")])
 recalculated = client.recalculate_price(request)
 print(hold.received_amount, "->", recalculated.received_amount)
-cart = client.add_to_cart(CartAddRequest(recalculated.pnr_no))  # 선택: 앱처럼 장바구니에 담습니다
+cart = client.add_to_cart(CartAddRequest(pnr_no=recalculated.pnr_no))  # 선택: 앱처럼 장바구니에 담습니다
 print(cart.str_result, cart.h_msg_cd)
 
 hold = recalculated  # 결제는 재계산된 홀드로 합니다

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, TypeAlias, get_args
 
 from ..._core.validation import (
@@ -57,7 +57,7 @@ KorailMileageLedger = Literal["1", "2"]
 KorailMileageMovement = Literal["0", "1", "2"]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MileageHistoryRequest:
     """마일리지 내역의 기간·종류·페이지 조건을 구성합니다.
 
@@ -92,7 +92,7 @@ def build_mileage_history_form(
     }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class OriginalTicketReference:
     """원표 조회와 환불·대리수령 같은 후속 처리에 쓰는 반환 식별자를 구성합니다.
 
@@ -103,7 +103,7 @@ class OriginalTicketReference:
     sale_window_no: str
     sale_date: str
     sale_sequence: str
-    return_password: str
+    return_password: str = field(repr=False)
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -123,10 +123,10 @@ class OriginalTicketReference:
         if not isinstance(ticket, TicketListTicket):
             raise KorailInvalidInputError("ticket must be a TicketListTicket")
         return cls(
-            _required_text(ticket.sale_window_no, "sale_window_no"),
-            _required_text(ticket.return_sale_date, "return_sale_date"),
-            _required_text(ticket.sale_sequence, "sale_sequence"),
-            _required_text(ticket.return_password, "return_password"),
+            sale_window_no=_required_text(ticket.sale_window_no, "sale_window_no"),
+            sale_date=_required_text(ticket.return_sale_date, "return_sale_date"),
+            sale_sequence=_required_text(ticket.sale_sequence, "sale_sequence"),
+            return_password=_required_text(ticket.return_password, "return_password"),
         )
 
 
@@ -176,7 +176,7 @@ def build_original_ticket_inquiry_form(
 KorailSelfSeatChangeRoomClassCode: TypeAlias = str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelfSeatChangeInfoRequest:
     """자율 좌석 변경 대상 역·사유 조회 입력을 구성합니다.
 

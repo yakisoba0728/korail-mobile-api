@@ -624,7 +624,11 @@ def test_inquiry_gate_selection(f8_client_factory, peak: bool, special: bool, ga
 
     client = f8_client_factory(handler)
     client.search_trains(
-        TrainSearchQuery("SYNTHETIC-DEPARTURE", "SYNTHETIC-ARRIVAL", "20990101"),
+        TrainSearchQuery(
+            departure_station="SYNTHETIC-DEPARTURE",
+            arrival_station="SYNTHETIC-ARRIVAL",
+            departure_date="20990101",
+        ),
         peak_season=peak,
         use_special_schedule=special,
     )
@@ -659,13 +663,34 @@ def config() -> KorailConfig:
 
 @pytest.fixture
 def schedule_query() -> AirportBusScheduleQuery:
-    return AirportBusScheduleQuery("20990101", "9001", "9002", "980", "1", "120000", "", "015", "")
+    return AirportBusScheduleQuery(
+        departure_date="20990101",
+        departure_station_code="9001",
+        arrival_station_code="9002",
+        service_code="980",
+        room_class_code="1",
+        departure_time="120000",
+        train_no="",
+        seat_attribute_code="015",
+        reservation_sale_division_code="",
+    )
 
 
 @pytest.fixture
 def seat_query() -> AirportBusSeatInventoryQuery:
     return AirportBusSeatInventoryQuery(
-        "99", "980", "20990101", "99001", "0001", "1", "9001", "9002", "015", "1", "2", 2
+        train_class_code="99",
+        service_code="980",
+        run_date="20990101",
+        train_no="99001",
+        car_no="0001",
+        room_class_code="1",
+        departure_station_code="9001",
+        arrival_station_code="9002",
+        seat_attribute_code="015",
+        departure_run_order="1",
+        arrival_run_order="2",
+        passenger_count=2,
     )
 
 
@@ -1345,7 +1370,11 @@ def test_fallback_wait_budget_restarts_for_each_admission(f8_client_factory) -> 
     client.netfunnel._clock = clock
     client.netfunnel._sleep = clock.sleep
     client.search_trains_with_transfer_fallback(
-        TrainSearchQuery("SYNTHETIC-DEPARTURE", "SYNTHETIC-ARRIVAL", "20990101")
+        TrainSearchQuery(
+            departure_station="SYNTHETIC-DEPARTURE",
+            arrival_station="SYNTHETIC-ARRIVAL",
+            departure_date="20990101",
+        )
     )
     assert api_count == 2 and clock.now == 2
     assert events == ["5101", "API", "5004", "5101", "API", "5004"]

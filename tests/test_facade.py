@@ -108,7 +108,7 @@ def test_past_date_and_unknown_station_do_not_send_search() -> None:
             id="teenager-counted-as-adult",
         ),
         pytest.param(
-            {"continuation": TrainSearchContinuation("0001", "0123")},
+            {"continuation": TrainSearchContinuation(query_station_no="0001", query_train_no="0123")},
             {"qryStNo": ["0001"], "qryStTrnNo": ["0123"]},
             id="continuation-without-station-lookup",
         ),
@@ -173,7 +173,12 @@ def test_ticket_and_login_facades_forward_the_client_options(monkeypatch: pytest
 
         return call
 
-    reference = OriginalTicketReference("SYNTHETIC-WINDOW", "0102", "1", "SYNTHETIC-RETURN")
+    reference = OriginalTicketReference(
+        sale_window_no="SYNTHETIC-WINDOW",
+        sale_date="0102",
+        sale_sequence="1",
+        return_password="SYNTHETIC-RETURN",
+    )
     with Korail(_config()) as korail:
         for name in ("list_tickets", "get_refund_ticket_detail", "login"):
             monkeypatch.setattr(korail.client, name, record(name))
@@ -204,7 +209,12 @@ def test_profile_keeps_token_queue_and_device_fields_consistent() -> None:
     config = build_config_from_profile(profile)
     assert config.dynapath.token_settings is None
     assert config.dynapath.token_provider is not None
-    context = DynapathRequestContext(*("synthetic",) * 9)
+    context = DynapathRequestContext(
+        **dict.fromkeys(
+            ("method", "path", "url", "device", "version", "key", "user_agent", "device_name", "os_version"),
+            "synthetic",
+        )
+    )
     token = config.dynapath.token_provider(context)
     assert token == (
         "2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus"
@@ -217,11 +227,13 @@ def test_profile_keeps_token_queue_and_device_fields_consistent() -> None:
 
 
 def test_profile_rejects_conflicting_token_provider() -> None:
-    profile = KorailDeviceProfile("SYNTHETIC-ID", "MODEL", "16", "BUILD")
+    profile = KorailDeviceProfile(
+        device_id="SYNTHETIC-ID", model="MODEL", android_release="16", build_id="BUILD"
+    )
     with pytest.raises(ValueError, match="configurable DynaPath"):
         build_config_from_profile(profile, base=_config())
     with pytest.raises(ValueError, match="single-line"):
-        KorailDeviceProfile("ID\nWRONG", "MODEL", "16", "BUILD")
+        KorailDeviceProfile(device_id="ID\nWRONG", model="MODEL", android_release="16", build_id="BUILD")
 
 
 def _station_and_search_handler(calls: list[httpx.Request]):
@@ -265,7 +277,7 @@ def test_bad_passengers_are_refused_before_the_station_list() -> None:
 def test_continuation_keeps_the_first_page_moment() -> None:
     """2.6.2: the next page re-read the clock and refused a first-page time over a minute old."""
     calls: list[httpx.Request] = []
-    cursor = TrainSearchContinuation("0001", "0123")
+    cursor = TrainSearchContinuation(query_station_no="0001", query_train_no="0123")
     with Korail(_config(), transport=httpx.MockTransport(_station_and_search_handler(calls))) as korail:
         with pytest.raises(KorailInvalidInputError, match="depart_after"):
             korail.trains.search("서울", "부산", continuation=cursor)

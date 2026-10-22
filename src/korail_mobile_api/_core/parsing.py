@@ -16,7 +16,7 @@
         car_no: int = wire("scarNo", required_int)
         note: str | None = wire("rmkCont")
         rows: tuple[Row, ...] = ()  # 중첩 목록·교차 검사·특수 규칙은 메타데이터 없이 명시 코드로 넘깁니다
-        raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+        raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
     seat = wire_model(Seat, row, "seat", rows=tuple(rows), raw=row)
     seats = wire_models(Seat, _required_read_rows(raw, "seatList", "seat list"), "seat")
