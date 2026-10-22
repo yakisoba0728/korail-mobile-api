@@ -21,15 +21,17 @@
 `OriginalTicketReference`는 네 값이 비어 있지 않은지만 검사하고 판매일의 자릿수는 검사하지 않습니다.
 [`get_ticket_receipt`](#get_ticket_receipt)를 뺀 메서드는 판매일 필드를 잘못 골라도 요청 전에 거절하지 않고 그대로 보내므로, 위 표에 맞는 필드를 넣으세요.
 `TicketListTicket`의 필드는 응답에 없으면 `None`이며, `None`이나 빈 문자열을 넣으면 `OriginalTicketReference`를 만들 때 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
+3.0부터 `OriginalTicketReference.from_ticket(ticket)`은 `return_sale_date`(`MMDD`)를 판매일로 넣어 만듭니다. `YYYYMMDD`를 받는 두 메서드에는 아래처럼 직접 만드세요.
 
 ```python
 from korail_mobile_api import OriginalTicketReference
 
 tickets = client.list_tickets()
 ticket = tickets.reservations[0].tickets[0]
-reference = OriginalTicketReference(
+reference = OriginalTicketReference.from_ticket(ticket)  # MMDD를 받는 메서드용
+sale_reference = OriginalTicketReference(  # YYYYMMDD를 받는 두 메서드용
     sale_window_no=ticket.sale_window_no,
-    sale_date=ticket.return_sale_date,  # MMDD를 받는 메서드용
+    sale_date=ticket.sale_date,
     sale_sequence=ticket.sale_sequence,
     return_password=ticket.return_password,
 )

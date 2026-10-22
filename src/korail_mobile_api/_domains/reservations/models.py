@@ -9,7 +9,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from ..._core.parsing import optional_int, strict_str, wire
+from ..._core.parsing import _optional_scalar_string, optional_int, strict_str, wire
+from ...errors import KorailInvalidInputError, KorailProtocolError
 from ..common.models import BaseKorailResponse
 
 
@@ -319,6 +320,41 @@ class ReservationJourney:
 
 
 @dataclass(frozen=True)
+class HoldReference:
+    """미결제 홀드를 취소할 때 쓰는 PNR·여정 식별자를 담습니다.
+
+    ``ReservationHoldResponse.reference``로 얻거나, 응답을 읽지 못한 예약 원문(예외의 ``raw``)에서 ``from_raw``로 만듭니다.
+    값은 ``cancel_unpaid_hold``가 요청 전에 검사합니다."""
+
+    pnr_no: str
+    #: 여정 수(``h_jrny_cnt``)입니다. 취소 요청에 그대로 보냅니다.
+    journey_count: str
+    #: 첫 여정의 순번(``h_jrny_sqno``)입니다. 없으면 취소 요청에 ``0001``을 보냅니다.
+    journey_sequence: str | None = None
+    #: 첫 여정의 예약 변경번호(``h_rsv_chg_no``)입니다. 없으면 취소 요청에 ``000``을 보냅니다.
+    change_no: str | None = None
+
+    @classmethod
+    def from_raw(cls, raw: Mapping[str, object]) -> HoldReference:
+        """예약 응답 원문에서 만듭니다. PNR(``h_pnr_no``)과 여정 수(``h_jrny_cnt``)만 있으면 되고, 첫 여정 값은 읽을 수 있을 때만 씁니다.
+
+        두 값이 문자열이나 정수가 아니면 ``KorailProtocolError``가 발생합니다."""
+        pnr_no = _optional_scalar_string(raw, "h_pnr_no")
+        journey_count = _optional_scalar_string(raw, "h_jrny_cnt")
+        if pnr_no is None or journey_count is None:
+            raise KorailProtocolError("KORAIL hold reference needs h_pnr_no and h_jrny_cnt", raw=raw)
+        container = raw.get("jrny_infos")
+        rows = container.get("jrny_info") if isinstance(container, Mapping) else None
+        first = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], Mapping) else {}
+        return cls(
+            pnr_no,
+            journey_count,
+            _optional_scalar_string(first, "h_jrny_sqno"),
+            _optional_scalar_string(first, "h_rsv_chg_no"),
+        )
+
+
+@dataclass(frozen=True)
 class ReservationHoldResponse(BaseKorailResponse):
     """홀드(결제 전 예약)의 식별값과 결제 기한·금액을 담습니다.
 
@@ -363,6 +399,19 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: 결제할 수 있는 홀드인지 나타냅니다. 예약대기(``STANDBY``)로 만든 홀드는 ``False``이며, ``pay_with_card``는 이런 홀드를
     #: 요청 전에 거절합니다.
     payable: bool = True
+
+    @property
+    def reference(self) -> HoldReference:
+        """취소에 쓰는 PNR·여정 식별자입니다. PNR이나 여정 수가 없으면 ``KorailInvalidInputError``가 발생합니다."""
+        if self.pnr_no is None or self.journey_count is None:
+            raise KorailInvalidInputError("KORAIL hold reference needs a PNR and a journey count")
+        first = self.journeys[0] if self.journeys else None
+        return HoldReference(
+            self.pnr_no,
+            self.journey_count,
+            first.journey_sequence if first is not None else None,
+            first.reservation_change_no if first is not None else None,
+        )
 
 
 @dataclass(frozen=True)

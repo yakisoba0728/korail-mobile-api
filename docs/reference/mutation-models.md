@@ -22,6 +22,8 @@
 
 ::: korail_mobile_api.ReservationHoldResponse
 
+::: korail_mobile_api.HoldReference
+
 ::: korail_mobile_api.ReservationPaymentCoupon
 
 ::: korail_mobile_api.ReservationPaymentTicket

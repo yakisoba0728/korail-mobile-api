@@ -21,6 +21,7 @@ from ..._core.validation import (
 from ..._core.wire import _is_ascii_digits
 from ...config import KorailConfig
 from ...errors import KorailInvalidInputError
+from .models import TicketListTicket
 
 
 def build_ticket_list_form(
@@ -112,6 +113,21 @@ class OriginalTicketReference:
             (self.return_password, "return_password"),
         ):
             _required_text(value, name)
+
+    @classmethod
+    def from_ticket(cls, ticket: TicketListTicket) -> OriginalTicketReference:
+        """승차권 목록의 한 장에서 원표 반환일(``return_sale_date``, ``MMDD``)을 판매일로 넣어 만듭니다.
+
+        수령자·대리수령 조회처럼 ``YYYYMMDD`` 판매일을 받는 메서드에는 ``sale_date=ticket.sale_date``로 직접 만드세요.
+        값이 없으면 ``KorailInvalidInputError``가 발생합니다."""
+        if not isinstance(ticket, TicketListTicket):
+            raise KorailInvalidInputError("ticket must be a TicketListTicket")
+        return cls(
+            _required_text(ticket.sale_window_no, "sale_window_no"),
+            _required_text(ticket.return_sale_date, "return_sale_date"),
+            _required_text(ticket.sale_sequence, "sale_sequence"),
+            _required_text(ticket.return_password, "return_password"),
+        )
 
 
 def _exact_original_ticket_reference(

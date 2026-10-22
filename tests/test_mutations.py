@@ -18,6 +18,7 @@ from korail_mobile_api import (
     CardPayment,
     CartAddRequest,
     DynapathConfig,
+    HoldReference,
     KorailPassengerCounts,
     KorailSeatAssignment,
     KorailSession,
@@ -41,6 +42,7 @@ from korail_mobile_api import (
 )
 from korail_mobile_api._domains.payments.parsers import parse_refund_ticket_response
 from korail_mobile_api._domains.reservations.forms import build_transfer_reservation_form
+from korail_mobile_api._domains.reservations.parsers import parse_reservation_hold_response
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.constants import KorailReservationJobType as Job
@@ -906,6 +908,36 @@ def test_cancel_skip_check_and_echo_padding(mutation_client) -> None:
     client, requests = mutation_client([BASE], "POST", (case.routes[-1],), expected)
     client.cancel_unpaid_hold(hold(journey_count="0002"), check_first=False)
     assert len(requests) == 1
+
+
+@pytest.mark.parametrize("journeys", [True, False], ids=["first-journey", "fallbacks"])
+def test_cancel_by_reference_sends_the_hold_bytes(mutation_client, journeys: bool) -> None:
+    """3.0 HoldReference: the hold, hold.reference and HoldReference.from_raw(raw) cancel with one identical form,
+    including the 0001/000 fallbacks; from_raw also reads a raw whose hold parse failed (D4)."""
+    raw = hold_raw() if journeys else {**hold_raw(), "jrny_infos": None}
+    case = next(c for c in CASES if c.name == "cancel_unpaid_hold")
+    expected = case.form if journeys else {**case.form, "txtJrnySqno": "0001", "hidRsvChgNo": "000"}
+    parsed = parse_reservation_hold_response(raw)
+    unparseable = {**raw, "h_wct_no": ["not", "a", "string"]}
+    with pytest.raises(KorailProtocolError):
+        parse_reservation_hold_response(unparseable)
+    assert HoldReference.from_raw(unparseable) == HoldReference.from_raw(raw) == parsed.reference
+    sent = []
+    for target in (parsed, parsed.reference, HoldReference.from_raw(unparseable)):
+        client, requests = mutation_client([BASE], "POST", (case.routes[-1],), expected)
+        client.cancel_unpaid_hold(target, check_first=False)
+        sent.append(requests[0].content)
+    assert sent[0] == sent[1] == sent[2]
+
+
+def test_hold_reference_needs_a_pnr_and_journey_count() -> None:
+    raw = hold_raw()
+    for key in ("h_pnr_no", "h_jrny_cnt"):
+        with pytest.raises(KorailProtocolError, match="h_pnr_no and h_jrny_cnt") as caught:
+            HoldReference.from_raw({**raw, key: None})
+        assert caught.value.raw == {**raw, key: None}
+    with pytest.raises(KorailInvalidInputError, match="PNR and a journey count"):
+        _ = hold(journey_count=None).reference
 
 
 def test_cancel_second_stage_failure_is_not_retried(mutation_client) -> None:

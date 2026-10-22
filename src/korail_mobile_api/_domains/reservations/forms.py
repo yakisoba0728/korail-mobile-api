@@ -34,7 +34,7 @@ from ...constants import (
 )
 from ...errors import KorailInvalidInputError
 from ..trains.models import PhysicalSeat, SeatInventoryResponse, TrainScheduleItem, TrainSummary
-from .models import ReservationHoldResponse
+from .models import HoldReference, ReservationHoldResponse
 
 # 병합 홀드 응답의 여정 종류는 선행 "21"·후행 "22" 이지만 요청은 여정을 나누지 않습니다(build_merge_reservation_form).
 # evidence: app 7.0.6 JourneyDefine.java:87-90 (평문은 보호돼 미확인)
@@ -823,22 +823,32 @@ def build_standby_wait_form(
 
 def build_unpaid_reservation_cancel_form(
     config: KorailConfig,
-    response: ReservationHoldResponse,
+    hold: ReservationHoldResponse | HoldReference,
 ) -> dict[str, str]:
-    """응답의 여정 수를 되울립니다. 순번·변경번호는 첫 여정 값을 되울리고, 없을 때만 아래 대체값을 씁니다."""
-    if not isinstance(response, ReservationHoldResponse):
-        raise KorailInvalidInputError("KORAIL cancellation requires an exact reservation hold response")
-    pnr_no = _successful_hold_pnr(
-        response,
-        context="KORAIL cancellation requires a fresh successful unpaid hold",
-    )
-    journey_count = response.journey_count.strip() if isinstance(response.journey_count, str) else ""
+    """홀드의 여정 수를 되울립니다. 순번·변경번호는 첫 여정 값을 되울리고, 없을 때만 아래 대체값을 씁니다."""
+    if isinstance(hold, ReservationHoldResponse):
+        _successful_hold_pnr(hold, context="KORAIL cancellation requires a fresh successful unpaid hold")
+        if not isinstance(hold.journey_count, str):
+            raise KorailInvalidInputError("KORAIL cancellation requires a fresh successful unpaid hold")
+        reference = hold.reference
+    elif isinstance(hold, HoldReference):
+        reference = hold
+        _required_text(reference.pnr_no, "pnr_no")
+        for value, name in (
+            (reference.journey_sequence, "journey_sequence"),
+            (reference.change_no, "change_no"),
+        ):
+            if value is not None:
+                _optional_text(value, name)
+    else:
+        raise KorailInvalidInputError(
+            "KORAIL cancellation requires an exact reservation hold response or a HoldReference"
+        )
+    journey_count = reference.journey_count.strip() if isinstance(reference.journey_count, str) else ""
     # 검사한 값을 그대로 보내며, 0 채움은 유지하고 0 만으로 된 값은 int() 없이 거절합니다.
     if not _is_ascii_digits(journey_count) or not journey_count.lstrip("0"):
         raise KorailInvalidInputError("KORAIL cancellation requires a fresh successful unpaid hold")
-    first = response.journeys[0] if response.journeys else None
-    sequence = first.journey_sequence if first is not None else None
-    change_no = first.reservation_change_no if first is not None else None
+    pnr_no, sequence, change_no = reference.pnr_no, reference.journey_sequence, reference.change_no
     form = _device_version_key(config)
     # 값이 없을 때 앱 결제 화면은 4·3바이트 보호 리터럴을 씁니다. 0001·000 은 그 자리의 라이브러리 값입니다.
     # evidence: app 7.0.6 PayViewModel.java:4678-4686

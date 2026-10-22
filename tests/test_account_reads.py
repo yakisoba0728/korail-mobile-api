@@ -45,6 +45,7 @@ COMMON = [
 DATE = "20300102"
 STAMP = 1_800_000_000_125
 REFERENCE = api.OriginalTicketReference("TEST-WINDOW", "0102", "TEST-SEQUENCE", "TEST-RETURN")
+
 FULL_REFERENCE = replace(REFERENCE, sale_date=DATE)
 SECOND_REFERENCE = replace(FULL_REFERENCE, sale_sequence="TEST-SEQUENCE-2")
 PASS_DATA = api.PassMenuData(commuter_kind_code="TEST-KIND")
@@ -1724,3 +1725,17 @@ def test_passenger_rows_filter_only_non_mappings_and_copy_row_raw() -> None:
     assert result[0].discount_kind_code is None
     assert result[0].raw == row and result[0].raw is not row
     assert result[1].passenger_type_code is None
+
+
+def test_original_ticket_reference_from_a_ticket_list_ticket() -> None:
+    """3.0: from_ticket puts the MMDD return sale date in sale_date, like the documented examples."""
+    ticket = api.TicketListTicket(
+        sale_window_no="TEST-WINDOW",
+        sale_date="20990102",
+        return_sale_date="0102",
+        sale_sequence="TEST-SEQUENCE",
+        return_password="TEST-RETURN",
+    )
+    assert api.OriginalTicketReference.from_ticket(ticket) == REFERENCE
+    with pytest.raises(api.KorailInvalidInputError, match="return_sale_date"):
+        api.OriginalTicketReference.from_ticket(replace(ticket, return_sale_date=None))

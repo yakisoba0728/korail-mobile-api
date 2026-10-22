@@ -353,14 +353,15 @@ except (KorailTransportError, KorailProtocolError) as error:
 
 예약 응답을 읽지 못해 `KorailProtocolError`가 나면 홀드는 서버에 이미 만들어졌을 수 있습니다. 예약번호(PNR)는 예외의 `raw`에 남습니다.
 같은 상세를 읽는 [`get_reservation_hold`](../api/reservations.md#get_reservation_hold)도 같은 이유로 실패할 수 있습니다.
-이는 알려진 한계이며, 예약번호로 취소하는 전용 API는 3.0에서 제공할 예정입니다. 그 전까지는 `raw`의 예약번호와 여정 수로 홀드 객체를 직접 만들어 [`cancel_unpaid_hold`](../api/reservations.md#cancel_unpaid_hold)에 넘깁니다.
-값이 비었거나 형식이 맞지 않으면 `cancel_unpaid_hold`가 요청 전에 거절합니다. 결제용 홀드가 아니므로 `pay_with_card`에는 넘기지 마세요.
+3.0부터는 [`HoldReference.from_raw`][korail_mobile_api.HoldReference]로 `raw`의 예약번호(`h_pnr_no`)와 여정 수(`h_jrny_cnt`)를 읽어 [`cancel_unpaid_hold`](../api/reservations.md#cancel_unpaid_hold)에 넘깁니다.
+첫 여정의 순번·변경 번호는 `raw`에서 읽을 수 있을 때만 쓰고, 없으면 홀드로 취소할 때와 같은 대체값을 보냅니다. 두 값이 없으면 `from_raw`가, 형식이 맞지 않으면 `cancel_unpaid_hold`가 요청 전에 거절합니다.
+`HoldReference`는 취소에만 씁니다. 결제는 [`get_reservation_hold`](../api/reservations.md#get_reservation_hold)로 검증한 홀드로 합니다.
 
 !!! warning "실제로 처리됩니다"
     `cancel_unpaid_hold`는 홀드를 실제로 취소합니다. 취소할 예약번호가 맞는지 [`list_reservations`](../api/reservations.md#list_reservations)로 먼저 확인하세요.
 
 ```python
-from korail_mobile_api import KorailProtocolError, ReservationHoldResponse
+from korail_mobile_api import HoldReference, KorailProtocolError
 
 # train: 위 예제에서 고른 열차
 try:
@@ -368,12 +369,7 @@ try:
 except KorailProtocolError as error:
     if not isinstance(error.raw, dict):
         raise  # 요청 전 입력 검사에서 거절됐거나 JSON 객체가 아닌 응답입니다.
-    pending = ReservationHoldResponse(
-        str_result="SUCC",
-        pnr_no=str(error.raw.get("h_pnr_no") or ""),
-        journey_count=str(error.raw.get("h_jrny_cnt") or ""),
-    )
-    response = client.cancel_unpaid_hold(pending)
+    response = client.cancel_unpaid_hold(HoldReference.from_raw(error.raw))
     print(response.str_result, response.h_msg_cd)
 ```
 

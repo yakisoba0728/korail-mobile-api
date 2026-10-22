@@ -16,6 +16,7 @@ from korail_mobile_api import (
     KorailDeviceProfile,
     KorailInvalidInputError,
     KorailPassengerCounts,
+    OriginalTicketReference,
     ReservationHoldResponse,
     TrainSearchContinuation,
     TrainSummary,
@@ -158,6 +159,36 @@ def test_reservation_detail_is_an_explicit_follow_up(monkeypatch: pytest.MonkeyP
         with pytest.raises(RuntimeError, match="synthetic detail failure"):
             korail.reservations.detail(hold)
         assert calls == ["reserve", "detail"]
+
+
+def test_ticket_and_login_facades_forward_the_client_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    """3.0: tickets.all takes the list mode and dates, tickets.detail wraps the refund-detail read, and Korail.login
+    takes KorailClient.login's keyword options. Each forwards its arguments unchanged in one client call."""
+    calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    def record(name: str):
+        def call(*args: object, **kwargs: object) -> str:
+            calls.append((name, args, kwargs))
+            return name
+
+        return call
+
+    reference = OriginalTicketReference("SYNTHETIC-WINDOW", "0102", "1", "SYNTHETIC-RETURN")
+    with Korail(_config()) as korail:
+        for name in ("list_tickets", "get_refund_ticket_detail", "login"):
+            monkeypatch.setattr(korail.client, name, record(name))
+        korail.tickets.all(2, mode="2", boarding_date_from="20990101", boarding_date_to="20990131")
+        korail.tickets.detail(reference, from_purchase_history=True)
+        korail.login("0000000000", "SYNTHETIC-PASSWORD", input_flag="4", check_valid_pw="N", cust_id=None)
+    assert calls == [
+        ("list_tickets", (2,), {"mode": "2", "boarding_date_from": "20990101", "boarding_date_to": "20990131"}),
+        ("get_refund_ticket_detail", (reference,), {"from_purchase_history": True}),
+        (
+            "login",
+            ("0000000000", "SYNTHETIC-PASSWORD"),
+            {"input_flag": "4", "check_valid_pw": "N", "cust_id": None, "etr_path": ""},
+        ),
+    ]
 
 
 def test_profile_keeps_token_queue_and_device_fields_consistent() -> None:

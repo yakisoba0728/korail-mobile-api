@@ -11,6 +11,7 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from difflib import get_close_matches
 from types import TracebackType
+from typing import Literal
 
 import httpx
 
@@ -28,7 +29,12 @@ from ._domains.airport_bus.models import (
 from ._domains.airport_bus.parsers import parse_limousine_stops
 from ._domains.common.models import BaseKorailResponse, KorailSession, KorailStation
 from ._domains.payments.forms import CardPayment, PaidTicket, RefundCompanion
-from ._domains.payments.models import RefundCommissionResponse, RefundTicketResponse, ReservationPaymentResponse
+from ._domains.payments.models import (
+    RefundCommissionResponse,
+    RefundTicketDetailResponse,
+    RefundTicketResponse,
+    ReservationPaymentResponse,
+)
 from ._domains.reservations.forms import KorailPassengerCounts, TicketReservationDetailRequest
 from ._domains.reservations.models import (
     ReservationHistoryResponse,
@@ -51,7 +57,7 @@ from ._domains.trains.models import (
 )
 from .client import KorailClient
 from .config import KorailConfig
-from .constants import KorailReservationJobType, KorailReserveOption, KorailSeatClass
+from .constants import KorailLoginInputFlag, KorailReservationJobType, KorailReserveOption, KorailSeatClass
 from .errors import KorailInvalidInputError, KorailNoResultsError
 
 KST = timezone(timedelta(hours=9))
@@ -453,8 +459,24 @@ class TicketResource:
     def __init__(self, client: KorailClient) -> None:
         self._client = client
 
-    def all(self, *, page_no: int = 1) -> TicketListResponse:
-        return self._client.list_tickets(page_no)
+    def all(
+        self,
+        page_no: int = 1,
+        *,
+        mode: Literal["1", "2"] = "1",
+        boarding_date_from: str = "",
+        boarding_date_to: str = "",
+    ) -> TicketListResponse:
+        """승차권 목록 한 페이지를 읽습니다(mode 1 은 현재표, 2 는 승차일 범위의 이력)."""
+        return self._client.list_tickets(
+            page_no, mode=mode, boarding_date_from=boarding_date_from, boarding_date_to=boarding_date_to
+        )
+
+    def detail(
+        self, ticket: OriginalTicketReference, *, from_purchase_history: bool = False
+    ) -> RefundTicketDetailResponse:
+        """원표 식별자로 승차권 한 장의 여정·좌석·운임 상세를 조회합니다."""
+        return self._client.get_refund_ticket_detail(ticket, from_purchase_history=from_purchase_history)
 
     def refund_quote(
         self,
@@ -527,8 +549,25 @@ class Korail:
     ) -> None:
         _close_connections(self.close, primary=exc)
 
-    def login(self, member_no: str, password: str) -> KorailSession:
-        return self.client.login(member_no, password)
+    def login(
+        self,
+        member_no: str,
+        password: str,
+        *,
+        input_flag: KorailLoginInputFlag | None = None,
+        check_valid_pw: Literal["Y", "N"] = "Y",
+        cust_id: str | None = "",
+        etr_path: str | None = "",
+    ) -> KorailSession:
+        """``KorailClient.login``과 같은 옵션으로 로그인합니다."""
+        return self.client.login(
+            member_no,
+            password,
+            input_flag=input_flag,
+            check_valid_pw=check_valid_pw,
+            cust_id=cust_id,
+            etr_path=etr_path,
+        )
 
     def logout(self) -> None:
         self.client.logout()

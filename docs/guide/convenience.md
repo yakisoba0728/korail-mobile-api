@@ -108,6 +108,10 @@ with Korail.logged_in(input("회원번호·전화번호·이메일: "), getpass(
     korail.logout()
 ```
 
+`korail.tickets.all(page_no, *, mode="1", boarding_date_from="", boarding_date_to="")`은 `list_tickets`와 같은 옵션을 받고(`mode="2"`는 승차일 범위의 이력),
+`korail.tickets.detail(reference)`는 원표 식별자로 [`get_refund_ticket_detail`](../api/payments.md#get_refund_ticket_detail)을 호출합니다.
+`korail.login(...)`은 `KorailClient.login`과 같은 키워드 옵션을 받습니다. 세 가지 모두 3.0부터입니다.
+
 `logged_in`은 로그인에 실패하면 연결을 닫고 원래 오류를 발생시킵니다. `with`가 끝나면 HTTP 연결을 닫지만 서버 로그아웃을 자동 요청하지는 않습니다. 로그아웃이 필요하면 예제처럼 명시적으로 호출하세요.
 
 ## 예약과 결제 전 확인

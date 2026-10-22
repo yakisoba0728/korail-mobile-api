@@ -247,19 +247,8 @@ first = client.reserve(merge_train, passengers=passengers, job_type=KorailReserv
 ```python
 from korail_mobile_api import MergeSeatsInquiryRequest
 
-when = merge_train.departure_date + merge_train.departure_time
 merge = client.get_merge_seat_options(
-    MergeSeatsInquiryRequest(
-        boarding_datetime=when,
-        run_datetime=when,
-        train_no=merge_train.train_no,
-        departure_station_name=merge_train.departure_station_name,
-        arrival_station_name=merge_train.arrival_station_name,
-        selected_station_name=None,
-        room_class_code="1",
-        seat_attribute_code=merge_train.seat_attribute_code or "015",
-        passenger_count=passengers.total,
-    )
+    MergeSeatsInquiryRequest.from_train(merge_train, passenger_count=passengers.total)
 )
 print([station.name for station in merge.intermediate_stations])
 ```

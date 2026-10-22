@@ -193,6 +193,7 @@ from ._domains.reservations.forms import (
 from ._domains.reservations.models import (
     CartAddResponse,
     CartListResponse,
+    HoldReference,
     ReservationHistoryResponse,
     ReservationHoldResponse,
     TicketDuplicationCheckResponse,
@@ -1675,11 +1676,11 @@ class KorailClient:
 
     def cancel_unpaid_hold(
         self,
-        hold: ReservationHoldResponse,
+        hold: ReservationHoldResponse | HoldReference,
         *,
         check_first: bool = True,
     ) -> BaseKorailResponse:
-        """미결제 홀드를 취소합니다(기본은 가능 여부 확인 뒤 취소).
+        """미결제 홀드나 그 HoldReference 를 취소합니다(기본은 가능 여부 확인 뒤 취소).
 
         서버 상태를 바꾸므로 실패해도 다시 보내지 말고 예약 내역을 확인하십시오."""
         self._require_session("cancellation requires")

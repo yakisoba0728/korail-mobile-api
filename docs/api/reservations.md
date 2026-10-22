@@ -327,7 +327,7 @@ print(response.h_msg_cd)
 
 ```python
 KorailClient.cancel_unpaid_hold(
-    hold: ReservationHoldResponse,
+    hold: ReservationHoldResponse | HoldReference,
     *,
     check_first: bool = True,
 ) -> BaseKorailResponse
@@ -336,6 +336,9 @@ KorailClient.cancel_unpaid_hold(
 예약 메서드가 반환한 홀드를 그대로 넘깁니다.
 `hold`의 `str_result`가 `SUCC`이고, `pnr_no`와 `journey_count`(1 이상의 숫자 문자열)가 있어야 합니다.
 요청에는 이 값과 첫 여정의 순번·변경 번호를 싣습니다. 첫 여정에 값이 없으면 각각 `"0001"`과 `"000"`을 보냅니다.
+
+홀드 대신 [`HoldReference`][korail_mobile_api.HoldReference]를 넘길 수도 있습니다(3.0부터). `hold.reference`나 응답 원문의 `HoldReference.from_raw(raw)`로 만들며, 같은 값이면 홀드를 넘길 때와 같은 요청을 보냅니다.
+`HoldReference`는 `str_result`를 검사하지 않고 `pnr_no`(빈 문자열 불가)와 `journey_count`만 같은 규칙으로 검사합니다.
 
 `check_first`가 `True`(기본값)이면 앱과 같이 취소 가능 여부를 먼저 확인한 뒤 취소 요청을 보냅니다. 확인 요청이 실패하면 예외가 발생하고 취소 요청은 보내지 않습니다.
 `check_first`가 `False`이면 확인 없이 취소 요청만 보냅니다. 어느 요청도 자동으로 다시 보내지 않습니다.
@@ -347,7 +350,7 @@ KorailClient.cancel_unpaid_hold(
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `hold` | [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse] | 필수 | 취소할 홀드입니다. |
+| `hold` | [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse] \| [`HoldReference`][korail_mobile_api.HoldReference] | 필수 | 취소할 홀드나 그 식별자입니다. |
 | `check_first` | `bool` | `True` | 취소 가능 여부를 먼저 확인할지 여부입니다. |
 
 **반환값**
@@ -359,7 +362,7 @@ KorailClient.cancel_unpaid_hold(
 | 예외 | 발생 조건 |
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `hold`가 [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse]가 아니거나, `str_result`가 `SUCC`가 아니거나, `pnr_no`가 비었거나, `journey_count`가 1 이상의 숫자 문자열이 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `hold`가 [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse]나 [`HoldReference`][korail_mobile_api.HoldReference]가 아니거나, 홀드의 `str_result`가 `SUCC`가 아니거나, `pnr_no`가 비었거나, `journey_count`가 1 이상의 숫자 문자열이 아닐 때 |
 
 **정보**
 

@@ -265,6 +265,17 @@ ROWS = [
     Row("cancel-journey-count-text", lambda c: c.cancel_unpaid_hold(_hold(journey_count="abc")), "unpaid hold"),
     Row("cancel-journey-count-zero", lambda c: c.cancel_unpaid_hold(_hold(journey_count="0")), "unpaid hold"),
     Row("cancel-journey-count-none", lambda c: c.cancel_unpaid_hold(_hold(journey_count=None)), "unpaid hold"),
+    Row("cancel-reference-blank-pnr", lambda c: c.cancel_unpaid_hold(api.HoldReference(" ", "1")), "pnr_no"),
+    Row(
+        "cancel-reference-journey-count-zero",
+        lambda c: c.cancel_unpaid_hold(api.HoldReference("SYNTHETIC-PNR", "0")),
+        "unpaid hold",
+    ),
+    Row(
+        "cancel-reference-sequence-type",
+        lambda c: c.cancel_unpaid_hold(api.HoldReference("SYNTHETIC-PNR", "1", 7)),  # type: ignore[arg-type]
+        "journey_sequence",
+    ),
     # Card payment charges the hold's received_amount, and only a fresh payable hold.
     Row("pay-card-type", lambda c: c.pay_with_card(HOLD, "card"), "requires a CardPayment", INVALID),
     Row("pay-hold-type", lambda c: c.pay_with_card({}, CARD), "exact reservation hold response", INVALID),

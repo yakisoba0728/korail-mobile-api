@@ -262,6 +262,20 @@ class FreeSeatCarRequest:
         for item in fields(self):
             _identifier(getattr(self, item.name), item.name)
 
+    @classmethod
+    def from_train(cls, train: TrainSummary) -> FreeSeatCarRequest:
+        """조회한 열차의 운행일·열차 번호·구성 순번·운행 순번을 복사합니다. 누락값은 추측하지 않고 거절합니다."""
+        if not isinstance(train, TrainSummary):
+            raise KorailInvalidInputError("train must be a TrainSummary")
+        return cls(
+            _required_text(train.run_date, "run_date"),
+            train.train_no,
+            _required_text(train.departure_construction_order, "departure_construction_order"),
+            _required_text(train.arrival_construction_order, "arrival_construction_order"),
+            _required_text(train.departure_run_order, "departure_run_order"),
+            _required_text(train.arrival_run_order, "arrival_run_order"),
+        )
+
 
 @dataclass(frozen=True)
 class GuideSeatConditionRequest:
@@ -320,6 +334,36 @@ class MergeSeatsInquiryRequest:
         ):
             _identifier(getattr(self, name), name)
         _passenger_count(self.passenger_count, "passenger_count")
+
+    @classmethod
+    def from_train(
+        cls,
+        train: TrainSummary,
+        *,
+        selected_station_name: str | None = None,
+        room_class_code: str = "1",
+        seat_attribute_code: str | None = None,
+        passenger_count: int = 1,
+    ) -> MergeSeatsInquiryRequest:
+        """첫 홀드 열차의 출발 일시(승차·운행 일시 모두)·열차 번호·역 이름을 복사합니다. 누락값은 추측하지 않고 거절합니다.
+
+        ``seat_attribute_code``가 ``None``이면 열차의 좌석 속성, 그것도 없으면 ``015``를 씁니다(``reserve``와 같은 규칙)."""
+        if not isinstance(train, TrainSummary):
+            raise KorailInvalidInputError("train must be a TrainSummary")
+        departure = _required_text(train.departure_date, "departure_date") + _required_text(
+            train.departure_time, "departure_time"
+        )
+        return cls(
+            departure,
+            departure,
+            train.train_no,
+            _required_text(train.departure_station_name, "departure_station_name"),
+            _required_text(train.arrival_station_name, "arrival_station_name"),
+            selected_station_name,
+            room_class_code,
+            seat_attribute_code if seat_attribute_code is not None else train.seat_attribute_code or "015",
+            passenger_count,
+        )
 
 
 def build_free_seat_car_form(

@@ -974,6 +974,21 @@ def test_station_names_come_from_the_parsed_station_list(rig):
     assert len(calls) == 2
 
 
+def test_free_seat_and_merge_requests_copy_the_searched_train():
+    """3.0 factories copy what the hand-built requests above take from a search row; missing values raise."""
+    assert FreeSeatCarRequest.from_train(TRAIN) == FREE_REQUEST
+    merge = MergeSeatsInquiryRequest.from_train(TRAIN, selected_station_name="SYNTH_MID", passenger_count=2)
+    assert merge == MERGE_REQUEST
+    assert (
+        MergeSeatsInquiryRequest.from_train(replace(TRAIN, seat_attribute_code=None)).seat_attribute_code
+        == "015"
+    )
+    with pytest.raises(KorailInvalidInputError, match="arrival_run_order"):
+        FreeSeatCarRequest.from_train(replace(TRAIN, arrival_run_order=None))
+    with pytest.raises(KorailInvalidInputError, match="departure_station_name"):
+        MergeSeatsInquiryRequest.from_train(replace(TRAIN, departure_station_name=None))
+
+
 def test_direct_no_results_falls_back_once_to_the_first_transfer_page(rig):
     """TrainScheduleViewModel.smali:35513-35566 confirms dialog, not plaintext WRD000061 (protected).
     The app's filter switch is TrainScheduleViewModel.java:3216-3219,11051-11079 (request field TrainScheduleIn.java:95).
