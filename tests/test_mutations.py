@@ -582,6 +582,8 @@ def cases() -> list[Case]:
             None,
             {},
         ),
+        # ProductCancelIn.java:67-70: txtVrRsNo/txtGdSqno both come from get_product_detail
+        # (ProductReservationListScreenKt.java:1252-1253, MyTicketDetailViewModel.java:3290).
         Case(
             "cancel_product_reservation",
             lambda c: c.cancel_product_reservation(
@@ -656,6 +658,8 @@ def cases() -> list[Case]:
             "parse_cart_add_response",
             {},
         ),
+        # NCardInfoOut.java:25-38: response keys are the Kotlin property names (serializer names are protected);
+        # dcntCrdKndMgNo (NCardInfoOut.java:30) is separate from dcntCrdStlTgtNo.
         Case(
             "register_discount_card",
             lambda c: c.register_discount_card(purchase_request()),
@@ -676,6 +680,7 @@ def cases() -> list[Case]:
                 "validity_end_date": "20991231",
             },
         ),
+        # NetworkApi.java:518-520 (POST despite the name); keys from NCardExtensionIn.java:31-34 property names.
         Case(
             "extend_discount_card",
             lambda c: c.extend_discount_card(

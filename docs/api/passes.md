@@ -123,7 +123,7 @@ KorailClient.get_pass_schedule(request: PassScheduleRequest) -> PassScheduleResp
 `departure_station_name`과 `arrival_station_name`에는 역 코드가 아니라 역 이름을 넣습니다.
 `transfer_type_code`와 `weekend_use_flag`의 뜻과 허용 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 날짜는 `YYYYMMDD`, 시각은 `HHMMSS` 형식으로 넣습니다. 라이브러리는 이 요청 값의 형식을 검사하지 않습니다. 빈 문자열인 필드는 요청에서 빠집니다.
-2.6.2부터 `None`인 필드는 요청 전에 `KorailProtocolError`로 거절합니다. 이전에는 `txtSelPage=`처럼 빈 값으로 보냈습니다.
+`None`이나 문자열이 아닌 필드는 `PassScheduleRequest`를 만들 때 [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError]로 거절합니다. 2.6.2 이전에는 `txtSelPage=`처럼 빈 값으로 보냈습니다.
 
 서버가 결과 코드 `WRG000000`(조회 결과 없음)으로 실패를 알리면 예외를 발생시키지 않고, 열차가 없는 응답(`str_result`는 `"FAIL"`)을 반환합니다. 이 응답이 정기권 보유 여부를 뜻하는 것은 아닙니다.
 
@@ -144,6 +144,7 @@ KorailClient.get_pass_schedule(request: PassScheduleRequest) -> PassScheduleResp
 | 예외 | 발생 조건 |
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError] | `PassScheduleRequest`의 필드가 `None`이거나 문자열이 아닐 때(요청을 만들 때 발생) |
 
 **정보**
 

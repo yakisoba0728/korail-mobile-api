@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import time
 from collections import Counter, UserDict
 from copy import deepcopy
@@ -29,6 +30,7 @@ from korail_mobile_api._core.parsing import (
     wire_model,
     wire_models,
 )
+from korail_mobile_api._domains.passes import forms as passes_forms
 from korail_mobile_api._domains.reservations.parsers import _reservation_passengers, parse_cart_list_response
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
@@ -278,7 +280,7 @@ CASES = [
         },
         success(trnScdlList=[{"trnNo": "00999", "runDt": DATE}]),
         (("trains.0.train_no", "00999"), ("trains.0.run_date", DATE)),
-        "NetworkApi.java:340-341; NCardScheduleIn.java:61; 검증 못 함",
+        "NetworkApi.java:340-341; NCardScheduleIn.java:61; NetworkService.java:2387-2393; 검증 못 함",
     ),
     case(
         "get_pass_available_dates",
@@ -351,7 +353,7 @@ CASES = [
             ("items.0.contents.0.title", "TEST-CONTENT"),
             ("items.0.contents.0.pass_data.station_selection", "TEST-STATION"),
         ),
-        "NetworkApi.java:768-769; TrGdMenuLtIn.java:50",
+        "NetworkApi.java:768-769; TrGdMenuLtIn.java:50; TrGdMenuLtOutPass.java:152 (h_seiect_station)",
     ),
     case(
         "get_pass_menu",
@@ -1341,7 +1343,10 @@ def test_commuter_original_ticket_stage(make_client) -> None:
     ],
 )
 def test_known_empty_failures_are_not_successful_rows(method, code, kwargs, make_client) -> None:
-    """CouponOut.java:55; PassScheduleInfoListOut.java:55; ReservationViewOut.java:64; dated empty-result observations."""
+    """CouponOut.java:55; PassScheduleInfoListOut.java:55; ReservationViewOut.java:64; dated empty-result observations.
+
+    WRG000000 is the "no result" notice (assets/error_json.json:4173,14397); no app branch on it was found.
+    """
     payload = {"strResult": "FAIL", "h_msg_cd": code, "h_msg_txt": "SYNTHETIC EMPTY"}
     client, _ = make_client(payload)
     result = getattr(client, method)(**kwargs)
@@ -1374,6 +1379,89 @@ def test_required_method_set_is_exact() -> None:
 def test_ncard_live_status_is_not_promoted(name) -> None:
     """The three N-card read docstrings keep 검증 못 함 (no N-card account to verify with)."""
     assert "검증 못 함" in (getattr(KorailClient, name).__doc__ or "")
+
+
+@pytest.mark.parametrize(
+    "management_no,kind",
+    [("B2N18120402", "B2N"), ("B2N18120403", "B2N"), ("B2N19060502", "MMM"), ("TEST-MANAGEMENT", "MMM")],
+)
+def test_discount_card_for_card_mapping_is_kept(management_no, kind) -> None:
+    """The library split is unchanged although the 7.0.6 NCardDefine switch singles out four B2N1906… products."""
+    request = api.DiscountCardScheduleRequest.for_card(
+        management_no, departure_station_name="TEST-FROM", arrival_station_name="TEST-TO", departure_date=DATE
+    )
+    assert request.card_kind_code == kind
+
+
+def test_discount_card_for_card_doc_points_to_explicit_kind_code() -> None:
+    doc = api.DiscountCardScheduleRequest.for_card.__doc__ or ""
+    assert "B2N1906" in doc and "다르" in doc and "card_kind_code" in doc
+
+
+def test_ncard_menu_id_stays_marked_unverified() -> None:
+    """ReservationMenuId.java:21-22 declares SEAT_ASSIGN and N_CARD separately; both values are protected."""
+    lines = inspect.getsource(passes_forms).splitlines()
+    index = lines.index('KORAIL_DISCOUNT_CARD_MENU_ID = "A2"')
+    assert any("미확인" in line for line in lines[index - 2 : index])
+
+
+@pytest.mark.parametrize("value", [None, 2])
+@pytest.mark.parametrize("name", [item.name for item in dataclass_fields(api.PassScheduleRequest)])
+def test_pass_schedule_request_rejects_non_text_when_built(name, value) -> None:
+    """Before 2.6.2 a None field went out as an empty key= (txtSelPage=); all 12 fields are now checked when built."""
+    with pytest.raises(api.KorailInvalidInputError, match=f"{name} must be a string"):
+        replace(BY_NAME["get_pass_schedule"].kwargs["request"], **{name: value})
+
+
+def test_pass_schedule_request_blank_field_is_still_omitted(make_client) -> None:
+    entry = BY_NAME["get_pass_schedule"]
+    client, calls = make_client(entry.response, lang=None)
+    client.get_pass_schedule(replace(entry.kwargs["request"], page_no=""))
+    assert "txtSelPage" not in dict(wire_pairs(calls[0]))
+
+
+@pytest.mark.parametrize(
+    "request_with,changes,message",
+    [
+        (
+            api.CommuterInitialRequest(PASS_DATA),
+            {"pass_data": api.PassMenuData()},
+            "pass_data.commuter_kind_code",
+        ),
+        (
+            api.CommuterPassengerRequest.from_response(
+                PASS_DATA,
+                api.CommuterInfoResponse(passenger_options=(api.CommuterPassengerOption("TEST-AGE"),)),
+                (1,),
+            ),
+            {"source": api.CommuterInfoResponse(passenger_options=(api.CommuterPassengerOption(),))},
+            "commuter_usage_age_code",
+        ),
+    ],
+)
+def test_commuter_builder_sends_validated_text(request_with, changes, message, make_client) -> None:
+    """The builder uses the validators' str results instead of casting, so a bypassed construction fails before send."""
+    for name, value in changes.items():
+        object.__setattr__(request_with, name, value)
+    client, calls = make_client(BY_NAME["get_commuter_info"].response, lang=None)
+    with pytest.raises(KorailProtocolError, match=f"{message} must not be empty"):
+        client.get_commuter_info(request_with)
+    assert not calls
+
+
+@pytest.mark.parametrize(
+    "value,expected", [(ABSENT_LIST, 0), (None, 0), ("0002", 2), (7, 7), ("TEST", None), (True, None)]
+)
+def test_commuter_int_fields_default_to_zero(value, expected, make_client) -> None:
+    """Psg.java:30-31 and the commuter info avlPrnb* fields are Kotlin Int: missing/null is 0, unreadable is None."""
+    row: dict[str, Any] = {"cmtrUtlAgeCd": "TEST-AGE"}
+    payload = success(psgList=[row])
+    if value is not ABSENT_LIST:
+        row["custAgeFrom"] = payload["avlPrnbFrom"] = value
+    client, _ = make_client(payload)
+    result = client.get_commuter_info(api.CommuterInitialRequest(PASS_DATA))
+    assert result.passenger_options[0].customer_age_from == expected
+    assert result.available_passenger_count_from == expected
 
 
 def test_mode_one_explicit_dates_are_not_silently_erased(make_client) -> None:
