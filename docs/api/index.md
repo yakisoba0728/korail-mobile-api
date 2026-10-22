@@ -1,13 +1,13 @@
 # API 레퍼런스
 
-`KorailClient`의 공개 메서드 85개를 주제별로 나눠 설명합니다. 모든 메서드는 동기식입니다. 상태 표는 [7.0.8 재검증](../verification-708.md)을 기준으로 하며, 이후 추가한 `get_reservation_hold`의 상세 조회는 [2026-09-29 추가 검사](../status.md)에서 확인했습니다. 본문에 적힌 이전 실서버 사례는 [7.0.6 시기 기록](../status.md)과 구별해 읽으세요.
+`KorailClient`의 공개 메서드 83개를 주제별로 나눠 설명합니다. 모든 메서드는 동기식입니다. 상태 표는 [7.0.8 재검증](../verification-708.md)을 기준으로 하며, 이후 추가한 `get_reservation_hold`의 상세 조회는 [2026-09-29 추가 검사](../records.md#230-추가-기능-2026-09-29)에서 확인했습니다. 본문에 적힌 이전 실서버 사례는 [7.0.6 시기 기록](../records.md#706-시기-기존-전체-목록-2026-09-2426)과 구별해 읽으세요. 현재 상태는 [실서버 확인 현황](../status.md)에 있습니다.
 
 [7.0.10 정적 검토](../verification-7010.md)는 별도 범위이며 아래 `7.0.8 확인` 표를 대체하지 않습니다.
-85개 행의 검토는 전체 wire 계약·모든 분기·실서버 호환을 보장하지 않습니다.
+그 검토의 85개 행(3.0 전 메서드 수)은 전체 wire 계약·모든 분기·실서버 호환을 보장하지 않습니다.
 
 ## 클라이언트
 
-::: korail_mobile_api.client.KorailClient
+::: korail_mobile_api.KorailClient
     options:
       members: false
       show_root_heading: true
@@ -22,7 +22,7 @@
 | 로그인 | 호출 전에 `login()`이 필요한지 여부입니다. 대부분의 메서드는 로그인하지 않았으면 요청을 보내지 않고 `KorailAuthError`를 발생시킵니다. 그렇지 않은 메서드는 설명에 따로 적었습니다. |
 | 대기열 | 요청 전에 통과하는 NetFunnel 관문 이름입니다. 관문이 없으면 `-`입니다. 자세한 내용은 [설정](../guide/configuration.md)을 참고하세요. |
 | 상태 변경 | 호출하면 좌석 점유·결제·환불처럼 서버의 상태가 실제로 바뀌는지 여부입니다. |
-| 7.0.8 확인 | `응답 파싱`은 반환 객체를 받았다는 뜻으로 모든 성공 분기를 보장하지 않습니다. `서버 거절`은 서버의 오류 응답까지 확인한 경우, `미실행`은 전제 자료가 없어 호출하지 않은 경우, `오프라인만 확인`은 합성 테스트만 완료한 새 기능, `해당 없음`은 로컬 메서드입니다. 메서드별 근거는 [7.0.8 전수 확인표](../verification-708.md)와 [추가 기능의 확인 현황](../status.md)에 있습니다. |
+| 7.0.8 확인 | `응답 파싱`은 반환 객체를 받았다는 뜻으로 모든 성공 분기를 보장하지 않습니다. `서버 거절`은 서버의 오류 응답까지 확인한 경우, `미실행`은 전제 자료가 없어 호출하지 않은 경우, `오프라인만 확인`은 합성 테스트만 완료한 새 기능, `해당 없음`은 로컬 메서드입니다. 메서드별 근거는 [7.0.8 전수 확인표](../verification-708.md)와 [날짜별 실서버 기록](../records.md)에 있습니다. |
 
 ## 공통 예외
 
@@ -31,15 +31,15 @@
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailTransportError`][korail_mobile_api.errors.KorailTransportError] | 네트워크 오류가 나거나 서버가 2xx가 아닌 HTTP 상태로 응답했을 때 |
-| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 요청 전 입력 검사에 실패했을 때, 응답이 JSON이 아니거나 필수 값이 없어 읽을 수 없을 때 |
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인이 필요한 메서드를 로그인하지 않고 호출했을 때 |
-| [`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError] | 서버 세션이 만료됐을 때(결과 코드 `P058`). 로컬 세션도 비웁니다. |
-| [`KorailAppError`][korail_mobile_api.errors.KorailAppError]와 하위 예외 | 서버가 실패(`FAIL`)로 응답했을 때. 결과 코드에 따라 하위 예외로 나뉩니다. 실패를 응답으로 돌려주는 메서드는 예외를 발생시키지 않습니다. |
-| [`KorailDynaPathError`][korail_mobile_api.errors.KorailDynaPathError] | DynaPath 보호 경로의 응답이 차단 신호였을 때 |
-| [`KorailDynaPathRequiredError`][korail_mobile_api.errors.KorailDynaPathRequiredError] | `KorailConfig(disable_dynapath=True)`로 토큰이 필요한 로그인을 호출했을 때. 로그인 요청은 보내지 않습니다. |
-| [`KorailNetFunnelError`][korail_mobile_api.errors.KorailNetFunnelError] | 대기열을 통과하지 못해 요청을 보내지 않았을 때. `reserve`·`pay`·`reservation_view` 관문은 대기열 서버 오류나 통과 외 응답에서, 모든 관문은 누적 대기 시간이 `netfunnel_wait_limit`를 넘거나 대기 응답에 입장 키가 없을 때 발생합니다. 열차 조회 관문은 대기열 서버 오류 시 대기열 없이 요청을 보냅니다. |
-| [`KorailQueueRejectedError`][korail_mobile_api.errors.KorailQueueRejectedError] | 대기열 서버가 요청을 차단했을 때(`301`, `302`) |
+| [`KorailTransportError`][korail_mobile_api.KorailTransportError] | 네트워크 오류가 나거나 서버가 2xx가 아닌 HTTP 상태로 응답했을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 요청 전 입력 검사에 실패했을 때, 응답이 JSON이 아니거나 필수 값이 없어 읽을 수 없을 때 |
+| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인이 필요한 메서드를 로그인하지 않고 호출했을 때 |
+| [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError] | 서버 세션이 만료됐을 때(결과 코드 `P058`). 로컬 세션도 비웁니다. |
+| [`KorailAppError`][korail_mobile_api.KorailAppError]와 하위 예외 | 서버가 실패(`FAIL`)로 응답했을 때. 결과 코드에 따라 하위 예외로 나뉩니다. 실패를 응답으로 돌려주는 메서드는 예외를 발생시키지 않습니다. |
+| [`KorailDynaPathError`][korail_mobile_api.KorailDynaPathError] | DynaPath 보호 경로의 응답이 차단 신호였을 때 |
+| [`KorailDynaPathRequiredError`][korail_mobile_api.KorailDynaPathRequiredError] | `KorailConfig(disable_dynapath=True)`로 토큰이 필요한 로그인을 호출했을 때. 로그인 요청은 보내지 않습니다. |
+| [`KorailNetFunnelError`][korail_mobile_api.KorailNetFunnelError] | 대기열을 통과하지 못해 요청을 보내지 않았을 때. `reserve`·`pay`·`reservation_view` 관문은 대기열 서버 오류나 통과 외 응답에서, 모든 관문은 누적 대기 시간이 `netfunnel_wait_limit`를 넘거나 대기 응답에 입장 키가 없을 때 발생합니다. 열차 조회 관문은 대기열 서버 오류 시 대기열 없이 요청을 보냅니다. |
+| [`KorailQueueRejectedError`][korail_mobile_api.KorailQueueRejectedError] | 대기열 서버가 요청을 차단했을 때(`301`, `302`) |
 
 ## 전체 메서드
 
@@ -55,13 +55,12 @@
 | [`close`](session.md#close) | HTTP 연결 풀과 대기열 연결 풀을 닫습니다. | 필요 없음 | 아니요 | 해당 없음 |
 | [`get_service_status`](session.md#get_service_status) | 예매 서비스가 열려 있는지 확인합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_app_data`](session.md#get_app_data) | 앱 메인 화면이 쓰는 캐시 파일(버전 정보, 공지, 안내 문구)을 받아 옵니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_notice`](session.md#get_notice) | 앱 메인 캐시에 들어 있는 공지를 읽습니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_common_code`](session.md#get_common_code) | 공통 코드 이름으로 서버의 앱 설정값을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`get_common_codes`](session.md#get_common_codes) | 공통 코드 이름으로 서버의 앱 설정값을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_uuid`](session.md#get_uuid) | 서버가 발급하는 단말 검증값을 받아 옵니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_station_info`](session.md#get_station_info) | 역 데이터의 판본과 수록 역 수를 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_station_data`](session.md#get_station_data) | 전체 역 목록을 코드·이름·좌표와 함께 받아 옵니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`get_station_list_version`](session.md#get_station_list_version) | 역 데이터의 판본과 수록 역 수를 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`list_stations`](session.md#list_stations) | 전체 역 목록을 코드·이름·좌표와 함께 받아 옵니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_train_calendar`](session.md#get_train_calendar) | 지금 예매할 수 있는 운행일 달력을 받아 옵니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_crew_request_list`](session.md#get_crew_request_list) | 승무원 호출 화면에 띄울 요청 사유 목록을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`list_crew_request_reasons`](session.md#list_crew_request_reasons) | 승무원 호출 화면에 띄울 요청 사유 목록을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 
 ### [열차 조회·좌석](trains.md)
 
@@ -72,15 +71,15 @@
 | [`search_trains`](trains.md#search_trains) | 한 구간·한 날짜의 직통 열차를 한 페이지 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`search_transfer_trains`](trains.md#search_transfer_trains) | 같은 조회 조건으로 환승 여정을 한 페이지 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`search_trains_with_transfer_fallback`](trains.md#search_trains_with_transfer_fallback) | 직통 열차가 없을 때만 같은 조건으로 환승 여정을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_transfer_stations`](trains.md#get_transfer_stations) | 한 구간에서 환승할 수 있는 역 목록을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`list_transfer_stations`](trains.md#list_transfer_stations) | 한 구간에서 환승할 수 있는 역 목록을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_train_schedule`](trains.md#get_train_schedule) | 열차 한 편의 정차역과 도착·출발 시각, 지연 정보를 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_seat_cars`](trains.md#get_seat_cars) | 열차 한 편의 호차 목록과 호차별 잔여석·좌석 속성을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_seat_cars`](trains.md#list_seat_cars) | 열차 한 편의 호차 목록과 호차별 잔여석·좌석 속성을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_seat_inventory`](trains.md#get_seat_inventory) | 한 호차의 좌석 배치와 좌석별 판매 가능 여부를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_free_seat_car_info`](trains.md#get_free_seat_car_info) | 열차 한 편의 자유석 호차 안내를 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`get_free_seat_cars`](trains.md#get_free_seat_cars) | 열차 한 편의 자유석 호차 안내를 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_seat_assignment_schedule`](trains.md#get_seat_assignment_schedule) | 좌석배정 예매 화면의 열차 목록을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_merge_seats_inquiry`](trains.md#get_merge_seats_inquiry) | 병합 예약으로 이어 붙일 수 있는 열차 구간과 좌석이 갈리는 중간역을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`get_merge_seat_options`](trains.md#get_merge_seat_options) | 병합 예약으로 이어 붙일 수 있는 열차 구간과 좌석이 갈리는 중간역을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_guide_seat_condition`](trains.md#get_guide_seat_condition) | 도우미석 이용 안내를 조회합니다. | 필요 | 아니요 | 서버 거절 |
-| [`get_price_fare_quote`](trains.md#get_price_fare_quote) | 열차 한두 편의 운임을 예매 전에 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`get_fare_quote`](trains.md#get_fare_quote) | 열차 한두 편의 운임을 예매 전에 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 
 ### [예약](reservations.md)
 
@@ -91,13 +90,13 @@
 | [`reserve`](reservations.md#reserve) | 열차 한 편에 결제 전 예약(홀드)을 만듭니다. | 필요 | 예 | 응답 파싱 |
 | [`reserve_transfer`](reservations.md#reserve_transfer) | 환승 여정의 두 열차를 한 PNR로 홀드합니다. | 필요 | 예 | 응답 파싱 |
 | [`reserve_merge`](reservations.md#reserve_merge) | 병합 예약의 후속 홀드를 만듭니다. | 필요 | 예 | 응답 파싱 |
-| [`confirm_standby_hold`](reservations.md#confirm_standby_hold) | 예약대기 홀드에 문자 알림과 객실 등급 변경 옵션을 저장합니다. | 필요 | 예 | 응답 파싱 |
+| [`set_standby_options`](reservations.md#set_standby_options) | 예약대기 홀드에 문자 알림과 객실 등급 변경 옵션을 저장합니다. | 필요 | 예 | 응답 파싱 |
 | [`cancel_unpaid_hold`](reservations.md#cancel_unpaid_hold) | 결제하지 않은 홀드를 취소합니다. | 필요 | 예 | 응답 파싱 |
-| [`get_reservation_history`](reservations.md#get_reservation_history) | 로그인 계정에 남아 있는 예약(결제 전 홀드 포함)을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_reservations`](reservations.md#list_reservations) | 로그인 계정에 남아 있는 예약(결제 전 홀드 포함)을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_ticket_reservation_detail`](reservations.md#get_ticket_reservation_detail) | PNR로 예약 하나의 여정과 좌석 상세를 다시 읽습니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_reservation_hold`](reservations.md#get_reservation_hold) | 기존 예약번호로 카드 결제용 홀드를 가져옵니다. | 필요 | 아니요 | 응답 파싱 (2026-09-29) |
 | [`check_ticket_duplication`](reservations.md#check_ticket_duplication) | 같은 PNR로 잡혀 있는 예약 건수를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_cart_list`](reservations.md#get_cart_list) | 로그인 계정의 장바구니를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_cart_items`](reservations.md#list_cart_items) | 로그인 계정의 장바구니를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`add_to_cart`](reservations.md#add_to_cart) | 결제 전 홀드를 장바구니에 담습니다. | 필요 | 예 | 응답 파싱 |
 
 ### [결제·환불](payments.md)
@@ -109,10 +108,10 @@
 | [`pay_with_card`](payments.md#pay_with_card) | 홀드를 카드로 결제합니다. | 필요 | 예 | 미실행 |
 | [`recalculate_price`](payments.md#recalculate_price) | 홀드의 할인 조합을 바꿔 결제 금액을 다시 계산합니다. | 필요 | 예 | 서버 거절 |
 | [`get_refund_ticket_detail`](payments.md#get_refund_ticket_detail) | 환불할 승차권의 여정·좌석·운임 상세를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_refund_commission`](payments.md#get_refund_commission) | 승차권 한 장의 예상 환불액과 수수료를 조회합니다. | 필요 | 아니요 | 서버 거절 |
+| [`get_refund_fee`](payments.md#get_refund_fee) | 승차권 한 장의 예상 환불액과 수수료를 조회합니다. | 필요 | 아니요 | 서버 거절 |
 | [`refund`](payments.md#refund) | 발권된 승차권 한 장을 환불합니다. | 필요 | 예 | 미실행 |
-| [`verify_station_ticket_refund`](payments.md#verify_station_ticket_refund) | 역에서 발권한 승차권을 온라인으로 환불할 수 있는지와 금액을 확인합니다. | 필요 | 아니요 | 미실행 |
-| [`execute_station_ticket_refund`](payments.md#execute_station_ticket_refund) | 역에서 발권해 확인을 마친 승차권의 환불을 요청합니다. | 필요 | 예 | 미실행 |
+| [`check_station_ticket_refund`](payments.md#check_station_ticket_refund) | 역에서 발권한 승차권을 온라인으로 환불할 수 있는지와 금액을 확인합니다. | 필요 | 아니요 | 미실행 |
+| [`refund_station_ticket`](payments.md#refund_station_ticket) | 역에서 발권해 확인을 마친 승차권의 환불을 요청합니다. | 필요 | 예 | 미실행 |
 
 ### [승차권·계정](account.md)
 
@@ -120,18 +119,18 @@
 
 | 메서드 | 설명 | 로그인 | 상태 변경 | 7.0.8 확인 |
 |---|---|:-:|:-:|:-:|
-| [`get_ticket_list`](account.md#get_ticket_list) | 로그인 계정의 승차권 목록 한 페이지를 예약별로 묶어 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_tickets`](account.md#list_tickets) | 로그인 계정의 승차권 목록 한 페이지를 예약별로 묶어 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_ticket_receipt`](account.md#get_ticket_receipt) | 승차권 한 장의 영수증과 결제수단을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_korail_point_summary`](account.md#get_korail_point_summary) | 계정의 포인트, 쿠폰·지연할인권 개수, 복지 할인 자격 같은 요약 정보를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`get_point_summary`](account.md#get_point_summary) | 계정의 포인트, 쿠폰·지연할인권 개수, 복지 할인 자격 같은 요약 정보를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_mileage_history`](account.md#get_mileage_history) | 기간 안의 마일리지 적립·사용 내역 한 페이지를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_discount_coupons`](account.md#get_discount_coupons) | 계정이 가진 할인쿠폰 목록 한 페이지를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_delay_discount_tickets`](account.md#get_delay_discount_tickets) | 계정이 가진 지연할인권 목록을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_deposit_banks`](account.md#get_deposit_banks) | 입금 가능한 은행의 코드와 이름 목록을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_customer_trip_info`](account.md#get_customer_trip_info) | 로그인 계정에 저장된 여행 편의설정을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_multi_child_discount_targets`](account.md#get_multi_child_discount_targets) | 다자녀 할인 대상으로 등록된 가족 구성원을 조회합니다. | 필요 | 아니요 | 서버 거절 |
-| [`get_trip_change_dates`](account.md#get_trip_change_dates) | 여정 변경으로 옮겨 갈 수 있는 날짜 목록을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_original_ticket_inquiry`](account.md#get_original_ticket_inquiry) | 여정 변경의 기준이 되는 원표를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_self_seat_change_info`](account.md#get_self_seat_change_info) | 자율 좌석·열차 변경으로 옮겨 갈 수 있는 승차역과 변경 사유를 조회합니다. | 필요 | 아니요 | 서버 거절 |
+| [`list_discount_coupons`](account.md#list_discount_coupons) | 계정이 가진 할인쿠폰 목록 한 페이지를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_delay_discount_tickets`](account.md#list_delay_discount_tickets) | 계정이 가진 지연할인권 목록을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_deposit_banks`](account.md#list_deposit_banks) | 입금 가능한 은행의 코드와 이름 목록을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`get_trip_preferences`](account.md#get_trip_preferences) | 로그인 계정에 저장된 여행 편의설정을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_multi_child_discount_targets`](account.md#list_multi_child_discount_targets) | 다자녀 할인 대상으로 등록된 가족 구성원을 조회합니다. | 필요 | 아니요 | 서버 거절 |
+| [`list_trip_change_dates`](account.md#list_trip_change_dates) | 여정 변경으로 옮겨 갈 수 있는 날짜 목록을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`get_original_tickets`](account.md#get_original_tickets) | 여정 변경의 기준이 되는 원표를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`get_self_seat_change_options`](account.md#get_self_seat_change_options) | 자율 좌석·열차 변경으로 옮겨 갈 수 있는 승차역과 변경 사유를 조회합니다. | 필요 | 아니요 | 서버 거절 |
 | [`get_delay_certificate`](account.md#get_delay_certificate) | 지난 승차권의 지연확인증(열차가 몇 분 늦게 도착했는지)을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_delay_return_receipt`](account.md#get_delay_return_receipt) | 열차 지연으로 돌려받은 지연료의 반환 영수증을 조회합니다. | 필요 | 아니요 | 서버 거절 |
 
@@ -141,11 +140,11 @@
 
 | 메서드 | 설명 | 로그인 | 상태 변경 | 7.0.8 확인 |
 |---|---|:-:|:-:|:-:|
-| [`get_recent_delivery_history`](delivery-checkin.md#get_recent_delivery_history) | 최근에 승차권을 전달했던 수령자 목록을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_recent_delivery_recipients`](delivery-checkin.md#list_recent_delivery_recipients) | 최근에 승차권을 전달했던 수령자 목록을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_delivery_recipient`](delivery-checkin.md#get_delivery_recipient) | N카드 2인 승차권을 전달하기 전에 수령자 후보를 조회합니다. | 필요 | 아니요 | 서버 거절 |
-| [`get_pbp_acceptance_specifications`](delivery-checkin.md#get_pbp_acceptance_specifications) | 전달한 승차권 여러 장의 대리수령 내역을 여정·좌석 단위로 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`retrieve_delivered_ticket`](delivery-checkin.md#retrieve_delivered_ticket) | 다른 회원에게 전달한 승차권을 회수합니다. | 필요 | 예 | 미실행 |
-| [`get_self_checkin_info`](delivery-checkin.md#get_self_checkin_info) | 셀프 체크인으로 등록한 자유석 좌석 정보를 조회합니다. | 필요 | 아니요 | 서버 거절 |
+| [`list_pbp_acceptances`](delivery-checkin.md#list_pbp_acceptances) | 전달한 승차권 여러 장의 대리수령 내역을 여정·좌석 단위로 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`recall_delivered_ticket`](delivery-checkin.md#recall_delivered_ticket) | 다른 회원에게 전달한 승차권을 회수합니다. | 필요 | 예 | 미실행 |
+| [`get_self_checkin`](delivery-checkin.md#get_self_checkin) | 셀프 체크인으로 등록한 자유석 좌석 정보를 조회합니다. | 필요 | 아니요 | 서버 거절 |
 | [`check_self_checkin_seat`](delivery-checkin.md#check_self_checkin_seat) | 좌석의 QR 코드를 스캔한 문자열로 셀프 체크인할 수 있는 좌석을 확인합니다. | 필요 | 아니요 | 미실행 |
 | [`register_self_checkin`](delivery-checkin.md#register_self_checkin) | [`check_self_checkin_seat`](delivery-checkin.md#check_self_checkin_seat)로 확인한 좌석으로 셀프 체크인을 등록합니다. | 필요 | 예 | 미실행 |
 | [`cancel_self_checkin`](delivery-checkin.md#cancel_self_checkin) | 등록한 셀프 체크인을 취소합니다. | 필요 | 예 | 미실행 |
@@ -157,17 +156,16 @@
 | 메서드 | 설명 | 로그인 | 상태 변경 | 7.0.8 확인 |
 |---|---|:-:|:-:|:-:|
 | [`get_pass_menu`](passes.md#get_pass_menu) | 정기권·패스 메뉴 한 갈래의 화면 구성 항목을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_pass_available_dates`](passes.md#get_pass_available_dates) | 정기권 상품 하나의 사용 개시 가능일과 발권 가능일을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`get_pass_availability`](passes.md#get_pass_availability) | 정기권 상품 하나의 사용 개시 가능일과 발권 가능일을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_pass_schedule`](passes.md#get_pass_schedule) | 정기권으로 탈 수 있는 열차 스케줄 한 페이지를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_commuter_kind_menu`](passes.md#get_commuter_kind_menu) | 정기권 종류 하나의 안내 문구와 조회 파라미터를 받아 옵니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_commuter_info`](passes.md#get_commuter_info) | 정기권 예매에 필요한 조건을 세 단계 중 하나로 조회합니다. | 필요 | 아니요 | 서버 거절 |
 | [`get_trip_menu`](passes.md#get_trip_menu) | 여행상품 메뉴 화면에 그릴 항목과 그 안의 문구 묶음을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_discount_card_usage_history`](passes.md#get_discount_card_usage_history) | N카드 한 장을 이미 사용한 여행 내역을 조회합니다. | 필요 | 아니요 | 미실행 |
+| [`list_discount_card_usages`](passes.md#list_discount_card_usages) | N카드 한 장을 이미 사용한 여행 내역을 조회합니다. | 필요 | 아니요 | 미실행 |
 | [`get_discount_card_schedule`](passes.md#get_discount_card_schedule) | N카드로 아직 탈 수 있는 열차를 한 구간에 대해 조회합니다. | 필요 | 아니요 | 서버 거절 |
-| [`register_discount_card`](passes.md#register_discount_card) | 결제 전 N카드 구매를 만듭니다. | 필요 | 예 | 미실행 |
 | [`extend_discount_card`](passes.md#extend_discount_card) | N카드의 유효기간을 실제로 연장합니다. | 필요 | 예 | 미실행 |
 | [`reserve_with_discount_card`](passes.md#reserve_with_discount_card) | N카드로 좌석을 홀드합니다. | 필요 | 예 | 미실행 |
-| [`get_product_reservations`](passes.md#get_product_reservations) | 로그인 계정이 예약한 여행상품 목록 한 페이지를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_product_reservations`](passes.md#list_product_reservations) | 로그인 계정이 예약한 여행상품 목록 한 페이지를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_product_detail`](passes.md#get_product_detail) | 여행상품 예약 한 건의 상세와 취소 조건을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`cancel_product_reservation`](passes.md#cancel_product_reservation) | 여행상품 예약을 취소합니다. | 필요 | 예 | 미실행 |
 
@@ -177,9 +175,9 @@
 
 | 메서드 | 설명 | 로그인 | 상태 변경 | 7.0.8 확인 |
 |---|---|:-:|:-:|:-:|
-| [`get_limousine_schedules`](airport-bus.md#get_limousine_schedules) | 공항버스 운행 편 한 페이지를 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_limousine_seat_inventory`](airport-bus.md#get_limousine_seat_inventory) | 공항버스 한 편의 좌석 배치와 좌석별 판매 가능 여부를 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`reserve_limousine`](airport-bus.md#reserve_limousine) | 공항버스 좌석을 잡아 결제 전 예약(홀드)을 만듭니다. | 필요 | 예 | 응답 파싱 |
-| [`get_maas_menu_list`](airport-bus.md#get_maas_menu_list) | 부가서비스 메뉴를 조회합니다. 전체 메뉴나 승차권 한 건에 대한 메뉴를 받을 수 있습니다. | 필요 | 아니요 | 응답 파싱 |
-| [`get_maas_station_data`](airport-bus.md#get_maas_station_data) | 부가서비스 하나를 이용할 수 있는 역 목록을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_maas_service_details`](airport-bus.md#get_maas_service_details) | 로그인한 계정이 신청한 부가서비스 내역을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_airport_bus_schedules`](airport-bus.md#list_airport_bus_schedules) | 공항버스 운행 편 한 페이지를 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`get_airport_bus_seat_inventory`](airport-bus.md#get_airport_bus_seat_inventory) | 공항버스 한 편의 좌석 배치와 좌석별 판매 가능 여부를 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`reserve_airport_bus`](airport-bus.md#reserve_airport_bus) | 공항버스 좌석을 잡아 결제 전 예약(홀드)을 만듭니다. | 필요 | 예 | 응답 파싱 |
+| [`list_maas_menus`](airport-bus.md#list_maas_menus) | 부가서비스 메뉴를 조회합니다. 전체 메뉴나 승차권 한 건에 대한 메뉴를 받을 수 있습니다. | 필요 | 아니요 | 응답 파싱 |
+| [`list_maas_stations`](airport-bus.md#list_maas_stations) | 부가서비스 하나를 이용할 수 있는 역 목록을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
+| [`list_maas_services`](airport-bus.md#list_maas_services) | 로그인한 계정이 신청한 부가서비스 내역을 조회합니다. | 필요 | 아니요 | 응답 파싱 |

@@ -6,13 +6,12 @@ import sys
 from copy import deepcopy
 from dataclasses import replace
 from inspect import Parameter, signature
-from urllib.parse import parse_qs
 
 import httpx
 import pytest
+from conftest import synthetic_config, wire_form
 
 from korail_mobile_api import (
-    KorailConfig,
     KorailProtocolError,
     KorailTransportError,
     OriginalTicketReference,
@@ -22,11 +21,16 @@ from korail_mobile_api import (
     RefundTicketDetailResponse,
     TicketResource,
 )
-from korail_mobile_api.read_parsers import parse_refund_commission_response
+from korail_mobile_api._domains.payments.parsers import parse_refund_commission_response
 
 
 def _reference():
-    return OriginalTicketReference("SYNTH-WINDOW-A", "1017", "SYNTH-SEQUENCE-A", "SYNTH-PASSWORD-A")
+    return OriginalTicketReference(
+        sale_window_no="SYNTH-WINDOW-A",
+        sale_date="1017",
+        sale_sequence="SYNTH-SEQUENCE-A",
+        return_password="SYNTH-PASSWORD-A",
+    )
 
 
 def _ticket(**changes):
@@ -66,12 +70,7 @@ def _refund_raw():
 def binding_client(scripted_client_factory, f8_logged_in_session):
     """A strict two-route transport: every extra lookup or mutation is observable."""
     recorded = []
-    config = KorailConfig(
-        base_url="https://api.example.invalid",
-        key="SYNTH-KEY",
-        netfunnel_enabled=False,
-        disable_dynapath=True,
-    )
+    config = synthetic_config(key="SYNTH-KEY", netfunnel_enabled=False, disable_dynapath=True)
 
     def make(*, fee_raw=None, refund_reply=None):
         fee = _fee_raw() if fee_raw is None else fee_raw
@@ -89,10 +88,6 @@ def binding_client(scripted_client_factory, f8_logged_in_session):
     for requests in recorded:
         assert all(request.method == "POST" for request in requests)
         assert [request.url.path for request in requests] == paths[: len(requests)]
-
-
-def _form(request):
-    return parse_qs(request.content.decode(), keep_blank_values=True)
 
 
 def _assert_private_error(error, *extra):
@@ -115,7 +110,7 @@ def test_matching_lookup_and_refund_make_exactly_two_http_requests(binding_clien
     unchanged = deepcopy(raw)
     client, requests = binding_client(fee_raw=raw)
 
-    commission = client.get_refund_commission(_reference())
+    commission = client.get_refund_fee(_reference())
     assert commission.raw == unchanged
     assert commission.refund_fee == "400"
     assert commission.refund_amount == "19600"
@@ -126,9 +121,9 @@ def test_matching_lookup_and_refund_make_exactly_two_http_requests(binding_clien
     assert len(requests) == 2
     assert requests[0].url.path.endswith("refunds.CommissionView")
     assert requests[1].url.path.endswith("refunds.RefundsRequest")
-    assert _form(requests[0])["h_orgtk_ret_sale_dt"] == ["1017"]
-    assert _form(requests[1])["h_orgtk_sale_dt"] == ["20991019"]
-    assert _form(requests[1])["tk_ret_tms_dv_cd"] == ["SYNTH-TIMES"]
+    assert wire_form(requests[0])["h_orgtk_ret_sale_dt"] == ["1017"]
+    assert wire_form(requests[1])["h_orgtk_sale_dt"] == ["20991019"]
+    assert wire_form(requests[1])["tk_ret_tms_dv_cd"] == ["SYNTH-TIMES"]
     assert raw == unchanged
     assert commission.raw == unchanged
 
@@ -137,7 +132,7 @@ def test_matching_lookup_and_refund_make_exactly_two_http_requests(binding_clien
 def test_oversized_mileage_is_zero_and_cannot_cover_the_fee(binding_client, limit):
     raw = {**_fee_raw(), "use_psb_mlg_num": "9" * 4301}
     client, requests = binding_client(fee_raw=raw)
-    commission = client.get_refund_commission(_reference())
+    commission = client.get_refund_fee(_reference())
     previous = sys.get_int_max_str_digits()
     try:
         sys.set_int_max_str_digits(limit)
@@ -191,11 +186,11 @@ def test_refund_mileage_comparison_follows_app_int32_rules(binding_client, usabl
     """Keep the SDK's ASCII gate and TextHelper.java:169-181 int32/zero fallback rules."""
     raw = {**_fee_raw(), "use_psb_mlg_num": usable, "ret_fee": fee}
     client, requests = binding_client(fee_raw=raw)
-    commission = client.get_refund_commission(_reference())
+    commission = client.get_refund_fee(_reference())
     if allowed:
         assert client.refund(_ticket(), commission=commission, settle_mileage=True).str_result == "SUCC"
         assert len(requests) == 2
-        assert _form(requests[1])["h_mlg_stl"] == ["Y"]
+        assert wire_form(requests[1])["h_mlg_stl"] == ["Y"]
     else:
         with pytest.raises(KorailProtocolError, match="mileage is below the fee"):
             client.refund(_ticket(), commission=commission, settle_mileage=True)
@@ -230,8 +225,8 @@ def test_quote_for_a_cannot_refund_mismatching_ticket(binding_client, changes):
     raw = _fee_raw()
     unchanged = deepcopy(raw)
     client, requests = binding_client(fee_raw=raw)
-    companion = RefundCompanion("SYNTH-COMPANION-A", "20991231")
-    commission = client.get_refund_commission(_reference(), companion=companion)
+    companion = RefundCompanion(name="SYNTH-COMPANION-A", certificate_no="20991231")
+    commission = client.get_refund_fee(_reference(), companion=companion)
     ticket = _ticket(companion_name=companion.name, companion_certificate_no=companion.certificate_no)
     changed = replace(ticket, **changes)
 
@@ -265,7 +260,7 @@ def test_bound_lookup_still_requires_original_date_and_success(
     binding_client, ticket_changes, commission_changes
 ):
     client, requests = binding_client()
-    commission = client.get_refund_commission(_reference())
+    commission = client.get_refund_fee(_reference())
     # Change public result data only; never manufacture or access private context.
     supplied = replace(commission, **commission_changes)
 
@@ -318,7 +313,9 @@ def test_direct_responses_cannot_forge_binding_from_server_raw(binding_client, s
 
 @pytest.mark.parametrize("original_date", ["1017", None], ids=["original-date", "missing-original-date"])
 def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion(binding_client, original_date):
-    companion = RefundCompanion("SYNTH-COMPANION-A", "20991231")
+    """MyTicketDetailViewModel.java:277,1521 (7.0.6, field by field): the fee lookup uses the original return date,
+    the refund the current sale date; a reissued ticket's sale_date differs from the original's."""
+    companion = RefundCompanion(name="SYNTH-COMPANION-A", certificate_no="20991231")
     detail = RefundTicketDetailResponse(
         str_result="SUCC",
         pnr_no="SYNTH-PNR-A",
@@ -331,7 +328,7 @@ def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion
         companion_birth_date=companion.certificate_no,
     )
     client, requests = binding_client()
-    commission = client.get_refund_commission(_reference(), companion=companion)
+    commission = client.get_refund_fee(_reference(), companion=companion)
     if original_date is None:
         with pytest.raises(KorailProtocolError):
             ticket = PaidTicket.from_refund_detail(detail)
@@ -347,9 +344,9 @@ def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion
 
     assert client.refund(ticket, commission=commission).str_result == "SUCC"
     assert len(requests) == 2
-    assert _form(requests[0])["h_comp_nm"] == [companion.name]
-    assert _form(requests[0])["h_comp_cert_no"] == [companion.certificate_no]
-    assert _form(requests[1])["h_orgtk_sale_dt"] == ["20991019"]
+    assert wire_form(requests[0])["h_comp_nm"] == [companion.name]
+    assert wire_form(requests[0])["h_comp_cert_no"] == [companion.certificate_no]
+    assert wire_form(requests[1])["h_orgtk_sale_dt"] == ["20991019"]
 
 
 def test_new_ticket_identity_fields_are_keyword_only_and_hidden_from_repr(binding_client):
@@ -367,8 +364,9 @@ def test_new_ticket_identity_fields_are_keyword_only_and_hidden_from_repr(bindin
         assert secret not in repr(ticket)
 
     client, requests = binding_client()
-    commission = client.get_refund_commission(
-        _reference(), companion=RefundCompanion(ticket.companion_name, ticket.companion_certificate_no)
+    commission = client.get_refund_fee(
+        _reference(),
+        companion=RefundCompanion(name=ticket.companion_name, certificate_no=ticket.companion_certificate_no),
     )
     # Quote raw has no request identity. Attaching local context must not expose it via repr.
     for secret in ("SYNTH-WINDOW-A", "1017", "SYNTH-SEQUENCE-A", "SYNTH-PASSWORD-A", "20991231"):
@@ -386,7 +384,7 @@ def test_refund_failure_after_quote_is_never_retried(binding_client, failure):
         reply = {"strResult": "SUCC", "h_msg_cd": "IRZ000001", "stlList": [{"stl_mns_cd": []}]}
         expected_error = KorailProtocolError
     client, requests = binding_client(refund_reply=reply)
-    commission = client.get_refund_commission(_reference())
+    commission = client.get_refund_fee(_reference())
     unchanged = deepcopy(commission.raw)
 
     with pytest.raises(expected_error) as caught:
@@ -403,8 +401,8 @@ def test_refund_failure_after_quote_is_never_retried(binding_client, failure):
 def test_ticket_facade_forwards_companion_and_preserves_binding_checks(binding_client, mismatch):
     client, requests = binding_client()
     tickets = TicketResource(client)
-    companion = RefundCompanion("SYNTH-COMPANION-A", "20991231")
-    commission = tickets.refund_fee(_reference(), companion=companion)
+    companion = RefundCompanion(name="SYNTH-COMPANION-A", certificate_no="20991231")
+    commission = tickets.refund_quote(_reference(), companion=companion)
     ticket = _ticket(companion_name=companion.name, companion_certificate_no=companion.certificate_no)
 
     if mismatch:
@@ -417,14 +415,14 @@ def test_ticket_facade_forwards_companion_and_preserves_binding_checks(binding_c
         assert tickets.refund(ticket, commission=commission).str_result == "SUCC"
         assert len(requests) == 2
 
-    assert _form(requests[0])["h_comp_nm"] == [companion.name]
-    assert _form(requests[0])["h_comp_cert_no"] == [companion.certificate_no]
+    assert wire_form(requests[0])["h_comp_nm"] == [companion.name]
+    assert wire_form(requests[0])["h_comp_cert_no"] == [companion.certificate_no]
 
 
 def test_ticket_facade_default_companion_retains_two_request_workflow(binding_client):
     client, requests = binding_client()
     tickets = TicketResource(client)
-    commission = tickets.refund_fee(_reference())
+    commission = tickets.refund_quote(_reference())
 
     assert tickets.refund(_ticket(), commission=commission).str_result == "SUCC"
     assert len(requests) == 2

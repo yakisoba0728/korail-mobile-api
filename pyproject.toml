@@ -54,8 +54,12 @@ dev = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["korail_mobile_api"]
 include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["korail_mobile_api*"]
+namespaces = false
 
 [tool.setuptools.dynamic]
 version = {attr = "korail_mobile_api.__version__"}
@@ -77,7 +81,23 @@ src = ["src"]
 extend-exclude = ["analysis", "build", "dist", ".venv", ".venv-min", ".venv-wheel"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = [
+    "E4", "E7", "E9", "F", "I",
+    "UP", "B", "SIM", "C4", "RUF", "PERF", "FURB", "PIE", "ANN401", "FBT001", "ERA", "FIX", "D1",
+]
+# SIM905: whitespace-split code lists stay denser than one literal per line.
+# TC001-TC003 stay off: moving imports under TYPE_CHECKING breaks runtime get_type_hints.
+ignore = ["D105", "D107", "SIM905"]
+
+[tool.ruff.lint.flake8-bugbear]
+# A frozen dataclass instance is a safe shared default.
+extend-immutable-calls = ["korail_mobile_api._domains.payments.forms.RefundCompanion"]
+
+[tool.ruff.lint.per-file-ignores]
+# tests keep the pre-3.0 rule set (E4/E7/E9/F/I).
+"tests/**" = ["UP", "B", "SIM", "C4", "RUF", "PERF", "FURB", "PIE", "ANN401", "FBT001", "ERA", "FIX", "D1"]
+# Offline checker scripts are run, not imported; their helpers need no docstrings.
+"checks/**" = ["D1"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -87,11 +107,27 @@ line-ending = "lf"
 [tool.pyright]
 include = ["src"]
 pythonVersion = "3.11"
+typeCheckingMode = "strict"
+# Runtime isinstance guards at the trust boundary are required even when the annotation already says so.
+reportUnnecessaryIsInstance = false
+# _core/_domains are private packages whose underscore helpers are shared across modules.
+reportPrivateUsage = false
+reportUnusedFunction = false
 
 [tool.mypy]
 python_version = "3.11"
 mypy_path = "src"
 files = ["src/korail_mobile_api"]
 strict = true
+disallow_any_explicit = true
+enable_error_code = [
+    "ignore-without-code",
+    "truthy-bool",
+    "possibly-undefined",
+    "exhaustive-match",
+    "mutable-override",
+    "deprecated",
+    "redundant-self",
+]
 show_error_codes = true
 pretty = true

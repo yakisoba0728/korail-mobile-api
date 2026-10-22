@@ -18,8 +18,8 @@ from korail_mobile_api import (
     build_config_from_env,
     build_config_from_profile,
 )
-from korail_mobile_api import _transport as transport_module
-from korail_mobile_api._transport import build_transport
+from korail_mobile_api._core import http as transport_module
+from korail_mobile_api._core.http import build_transport
 
 USER = "synthetic-proxy-user"
 SECRET = "synthetic-proxy-secret"
@@ -265,7 +265,24 @@ def test_environment_uses_diagnostic_device_facts(device_env: pytest.MonkeyPatch
     config = build_config_from_env()
     assert config.dynapath.token_settings is None
     assert config.dynapath.token_provider is not None
-    assert config.dynapath.token_provider(DynapathRequestContext(*("synthetic",) * 9)) == (
+    assert config.dynapath.token_provider(
+        DynapathRequestContext(
+            **dict.fromkeys(
+                (
+                    "method",
+                    "path",
+                    "url",
+                    "device",
+                    "version",
+                    "key",
+                    "user_agent",
+                    "device_name",
+                    "os_version",
+                ),
+                "synthetic",
+            )
+        )
+    ) == (
         "2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus"
         "&os=MTY&dm=c3ludGhldGljLW1vZGVs&iid=c3ludGhldGljLWluc3RhbGw"
     )

@@ -172,9 +172,10 @@ def test_f8_distribution_contents_and_metadata(
     assert "korail_mobile_api/py.typed" in wheel
     assert "src/korail_mobile_api/error_messages.json" in source
     assert "korail_mobile_api/error_messages.json" in wheel
+    # Unsupported-call records ship with the tests in the sdist, never in the wheel.
     for name in F8_RECORD_MODULES:
-        assert "src/korail_mobile_api/" + name in source
-        assert "korail_mobile_api/" + name in wheel
+        assert "tests/records/" + name in source
+        assert not any(member.endswith("/" + name) for member in wheel)
     for name in ("contract_api.py", "netfunnel_offline.py", "README.md", "ACCEPTANCE.md"):
         assert "checks/" + name in source
     for name in ("conftest.py", "test_public_api_smoke.py", "test_packaging.py"):
@@ -280,7 +281,7 @@ def test_f8_distribution_contents_and_metadata(
 
 
 def test_f8_unsupported_modules_are_not_imported(f8_subprocess_env: dict[str, str]) -> None:
-    """Record modules ship as source only, not as supported or normally loaded APIs."""
+    """Record modules are test code (tests/records); importing the package loads none of them."""
     code = (
         "import json,sys; sys.path.insert(0,sys.argv[1]); import korail_mobile_api as api; "
         "print(json.dumps([n for n in sys.modules if n.startswith('korail_mobile_api.')]))"
@@ -295,4 +296,4 @@ def test_f8_unsupported_modules_are_not_imported(f8_subprocess_env: dict[str, st
     assert result.returncode == 0, result.stderr
     modules = json.loads(result.stdout)
     for name in F8_RECORD_MODULES:
-        assert "korail_mobile_api." + name.removesuffix(".py") not in modules
+        assert not any(module.endswith("." + name.removesuffix(".py")) for module in modules)

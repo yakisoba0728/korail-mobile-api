@@ -3,26 +3,33 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from urllib.parse import parse_qs
 
 import httpx
 import pytest
+from conftest import synthetic_config, wire_form
 
 from korail_mobile_api import (
     AirportBusResource,
+    AirportBusSchedule,
+    AirportBusStop,
     BaseKorailResponse,
+    DynapathTokenSettings,
     Korail,
     KorailConfig,
+    KorailInvalidInputError,
     KorailNoResultsError,
     KorailPassengerCounts,
     KorailProtocolError,
     KorailSession,
     KorailTransportError,
-    LimousineSchedule,
-    LimousineStop,
     MembershipResource,
+    OriginalTicketReference,
     PaidTicket,
     PriceFareLeg,
+    PriceRecalculationRequest,
+    RefundCompanion,
+    StationRefundExecutionRequest,
+    StationRefundVerificationRequest,
     StationResource,
     TrainResource,
     TrainSummary,
@@ -33,7 +40,7 @@ MOMENT = datetime(2099, 1, 2, 9)
 
 @pytest.fixture
 def config() -> KorailConfig:
-    return KorailConfig(base_url="https://api.example.invalid", netfunnel_enabled=False, disable_dynapath=True)
+    return synthetic_config(netfunnel_enabled=False, disable_dynapath=True)
 
 
 def _row(number: str, time: str = "100000", **fields: object) -> dict[str, object]:
@@ -58,25 +65,92 @@ def test_new_resources_do_not_request_during_construction(config):
         assert isinstance(korail.airport_bus, AirportBusResource)
 
 
+_STATION_REFUND = {
+    "pnr_no": "SYNTHETIC-PNR",
+    "original_sale_date": "20990102",
+    "original_sale_window_no": "0001",
+    "original_sale_sequence": "0001",
+    "original_return_password": "SYNTHETIC-HIDDEN-PASSWORD",
+    "refund_division_code": "1",
+    "refund_reason_code": "1",
+    "ticket_kind_code": "1",
+    "customer_phone": "SYNTHETIC-HIDDEN-PHONE",
+    "refund_amount": "1000",
+    "refund_fee": "0",
+    "customer_name": "SYNTHETIC-HIDDEN-NAME",
+}
+
+
 @pytest.mark.parametrize(
-    "model, marker",
+    "model, attribute",
     [
-        (KorailSession(jsessionid="SYNTHETIC-DEBUG-COOKIE"), "SYNTHETIC-DEBUG-COOKIE"),
-        (BaseKorailResponse(raw={"debug": "SYNTHETIC-DEBUG-RAW"}), "SYNTHETIC-DEBUG-RAW"),
+        (KorailSession(jsessionid="SYNTHETIC-HIDDEN-COOKIE"), "jsessionid"),
+        (KorailSession(raw={"debug": "SYNTHETIC-HIDDEN-RAW"}), "raw"),
+        (BaseKorailResponse(raw={"debug": "SYNTHETIC-HIDDEN-RAW"}), "raw"),
         (
-            PaidTicket("SYNTHETIC-PNR", "20990102", "0001", "0001", "SYNTHETIC-DEBUG-RETURN"),
-            "SYNTHETIC-DEBUG-RETURN",
+            PaidTicket(
+                pnr_no="SYNTHETIC-PNR",
+                sale_date="20990102",
+                sale_window_no="0001",
+                sale_sequence="0001",
+                return_password="SYNTHETIC-HIDDEN-RETURN",
+            ),
+            "return_password",
+        ),
+        (
+            OriginalTicketReference(
+                sale_window_no="0001",
+                sale_date="0102",
+                sale_sequence="0001",
+                return_password="SYNTHETIC-HIDDEN-RETURN",
+            ),
+            "return_password",
+        ),
+        (RefundCompanion(name="SYNTHETIC-HIDDEN-NAME"), "name"),
+        (RefundCompanion(certificate_no="SYNTHETIC-HIDDEN-BIRTH"), "certificate_no"),
+        (
+            StationRefundVerificationRequest(
+                customer_name="SYNTHETIC-HIDDEN-NAME",
+                return_no_1="1",
+                return_no_2="2",
+                return_no_3="3",
+                return_no_4="4",
+            ),
+            "customer_name",
+        ),
+        *(
+            (StationRefundExecutionRequest(**_STATION_REFUND), name)
+            for name in ("original_return_password", "customer_phone", "customer_name")
+        ),
+        (
+            PriceRecalculationRequest(pnr_no="SYNTHETIC-PNR", non_member_no="SYNTHETIC-HIDDEN-NO"),
+            "non_member_no",
+        ),
+        (KorailConfig(advertising_id="SYNTHETIC-HIDDEN-AD-ID"), "advertising_id"),
+        (
+            DynapathTokenSettings(
+                device_id="SYNTHETIC-HIDDEN-DEVICE",
+                as_value="SYNTHETIC",
+                app_start_ts="1",
+                os_version="16",
+                device_model="SYNTHETIC",
+            ),
+            "device_id",
         ),
     ],
 )
-def test_existing_debug_representations_are_not_masked(model, marker):
-    assert marker in repr(model) and marker in str(model)
+def test_caller_secrets_are_hidden_from_debug_representations(model, attribute):
+    """3.0 hides caller-supplied secrets and raw from repr; the attribute itself keeps the real value."""
+    value = getattr(model, attribute)
+    marker = value["debug"] if attribute == "raw" else value
+    assert marker.startswith("SYNTHETIC-HIDDEN")
+    assert marker not in repr(model) and marker not in str(model)
 
 
 @pytest.mark.parametrize("goods", [None, "", "SYNTHETIC-GOODS"])
 def test_fare_factory_copies_identifiers_without_guessing(goods):
     train = TrainSummary(
-        "00007",
+        train_no="00007",
         train_group_code="101",
         train_class_code="00",
         run_date="20990101",
@@ -87,14 +161,14 @@ def test_fare_factory_copies_identifiers_without_guessing(goods):
         goods_no=goods,
     )
     assert PriceFareLeg.from_train(train) == PriceFareLeg(
-        "9901",
-        "9903",
-        "20990101",
-        "00007",
-        "031",
-        "101",
-        "00",
-        goods or None,
+        departure_station_code="9901",
+        arrival_station_code="9903",
+        run_date="20990101",
+        train_no="00007",
+        requested_seat_attribute_code="031",
+        train_group_code="101",
+        train_class_code="00",
+        goods_no=goods or None,
     )
 
 
@@ -134,7 +208,7 @@ def test_fare_factory_rejects_wrong_model():
 @pytest.mark.parametrize("goods", [False, 0, " ", "bad,field"])
 def test_fare_factory_does_not_normalize_invalid_goods_to_missing(goods):
     train = TrainSummary(
-        "00007",
+        train_no="00007",
         train_group_code="101",
         train_class_code="00",
         run_date="20990102",
@@ -151,7 +225,7 @@ def test_fare_factory_does_not_normalize_invalid_goods_to_missing(goods):
 def test_iterator_validates_budget_without_requests(scripted_client_factory, config, max_pages):
     client, requests, _ = scripted_client_factory([], config=config)
     trains = TrainResource(client, StationResource(client), validate_stations=False)
-    with pytest.raises(ValueError, match="max_pages"):
+    with pytest.raises(KorailInvalidInputError, match="max_pages"):
         list(trains.iter_search("출발", "도착", depart_after=MOMENT, max_pages=max_pages))
     assert requests == []
 
@@ -179,7 +253,7 @@ def test_iterator_is_lazy_bounded_and_preserves_search_options(scripted_client_f
     assert next(iterator).train_no == "00007" and len(requests) == 1
     assert [train.train_no for train in iterator] == ["00008"]
     assert len(requests) == 2 and pending == []
-    forms = [parse_qs(request.content.decode()) for request in requests]
+    forms = [wire_form(request) for request in requests]
     for form in forms:
         assert form["txtPsgFlg_1"] == ["2"] and form["txtPsgFlg_2"] == ["1"]
         assert form["adjStnScdlOfrFlg"] == ["Y"]
@@ -204,7 +278,7 @@ def test_iterator_uses_unfiltered_page_and_composite_identity(scripted_client_fa
         ("00007", "9901"),
         ("00007", "9902"),
     ]
-    assert parse_qs(requests[1].content.decode())["txtGoHour"] == ["100000"]
+    assert wire_form(requests[1])["txtGoHour"] == ["100000"]
     assert len(requests) == 2
 
 
@@ -327,7 +401,7 @@ def test_iterator_keeps_original_query_after_long_queue_wait(scripted_client_fac
     )
     trains = TrainResource(client, StationResource(client), validate_stations=False)
     assert len(list(trains.iter_search("출발", "도착", max_pages=2))) == 2
-    assert [parse_qs(request.content.decode())["txtGoHour"] for request in requests] == [["090000"], ["090000"]]
+    assert [wire_form(request)["txtGoHour"] for request in requests] == [["090000"], ["090000"]]
 
 
 @pytest.mark.parametrize(
@@ -348,7 +422,7 @@ def test_membership_dates_and_original_response(
     client, requests, _ = scripted_client_factory([raw], config=config, session=f8_logged_in_session)
     response = MembershipResource(client).mileage(**kwargs, ledger="2", movement="1", page_no=2)
     assert response.raw == raw
-    form = parse_qs(requests[0].content.decode())
+    form = wire_form(requests[0])
     assert (form["qryStDt"][0], form["qryClsDt"][0]) == expected
     assert form["pontTpVal"] == ["2"] and form["qryDvVal"] == ["1"] and form["nowPgNo"] == ["2"]
 
@@ -386,7 +460,7 @@ def test_membership_default_range_uses_today_kst(
         [{"strResult": "SUCC"}], config=config, session=f8_logged_in_session
     )
     MembershipResource(client).mileage()
-    form = parse_qs(requests[0].content.decode())
+    form = wire_form(requests[0])
     assert form["qryStDt"] == ["20990101"] and form["qryClsDt"] == ["20990131"]
 
 
@@ -398,9 +472,9 @@ def test_membership_explicit_early_dates_do_not_compute_default_range(
     )
     membership = MembershipResource(client)
     membership.mileage(start_date=date.min, end_date=date.min)
-    form = parse_qs(requests[0].content.decode())
+    form = wire_form(requests[0])
     assert form["qryStDt"] == form["qryClsDt"] == ["00010101"]
-    with pytest.raises(ValueError, match="30-day"):
+    with pytest.raises(KorailInvalidInputError, match="30-day"):
         membership.mileage(end_date=date.min)
     assert len(requests) == 1
 
@@ -410,7 +484,7 @@ def test_membership_coupons_preserve_page_and_pnr(scripted_client_factory, confi
         [{"strResult": "SUCC"}], config=config, session=f8_logged_in_session
     )
     assert MembershipResource(client).coupons(page_no=2, pnr_no="SYNTHETIC-PNR").items == ()
-    form = parse_qs(requests[0].content.decode())
+    form = wire_form(requests[0])
     assert form["txtSelPage"] == ["2"] and form["pnrNo"] == ["SYNTHETIC-PNR"]
 
 
@@ -433,15 +507,18 @@ def test_bus_stop_cache_refresh_and_name_search(scripted_client_factory, config)
         config=config,
     )
     bus = AirportBusResource(client)
-    assert bus.stops() == (LimousineStop("9901", "시험출발"), LimousineStop("9903", "시험도착"))
+    assert bus.stops() == (
+        AirportBusStop(code="9901", name="시험출발"),
+        AirportBusStop(code="9903", name="시험도착"),
+    )
     assert bus.stops() is bus.stops() and len(requests) == 1
     result = bus.search(" 시험출발 ", "9903", service_code="980", depart_after=MOMENT)
     assert result.raw["extra"] == "kept" and result.schedules == ()
-    form = parse_qs(requests[1].content.decode())
+    form = wire_form(requests[1])
     assert form["dptRsStnCd"] == ["9901"] and form["arvRsStnCd"] == ["9903"]
     assert form["dptDt"] == ["20990102"] and form["dptTm"] == ["090000"]
     assert "rsvSaleDvCd" not in form
-    assert parse_qs(requests[0].content.decode())["code"] == [
+    assert wire_form(requests[0])["code"] == [
         "app.limousine.stationNm",
         "app.limousine.stationCd",
     ]
@@ -472,7 +549,7 @@ def test_bad_bus_catalog_keeps_full_raw_and_is_not_cached(scripted_client_factor
 
 def test_unknown_bus_stop_does_not_send_schedule(scripted_client_factory, config):
     client, requests, _ = scripted_client_factory([_stops()], config=config)
-    with pytest.raises(ValueError, match="정류장"):
+    with pytest.raises(KorailInvalidInputError, match="정류장"):
         AirportBusResource(client).search("없는 정류장", "시험도착", service_code="980", depart_after=MOMENT)
     assert len(requests) == 1 and requests[0].url.path.endswith("common.code.do")
 
@@ -480,7 +557,7 @@ def test_unknown_bus_stop_does_not_send_schedule(scripted_client_factory, config
 def test_ambiguous_bus_name_or_code_does_not_pick_the_first_match(scripted_client_factory, config):
     raw = _stops(**{"app.limousine.stationNm": ["9903", "시험도착"]})
     client, requests, _ = scripted_client_factory([raw], config=config)
-    with pytest.raises(ValueError, match="구분"):
+    with pytest.raises(KorailInvalidInputError, match="구분"):
         AirportBusResource(client).search("9903", "시험도착", service_code="980", depart_after=MOMENT)
     assert len(requests) == 1 and requests[0].url.path.endswith("common.code.do")
 
@@ -524,9 +601,9 @@ def test_bus_seats_copy_schedule_identifiers(scripted_client_factory, config):
     client, requests, _ = scripted_client_factory(
         [{"strResult": "SUCC", "seatList": [], "extra": "kept"}], config=config
     )
-    schedule = LimousineSchedule(
-        train_class_code="98",
-        service_code="980",
+    schedule = AirportBusSchedule(
+        settlement_train_class_code="98",
+        train_group_code="980",
         run_date="20990102",
         train_no="00007",
         departure_station_code="9901",
@@ -536,7 +613,7 @@ def test_bus_seats_copy_schedule_identifiers(scripted_client_factory, config):
     )
     result = AirportBusResource(client).seats(schedule, passenger_count=2)
     assert result.raw["extra"] == "kept" and result.seats == ()
-    form = parse_qs(requests[0].content.decode())
+    form = wire_form(requests[0])
     assert form["trnNo"] == ["00007"] and form["srcarNo"] == ["0001"]
     assert form["dptStnRunOrdr"] == ["001"] and form["arvStnRunOrdr"] == ["002"]
     assert form["totPsgCnt"] == ["2"] and form["isArrow"] == ["false"] and "gdNo" not in form
@@ -545,7 +622,7 @@ def test_bus_seats_copy_schedule_identifiers(scripted_client_factory, config):
 def test_incomplete_bus_schedule_never_sends(scripted_client_factory, config):
     client, requests, _ = scripted_client_factory([], config=config)
     with pytest.raises(KorailProtocolError, match="train_class_code"):
-        AirportBusResource(client).seats(LimousineSchedule())
+        AirportBusResource(client).seats(AirportBusSchedule())
     assert requests == []
 
 
@@ -553,5 +630,5 @@ def test_incomplete_bus_schedule_never_sends(scripted_client_factory, config):
 def test_invalid_bus_passenger_count_never_sends(scripted_client_factory, config, count):
     client, requests, _ = scripted_client_factory([], config=config)
     with pytest.raises(KorailProtocolError, match="passenger_count"):
-        AirportBusResource(client).seats(LimousineSchedule(), passenger_count=count)
+        AirportBusResource(client).seats(AirportBusSchedule(), passenger_count=count)
     assert requests == []

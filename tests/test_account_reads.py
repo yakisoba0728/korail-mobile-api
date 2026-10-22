@@ -2,24 +2,36 @@
 
 from __future__ import annotations
 
+import inspect
+import time
 from collections import Counter, UserDict
 from copy import deepcopy
-from dataclasses import dataclass, is_dataclass, replace
+from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as dataclass_fields
 from typing import Any
-from urllib.parse import parse_qsl
 
-import httpx
 import pytest
+from conftest import synthetic_config, wire_pairs
 
-from korail_mobile_api import read_models as m
-from korail_mobile_api import read_payloads as p
-from korail_mobile_api._parsing import _nullable_scalar_fields, _reservation_passengers
+import korail_mobile_api as api
+from korail_mobile_api import KorailSession
+from korail_mobile_api._core.parsing import (
+    defaulted_str,
+    nullable_str,
+    optional_bool,
+    optional_int,
+    present_str,
+    required_int,
+    required_str,
+    strict_str,
+    wire,
+    wire_model,
+    wire_models,
+)
+from korail_mobile_api._domains.passes import forms as passes_forms
+from korail_mobile_api._domains.reservations.parsers import _reservation_passengers
 from korail_mobile_api.client import KorailClient
-from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import KorailProtocolError, KorailSessionExpiredError
-from korail_mobile_api.models import KorailSession
-from korail_mobile_api.read_parsers import parse_cart_list_response
 
 PREFIX = "/classes/com.korail.mobile."
 COMMON = [
@@ -30,17 +42,20 @@ COMMON = [
 ]
 DATE = "20300102"
 STAMP = 1_800_000_000_125
-REFERENCE = p.OriginalTicketReference("TEST-WINDOW", "0102", "TEST-SEQUENCE", "TEST-RETURN")
+REFERENCE = api.OriginalTicketReference(
+    sale_window_no="TEST-WINDOW", sale_date="0102", sale_sequence="TEST-SEQUENCE", return_password="TEST-RETURN"
+)
+
 FULL_REFERENCE = replace(REFERENCE, sale_date=DATE)
 SECOND_REFERENCE = replace(FULL_REFERENCE, sale_sequence="TEST-SEQUENCE-2")
-PASS_DATA = m.PassMenuData(commuter_kind_code="TEST-KIND")
-DETAIL = m.RefundTicketDetailResponse(
+PASS_DATA = api.PassMenuData(commuter_kind_code="TEST-KIND")
+DETAIL = api.RefundTicketDetailResponse(
     sale_date=DATE,
     original_sale_date="0102",
     original_window_no="TEST-WINDOW",
     original_sale_sequence="TEST-SEQUENCE",
     original_return_password="TEST-RETURN",
-    journeys=(m.RefundTicketJourney(journey_sequence="001"),),
+    journeys=(api.RefundTicketJourney(journey_sequence="001"),),
 )
 ABSENT_LIST = object()
 DELAY_KEYS = ("runDay", "trnNo", "dptRsStnCd", "arvRsStnCd", "arvRsStnNm", "dlayArvFlg", "trnDlayTm")
@@ -132,7 +147,7 @@ class Case:
     method: str
     route: str
     kwargs: dict[str, Any]
-    fields: tuple[tuple[str, str], ...]
+    fields: dict[str, str] | tuple[tuple[str, str], ...]
     response: dict[str, Any]
     checks: tuple[tuple[str, Any], ...]
     source: str
@@ -140,41 +155,24 @@ class Case:
     query: bool = False
     common_lang: bool = True
 
-
-def case(
-    method: str,
-    route: str,
-    kwargs: dict[str, Any],
-    fields: dict[str, str] | tuple[tuple[str, str], ...],
-    response: dict[str, Any],
-    checks: tuple[tuple[str, Any], ...],
-    source: str,
-    **options: Any,
-) -> Case:
-    return Case(
-        method,
-        route,
-        kwargs,
-        tuple(fields.items()) if isinstance(fields, dict) else fields,
-        response,
-        checks,
-        source,
-        **options,
-    )
+    def __post_init__(self) -> None:
+        if isinstance(self.fields, dict):  # a table row may list its fields as a dict
+            object.__setattr__(self, "fields", tuple(self.fields.items()))
 
 
 CASES = [
-    case(
-        "get_cart_list",
+    Case(
+        "list_cart_items",
         "cart.showCartList",
         {"pnr_no": "TEST-PNR", "additional_service_request_no": "TEST-SERVICE"},
         {"pnrNo": "TEST-PNR", "addSrvReqNo": "TEST-SERVICE"},
         success(cart_infos={"cart_info": [{"h_pnr_no": "TEST-PNR", "h_rcvd_amt": "001200"}]}),
         (("items.0.pnr_no", "TEST-PNR"), ("items.0.received_amount", "001200")),
-        "NetworkApi.java:691-692; CartListIn.java:51",
+        "NetworkApi.java:691-692; CartListIn.java:51; CartInfo.java:28-61,281-392 (String fields, h_tk_cnt :51; "
+        "unread getters :35,36,47,48,50; utlClsDt+utlClsTm joined at PayTicketContentKt.java:5234)",
     ),
-    case(
-        "get_deposit_banks",
+    Case(
+        "list_deposit_banks",
         "dlay.dptnBank.do",
         {},
         {},
@@ -183,8 +181,8 @@ CASES = [
         "NetworkApi.java:392-393; DptnBank.java:46-58",
         common_lang=False,
     ),
-    case(
-        "get_delay_discount_tickets",
+    Case(
+        "list_delay_discount_tickets",
         "passCard.DelayDiscountView",
         {"departure_date_to": DATE},
         {"h_page_no": DATE},
@@ -193,28 +191,28 @@ CASES = [
         "NetworkApi.java:352-353; DelayDiscountViewIn.java:50,77",
         query=True,
     ),
-    case(
-        "get_discount_coupons",
+    Case(
+        "list_discount_coupons",
         "passCard.CouponView",
         {"page_no": 2, "pnr_no": "TEST-PNR"},
         {"txtSelPage": "2", "pnrNo": "TEST-PNR"},
         success(coupon_infos={"coupon_info": [{"h_cpn_no": "TEST-COUPON", "h_fdcert_mg_cls_dt": DATE}]}),
-        (("items.0.coupon_no", "TEST-COUPON"), ("items.0.expiration_date", DATE)),
+        (("items.0.coupon_no", "TEST-COUPON"), ("items.0.management_close_date", DATE)),
         "NetworkApi.java:328-329; CouponIn.java:52",
     ),
-    case(
-        "get_korail_point_summary",
+    Case(
+        "get_point_summary",
         "xPoint.MyXPointView",
         {},
         {"point_dv_cd": "0"},
         success(h_korail_point="001200"),
         (("korail_point", "001200"),),
-        "NetworkApi.java:515-516; MyXPointViewIn.java:49",
+        "NetworkApi.java:515-516; MyXPointViewIn.java:49; MyXPointViewOut.java:27-74",
     ),
-    case(
+    Case(
         "get_mileage_history",
         "mlg.amtSpec.do",
-        {"request": p.MileageHistoryRequest(DATE, "20300203", page_no=2)},
+        {"request": api.MileageHistoryRequest(start_date=DATE, end_date="20300203", page_no=2)},
         {
             "pontTpVal": "1",
             "qryDvVal": "0",
@@ -227,8 +225,8 @@ CASES = [
         (("entries.0.departure_date", DATE), ("entries.0.point_amount", "001200")),
         "NetworkApi.java:274-275; AmtSpecIn.java:57",
     ),
-    case(
-        "get_discount_card_usage_history",
+    Case(
+        "list_discount_card_usages",
         "ticket.dcntCrdUseQry.do",
         {"card_no": "TEST-NCARD"},
         {"dcntCrdNo": "TEST-NCARD"},
@@ -236,15 +234,15 @@ CASES = [
         (("items.0.passenger_name", "TEST-PERSON"), ("items.0.run_date", DATE)),
         "NetworkApi.java:218-219; NCardHistoryIn.java:50; 검증 못 함",
     ),
-    case(
+    Case(
         "get_discount_card_schedule",
         "research.dcntCrdScheduleView.do",
         {
-            "request": p.DiscountCardScheduleRequest(
-                "TEST-MANAGEMENT",
-                "TEST-FROM",
-                "TEST-TO",
-                DATE,
+            "request": api.DiscountCardScheduleRequest(
+                card_kind_management_no="TEST-MANAGEMENT",
+                departure_station_name="TEST-FROM",
+                arrival_station_name="TEST-TO",
+                departure_date=DATE,
                 usable_trip_count="2",
                 usage_period_days="30",
                 page_no="3",
@@ -265,10 +263,10 @@ CASES = [
         },
         success(trnScdlList=[{"trnNo": "00999", "runDt": DATE}]),
         (("trains.0.train_no", "00999"), ("trains.0.run_date", DATE)),
-        "NetworkApi.java:340-341; NCardScheduleIn.java:61; 검증 못 함",
+        "NetworkApi.java:340-341; NCardScheduleIn.java:61; NetworkService.java:2387-2393; 검증 못 함",
     ),
-    case(
-        "get_pass_available_dates",
+    Case(
+        "get_pass_availability",
         "pass.passInfoList",
         {"kind_code": "TEST-KIND", "period_code": "TEST-PERIOD", "age_code": "TEST-AGE"},
         {"txtCmtrKndCd": "TEST-KIND", "txtCmtrUtlTrmCd": "TEST-PERIOD", "txtCmtrUtlAgeCd": "TEST-AGE"},
@@ -280,23 +278,23 @@ CASES = [
         (("open_dates", (DATE,)), ("pass_info.0.pnr_no", "TEST-PNR"), ("offices.0.code", "TEST-CODE")),
         "NetworkApi.java:543-544; PassInfoListIn.java:57",
     ),
-    case(
+    Case(
         "get_pass_schedule",
         "pass.passScheduleInfoList",
         {
-            "request": p.PassScheduleRequest(
-                "TEST-TRAIN",
-                DATE,
-                "120000",
-                "TEST-TRANSFER",
-                "TEST-KIND",
-                "TEST-PERIOD",
-                "TEST-AGE",
-                "2",
-                "3",
-                "TEST-FROM",
-                "TEST-TO",
-                "TEST-WEEKEND",
+            "request": api.PassScheduleRequest(
+                selected_train_code="TEST-TRAIN",
+                departure_date=DATE,
+                departure_time="120000",
+                transfer_type_code="TEST-TRANSFER",
+                pass_kind_code="TEST-KIND",
+                pass_period_code="TEST-PERIOD",
+                pass_age_code="TEST-AGE",
+                page_no="2",
+                page_size="3",
+                departure_station_name="TEST-FROM",
+                arrival_station_name="TEST-TO",
+                weekend_use_flag="TEST-WEEKEND",
             )
         },
         {
@@ -317,7 +315,7 @@ CASES = [
         (("schedules.0.trains.0.train_no", "00999"),),
         "NetworkApi.java:563-564; PassScheduleInfoListIn.java:63",
     ),
-    case(
+    Case(
         "get_trip_menu",
         "pass.trGdMenuLt.do",
         {},
@@ -338,9 +336,9 @@ CASES = [
             ("items.0.contents.0.title", "TEST-CONTENT"),
             ("items.0.contents.0.pass_data.station_selection", "TEST-STATION"),
         ),
-        "NetworkApi.java:768-769; TrGdMenuLtIn.java:50",
+        "NetworkApi.java:768-769; TrGdMenuLtIn.java:50; TrGdMenuLtOutPass.java:152 (h_seiect_station)",
     ),
-    case(
+    Case(
         "get_pass_menu",
         "pass.passMenu.do",
         {"menu_no": "TEST-MENU"},
@@ -361,8 +359,8 @@ CASES = [
         ),
         "NetworkApi.java:547-548; PassMenuIn.java:52",
     ),
-    case(
-        "get_crew_request_list",
+    Case(
+        "list_crew_request_reasons",
         "push.crwCallRq.do",
         {},
         {"timeStamp": str(STAMP)},
@@ -370,7 +368,7 @@ CASES = [
         (("items.0.message_code", "TEST-CODE"), ("items.0.content", "TEST-REASON")),
         "NetworkService.java:3952-3955; CommonIn.java:350; CrewCallCommonIn.java:50",
     ),
-    case(
+    Case(
         "get_commuter_kind_menu",
         "push.cmtrKnd.do",
         {"commuter_kind_code": "TEST-KIND"},
@@ -382,10 +380,10 @@ CASES = [
         query=True,
         common_lang=False,
     ),
-    case(
+    Case(
         "get_commuter_info",
         "research.cmtrInfo.do",
-        {"request": p.CommuterInitialRequest(PASS_DATA)},
+        {"request": api.CommuterInitialRequest(pass_data=PASS_DATA)},
         {"jobDvCd": "a", "cmtrKndCd": "TEST-KIND", "psgCnt": "0"},
         success(
             psgList=[
@@ -407,8 +405,8 @@ CASES = [
         ),
         "NetworkApi.java:199-200; CommutationInfoIn.java:64",
     ),
-    case(
-        "get_product_reservations",
+    Case(
+        "list_product_reservations",
         "product.ReservationList",
         {
             "page_no": 2,
@@ -427,7 +425,7 @@ CASES = [
         verb="GET",
         query=True,
     ),
-    case(
+    Case(
         "get_product_detail",
         "product.ReservationDetail",
         {"reservation_no": "TEST-RSV", "reservation_sequence": "0002"},
@@ -441,14 +439,14 @@ CASES = [
         ),
         (
             ("product_name", "TEST-PRODUCT"),
-            ("cancellation_amount", "001200"),
+            ("cancellation_return_amount", "001200"),
             ("included_item_names", ("TEST-ITEM",)),
         ),
         "NetworkApi.java:221-222; ProductDetailIn.java:53",
         verb="GET",
         query=True,
     ),
-    case(
+    Case(
         "get_ticket_receipt",
         "receipt.ReceiptInfo",
         {
@@ -473,8 +471,8 @@ CASES = [
         ),
         "NetworkApi.java:748-749; ReceiptInfo.java:87; StlInfo.java:55; CashReceiptInfo.java:52",
     ),
-    case(
-        "get_reservation_history",
+    Case(
+        "list_reservations",
         "reservation.ReservationView",
         {},
         {"timeStamp": "0"},
@@ -484,25 +482,27 @@ CASES = [
             }
         ),
         (("journeys.0.trains.0.pnr_no", "TEST-PNR"), ("items.0.train_no", "00999")),
-        "NetworkApi.java:635-636; ReservationViewIn.java:50-65",
+        "NetworkApi.java:635-636; ReservationViewIn.java:50-65; ReservationViewOut.java:64; "
+        "ReservationViewOutTrainInfo.java:94,496 (protected deadline slots, h_rsv_amt); "
+        "ReservationViewOutJrnyInfo.java:55 (reservationOut key guessed from the property name)",
     ),
-    case(
+    Case(
         "get_seat_assignment_schedule",
         "research.assignScheduleView.do",
         {
-            "request": p.SeatAssignmentScheduleRequest(
-                "TEST-MENU",
-                DATE,
-                "120000",
-                "TEST-FROM",
-                "TEST-TO",
-                "TEST-GROUP",
-                "TEST-ROOM",
-                "TEST-SEAT",
-                2,
-                "TEST-DETOUR",
-                "TEST-TRANSFER",
-                "TEST-CONNECTION",
+            "request": api.SeatAssignmentScheduleRequest(
+                menu_id="TEST-MENU",
+                departure_date=DATE,
+                departure_time="120000",
+                departure_station_name="TEST-FROM",
+                arrival_station_name="TEST-TO",
+                train_group_code="TEST-GROUP",
+                room_class_code="TEST-ROOM",
+                seat_attribute_code="TEST-SEAT",
+                passenger_count=2,
+                standing_detour_division_name="TEST-DETOUR",
+                transfer_type_code="TEST-TRANSFER",
+                connection_arrival_station_name="TEST-CONNECTION",
             )
         },
         {
@@ -526,8 +526,8 @@ CASES = [
         (("trains.0.train_no", "00999"), ("next_page_flag", "Y")),
         "NetworkApi.java:278-279; AssignScheduleIn.java:63; dated 2026-09-22 slot observation",
     ),
-    case(
-        "get_multi_child_discount_targets",
+    Case(
+        "list_multi_child_discount_targets",
         "cust.mchdDcntTgt.do",
         {"departure_date": DATE},
         {"dptDt": DATE},
@@ -535,8 +535,8 @@ CASES = [
         (("targets.0.customer_family_name", "TEST-PERSON"), ("targets.0.family_sequence", "0002")),
         "NetworkApi.java:491-492; MchdDcntTgtIn.java:51",
     ),
-    case(
-        "get_customer_trip_info",
+    Case(
+        "get_trip_preferences",
         "research.custTripInfo.do",
         {},
         {"custMgNo": "TEST-CUSTOMER", "medDvCd": "03", "regSqno": "0"},
@@ -544,8 +544,8 @@ CASES = [
         (("trips.0.departure_station_name", "TEST-FROM"), ("trips.0.adult_count", "0002")),
         "NetworkApi.java:332-333; CustTripInfoOut.java:51-63",
     ),
-    case(
-        "get_trip_change_dates",
+    Case(
+        "list_trip_change_dates",
         "reservation.tripChgDate.do",
         {"departure_date": DATE},
         {"tripChgDate": DATE},
@@ -555,26 +555,26 @@ CASES = [
         verb="GET",
         query=True,
     ),
-    case(
+    Case(
         "get_delivery_recipient",
         "tk.dlvRcvCust.do",
         {"ticket": FULL_REFERENCE},
         {"saleWctNo": "TEST-WINDOW", "saleDt": DATE, "saleSqno": "TEST-SEQUENCE", "tkRetPwd": "TEST-RETURN"},
         success(**dict.fromkeys(RECIPIENT_KEYS, "TEST")),
         (("acceptance_customer_management_no", "TEST"), ("member_card_no", "TEST")),
-        "NetworkApi.java:372-373; DeliveryRcvCustOut.java:51; 검증 못 함",
+        "NetworkApi.java:372-373; DeliveryRcvCustOut.java:51; DeliveryTicketFormViewModel.java:697-700; 검증 못 함",
     ),
-    case(
+    Case(
         "check_ticket_duplication",
         "ticket.ticketDupCheck.do",
-        {"request": p.TicketDuplicationCheckRequest("TEST-PNR")},
+        {"request": api.TicketDuplicationCheckRequest(pnr_no="TEST-PNR")},
         {"pnrNo": "TEST-PNR"},
         success(rsvCnt="0002"),
         (("reservation_count", "0002"),),
-        "NetworkApi.java:744-745; TicketDupCheckIn.java:51",
+        "NetworkApi.java:744-745; TicketDupCheckIn.java:51; TicketDupCheckOut.java:28,50 (String rsvCnt)",
     ),
-    case(
-        "get_pbp_acceptance_specifications",
+    Case(
+        "list_pbp_acceptances",
         "tk.pbpAcepSpec.do",
         {"tickets": (FULL_REFERENCE, SECOND_REFERENCE)},
         (
@@ -584,10 +584,11 @@ CASES = [
         ),
         PBP_BODY,
         (("tickets.0.journeys.0.seats.0.car_no", 2), ("tickets.0.pnr_no", "TEST")),
-        "NetworkApi.java:368-369; DeliveredTicketOut.java:50; Tk.java:54; Jrny.java:60; Seat.java:53",
+        "NetworkApi.java:368-369; DeliveredTicketOut.java:50; Tk.java:54; Jrny.java:60; Seat.java:35,53 (int scarNo; "
+        "the quoted-int Json setting is protected, NetworkServiceKt.java:15-31)",
     ),
-    case(
-        "get_original_ticket_inquiry",
+    Case(
+        "get_original_tickets",
         "research.tripChgOgtk.do",
         {"tickets": (REFERENCE, replace(REFERENCE, sale_sequence="TEST-SEQUENCE-2"))},
         (
@@ -610,12 +611,21 @@ CASES = [
             ]
         ),
         (("tickets.0.pnr_no", "TEST-PNR"), ("tickets.0.journeys.0.seats.0.car_no", "0002")),
-        "NetworkApi.java:235-236; OgTicketInquiryIn.java:53; ChangeOrtkInfo.java:52",
+        "NetworkApi.java:235-236; OgTicketInquiryIn.java:53; ChangeOrtkInfo.java:52; OgTicketInquiryOut.java:27; "
+        "OrgTk.java:28-52 (keys are attribute-name guesses); JrnyInfo.java:29-63; SeatInfo.java:25-51",
     ),
-    case(
-        "get_self_seat_change_info",
+    Case(
+        "get_self_seat_change_options",
         "self.seatChgInfo.do",
-        {"request": p.SelfSeatChangeInfoRequest(DATE, "00999", "TEST-FROM", "TEST-TO", "1")},
+        {
+            "request": api.SelfSeatChangeInfoRequest(
+                run_date=DATE,
+                train_no="00999",
+                departure_station_code="TEST-FROM",
+                arrival_station_code="TEST-TO",
+                room_class_code="1",
+            )
+        },
         {"runDt": DATE, "trnNo": "00999", "dptRsStnCd": "TEST-FROM", "arvRsStnCd": "TEST-TO", "psrmClCd": "1"},
         success(
             trnNo="00999", chgStnList=[{"dptRsStnNm": "TEST-STATION"}], chgRsnList=[{"qryCode": "TEST-REASON"}]
@@ -625,10 +635,11 @@ CASES = [
             ("stations.0.departure_station_name", "TEST-STATION"),
             ("reasons.0.query_code", "TEST-REASON"),
         ),
-        "NetworkApi.java:807-808; SeatAvailabilityIn.java:55",
+        "NetworkApi.java:807-808; SeatAvailabilityIn.java:55; SeatAvailabilityOut.java:28-42; ChgStnInfo.java:21-35; "
+        "ChgRsnInfo.java:21-24 (serializer names protected, ChgRsnInfo$$serializer.java:34-36: keys are guesses)",
     ),
-    case(
-        "get_recent_delivery_history",
+    Case(
+        "list_recent_delivery_recipients",
         "tk.rcntDlvHst.do",
         {},
         {"custMgNo": "TEST-CUSTOMER"},
@@ -639,10 +650,10 @@ CASES = [
         ),
         "NetworkApi.java:595-596; RecentDeliveryHistoryOut.java:51-63; DeliveryHistoryData.java:52",
     ),
-    case(
+    Case(
         "get_ticket_reservation_detail",
         "certification.ReservationList",
-        {"request": p.TicketReservationDetailRequest("TEST-PNR")},
+        {"request": api.TicketReservationDetailRequest(pnr_no="TEST-PNR")},
         {"hidPnrNo": "TEST-PNR"},
         success(
             h_pnr_no="TEST-PNR",
@@ -662,12 +673,16 @@ CASES = [
             ("journeys.0.run_date", DATE),
             ("journeys.0.seats.0.total_discount_amount", "001200"),
         ),
-        "NetworkApi.java:423-424; TicketRsvInquiryIn.java:51",
+        "NetworkApi.java:423-424; TicketRsvInquiryIn.java:51; ReservationOutJrnyInfo.java:86,305 (h_arv_dt); "
+        "ReservationOutSeatInfo.java:33,81,269 (h_tot_disc_amt); h_psg_tp_dv_nm only in BasketTicketDataKt.java:44",
     ),
-    case(
-        "get_refund_commission",
+    Case(
+        "get_refund_fee",
         "refunds.CommissionView",
-        {"ticket": REFERENCE, "companion": p.RefundCompanion("TEST-COMPANION", "TEST-CERTIFICATE")},
+        {
+            "ticket": REFERENCE,
+            "companion": api.RefundCompanion(name="TEST-COMPANION", certificate_no="TEST-CERTIFICATE"),
+        },
         {
             "h_orgtk_ret_sale_dt": "0102",
             "h_orgtk_wct_no": "TEST-WINDOW",
@@ -678,9 +693,11 @@ CASES = [
         },
         success(ret_amt="001200", ret_fee="0000", prg_psb_flg="Y"),
         (("refund_amount", "001200"), ("refund_fee", "0000"), ("proceed_possible_flag", "Y")),
-        "NetworkApi.java:599-600; RefundCommissionIn.java:59",
+        "NetworkApi.java:598-600; RefundCommissionIn.java:32-42,59 (h_orgtk_ret_sale_dt differs from the refund's "
+        "h_orgtk_sale_dt, RefundTicketIn.java:38; compaNm/compaBrth from MyTicketDetailViewModel.java:277, "
+        "FTicketDetailViewModel.java:179); RefundCommissionOut.java:35-41,62,140-164",
     ),
-    case(
+    Case(
         "get_refund_ticket_detail",
         "refunds.SelTicketInfo",
         {"ticket": REFERENCE, "from_purchase_history": True, "txt_index": "TEST-INDEX"},
@@ -696,17 +713,27 @@ CASES = [
             h_pnr_no="TEST-PNR",
             ticket_infos={"ticket_info": [{"h_trn_no": "00999", "tk_seat_info": [{"h_seat_no": "TEST-SEAT"}]}]},
             h_qrcode="TEST-QR",
+            dcnt_crd_info={"h_dcnt_crd_no": "TEST-NCARD", "appSegList": [{"stlbDturDvNm": "TEST-DETOUR"}]},
         ),
         (
             ("pnr_no", "TEST-PNR"),
             ("journeys.0.train_no", "00999"),
             ("journeys.0.seats.0.seat_no", "TEST-SEAT"),
             ("qr_code", "TEST-QR"),
+            ("discount_card.card_no", "TEST-NCARD"),
+            ("discount_card.sections.0.detour_division_name", "TEST-DETOUR"),
         ),
-        "NetworkApi.java:407-408; TicketDetailIn.java:57",
+        "NetworkApi.java:406-408; TicketDetailIn.java:57; TicketDetailOut.java:38,117 (unaliased keys are attribute-name "
+        "guesses: retPsbFlg :71, pbpAcepTgtFlg :65,1936 vs the list's MyTicketListOutTicket.java:92,300 and "
+        "MyTicketBaseViewModel.java:769; mlgSaveFlg/mlgSaveTgt are absent from :39-91), h_abrd_ps_nm/s_brth "
+        ":410,418, h_qrcode :478, dcnt_crd_info :49,438 (DiscountCardInfo.java:27-32,113,117; term extension "
+        "NCardTicketSectionKt.smali:7821-7843; AppSegInfo.java:24-37 with stlbDturDvNm :36 copied to "
+        "AssignScheduleIn.java:41 stlbDturDvNm1 via NCardReservationViewModel.java:154-164 and "
+        "TrainScheduleViewModel.java:2639,2730-2736,2749,2831); retPsbFlg Y is no refund guarantee "
+        "(NormalTicketSectionKt.java:951)",
     ),
-    case(
-        "get_ticket_list",
+    Case(
+        "list_tickets",
         "myTicket.MyTicketNewList.do",
         {"page_no": 3, "mode": "2", "boarding_date_from": DATE, "boarding_date_to": "20300203"},
         {
@@ -735,9 +762,9 @@ CASES = [
             ("reservations.0.tickets.0.return_sale_date", "0102"),
             ("reservations.0.tickets.0.trains.0.train_no", "00999"),
         ),
-        "NetworkApi.java:511-512; MyTicketListIn.java:62",
+        "NetworkApi.java:511-512; MyTicketListIn.java:62; MyTicketListOut.java:82 (pnr_list)",
     ),
-    case(
+    Case(
         "get_delay_certificate",
         "dlay.athnIsu.do",
         {"ticket": REFERENCE},
@@ -749,19 +776,22 @@ CASES = [
         },
         success(dlayList=[{**dict.fromkeys(DELAY_KEYS, "TEST"), "trnDlayTm": "15", "runDt": DATE}]),
         (("delays.0.delay_minutes", "15"), ("delays.0.run_date", DATE)),
-        "NetworkApi.java:347-349; DelayCertificateIn.java:52; DelayCertificate.java:57",
+        "NetworkApi.java:347-349; DelayCertificateIn.java:52; DelayCertificate.java:57; the detail's "
+        "h_orgtk_wct_no/h_orgtk_ret_sale_dt/h_orgtk_sale_sqno/h_orgtk_ret_pwd (DelayCertificateViewModel.java:94); "
+        "delayed tickets only (NormalTicketSectionKt.java:786-808)",
     ),
-    case(
+    Case(
         "get_delay_return_receipt",
         "dlay.pymtRcet.do",
         {"ticket": REFERENCE},
         {"saleWctNo": "TEST-WINDOW", "saleDd": "0102", "saleSqno": "TEST-SEQUENCE", "tkRetPwd": "TEST-RETURN"},
         success(retDt=DATE, dlayFarePymtMtdNm="TEST-METHOD", dlayFareRetAmt="1200"),
         (("return_amount", "1200"), ("payment_method_name", "TEST-METHOD")),
-        "NetworkApi.java:355-357; DelayReturnReceiptIn.java:52; DelayReturnReceiptOut.java:53-69",
+        "NetworkApi.java:355-357; DelayReturnReceiptIn.java:52; DelayReturnReceiptOut.java:53-69; same values as "
+        "the delay certificate (DelayReturnReceiptViewModel.java:88; TicketReceiptRouteKt.java:309-313)",
     ),
-    case(
-        "get_self_checkin_info",
+    Case(
+        "get_self_checkin",
         "checkin.info.do",
         {"detail": DETAIL},
         {
@@ -773,9 +803,10 @@ CASES = [
         },
         success(**{**dict.fromkeys(CHECKIN_INFO_KEYS, "TEST"), "seatNo": "7A"}),
         (("seat_no", "7A"),),
-        "NetworkApi.java:674-676; SelfCheckInInfoIn.java:55; SelfCheckInInfoOut.java:56-59",
+        "NetworkApi.java:674-676; SelfCheckInInfoIn.java:55; SelfCheckInInfoOut.java:56-59,146; "
+        "saleDt is h_sale_dt (SelfCheckInResultViewModel.java:111-112,249-250)",
     ),
-    case(
+    Case(
         "check_self_checkin_seat",
         "checkin.psbFlg.do",
         {"detail": DETAIL, "qr_code": "TEST-QR"},
@@ -789,7 +820,10 @@ CASES = [
         },
         success(consList=[{**dict.fromkeys(CHECKIN_SEAT_KEYS, "TEST"), "cpsNo": "TEST-CPS"}]),
         (("seats.0.cps_no", "TEST-CPS"),),
-        "NetworkApi.java:678-680; SelfCheckInPossibleIn.java:56; ConsList.java:63-101",
+        "NetworkApi.java:678-680; SelfCheckInPossibleIn.java:56; ConsList.java:63-101; "
+        "saleDd is h_orgtk_ret_sale_dt (SelfCheckInInfoViewModel.java:102-108); qrcode is the seat-table QR, "
+        "not h_qrcode (SelfCheckInInfoRouteKt.java:241-254, strings.xml:3245-3247); the app registers the "
+        "first row (SelfCheckInInfoViewModel.java:151-153); SelfCheckInPossibleOut.java:50-55",
     ),
 ]
 BY_NAME = {c.method: c for c in CASES}
@@ -798,7 +832,7 @@ BY_NAME = {c.method: c for c in CASES}
 @pytest.fixture(autouse=True)
 def fixed_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pin the timestamp sent by timestamp-bearing forms. conftest.f8_block_sockets blocks the network."""
-    monkeypatch.setattr(p.time, "time", lambda: STAMP / 1000)
+    monkeypatch.setattr(time, "time", lambda: STAMP / 1000)
 
 
 @pytest.fixture
@@ -806,16 +840,17 @@ def make_client(scripted_client_factory):
     """NetworkService.java:15320-15427: observe the encoded request, not just the builder."""
 
     def make(response: dict[str, Any], *, lang: str | None = "TEST-LANG", **config_changes: Any):
-        config = KorailConfig(
-            base_url="https://offline.invalid",
-            device="TEST-DEVICE",
-            version="TEST-VERSION",
-            key="TEST-KEY",
-            advertising_id="TEST-ADVERTISING",
-            lang=lang,
-            netfunnel_enabled=False,
-            disable_dynapath=True,
-            **config_changes,
+        config = synthetic_config(
+            **{
+                "device": "TEST-DEVICE",
+                "version": "TEST-VERSION",
+                "key": "TEST-KEY",
+                "advertising_id": "TEST-ADVERTISING",
+                "lang": lang,
+                "netfunnel_enabled": False,
+                "disable_dynapath": True,
+                **config_changes,
+            }
         )
         session = KorailSession(
             jsessionid="TEST-SESSION", customer_no="TEST-CUSTOMER", member_card_no="TEST-MEMBER"
@@ -830,11 +865,11 @@ def make_client(scripted_client_factory):
     "name,expected",
     [
         (
-            "get_ticket_list",
+            "list_tickets",
             "Device Version AppVersion Key lang txtIndex h_abrd_dt_from h_abrd_dt_to txtDeviceId hiduserYn h_page_no",
         ),
         (
-            "get_refund_commission",
+            "get_refund_fee",
             "Device Version AppVersion Key lang "
             "h_orgtk_ret_sale_dt h_orgtk_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_comp_nm h_comp_cert_no",
         ),
@@ -846,10 +881,10 @@ def test_forms_follow_the_app_dto_order(name, expected, make_client) -> None:
     entry = BY_NAME[name]
     client, calls = make_client(entry.response)
     kwargs = dict(entry.kwargs)
-    if name == "get_ticket_list":
+    if name == "list_tickets":
         kwargs.update(boarding_date_from="20300101", boarding_date_to="20300131")
     else:
-        kwargs["companion"] = p.RefundCompanion("TEST-NAME", "TEST-CERT")
+        kwargs["companion"] = api.RefundCompanion(name="TEST-NAME", certificate_no="TEST-CERT")
     getattr(client, name)(**kwargs)
     assert [key for key, _ in wire_pairs(calls[0])] == expected.split()
 
@@ -875,11 +910,6 @@ def attr_path(obj: Any, path: str) -> Any:
     return obj
 
 
-def wire_pairs(request: httpx.Request, query: bool = False) -> list[tuple[str, str]]:
-    data = request.url.query if query else request.content
-    return parse_qsl(data.decode("utf-8"), keep_blank_values=True)
-
-
 @pytest.mark.parametrize("entry", CASES, ids=lambda c: c.method)
 @pytest.mark.parametrize("lang", [None, "TEST-LANG", ""])
 def test_account_read_contract(entry: Case, lang: str | None, make_client) -> None:
@@ -902,7 +932,7 @@ def test_account_read_contract(entry: Case, lang: str | None, make_client) -> No
         else [pair for pair in COMMON if pair[0] != "AppVersion"]
     )
     common += [("lang", lang)] if lang and entry.common_lang else []
-    assert Counter(wire_pairs(request, entry.query)) == Counter(common + list(entry.fields)), entry.source
+    assert Counter(wire_pairs(request, query=entry.query)) == Counter(common + list(entry.fields)), entry.source
     if entry.query:
         assert request.content == b""
     else:
@@ -912,7 +942,7 @@ def test_account_read_contract(entry: Case, lang: str | None, make_client) -> No
     assert result.raw == payload
     for path, expected in entry.checks:
         assert attr_path(result, path) == expected, (entry.method, path, entry.source)
-    if entry.method == "get_pbp_acceptance_specifications":
+    if entry.method == "list_pbp_acceptances":
         assert [v for k, v in wire_pairs(request) if k == "tkRetNo"] == [
             v for k, v in entry.fields if k == "tkRetNo"
         ]
@@ -921,11 +951,11 @@ def test_account_read_contract(entry: Case, lang: str | None, make_client) -> No
 # (method, path to object containing required fields, required keys).
 # These literal masks follow the generated constructors, not Python implementation.
 REQUIRED_GROUPS = [
-    ("get_deposit_banks", ("dptnBank", 0), ("dptnBankCd", "dptnBankNm")),  # DptnBank.java:46 mask 3
-    ("get_customer_trip_info", (), ("mainList",)),  # CustTripInfoOut.java:51 mask 8
-    ("get_trip_change_dates", (), ("tripChgDates",)),  # TipChgDateInquiryOut.java:53 mask 16
-    ("get_recent_delivery_history", (), ("acepList",)),  # RecentDeliveryHistoryOut.java:51-57 mask 24
-    ("get_recent_delivery_history", ("acepList", 0), RECENT_KEYS),  # DeliveryHistoryData.java:52 mask 63
+    ("list_deposit_banks", ("dptnBank", 0), ("dptnBankCd", "dptnBankNm")),  # DptnBank.java:46 mask 3
+    ("get_trip_preferences", (), ("mainList",)),  # CustTripInfoOut.java:51 mask 8
+    ("list_trip_change_dates", (), ("tripChgDates",)),  # TipChgDateInquiryOut.java:53 mask 16
+    ("list_recent_delivery_recipients", (), ("acepList",)),  # RecentDeliveryHistoryOut.java:51-57 mask 24
+    ("list_recent_delivery_recipients", ("acepList", 0), RECENT_KEYS),  # DeliveryHistoryData.java:52 mask 63
     (
         "get_delay_certificate",
         ("dlayList", 0),
@@ -933,15 +963,15 @@ REQUIRED_GROUPS = [
     ),  # DelayCertificate.java:57-60 mask 255 (runDt nullable)
     ("check_self_checkin_seat", ("consList", 0), CHECKIN_SEAT_KEYS),  # ConsList.java:63-65 mask 65535
     ("get_delivery_recipient", (), RECIPIENT_KEYS),  # DeliveryRcvCustOut.java:51 mask 120
-    ("get_pbp_acceptance_specifications", (), ("tkList",)),  # DeliveredTicketOut.java:50 mask 8
-    ("get_pbp_acceptance_specifications", ("tkList", 0), (*PBP_TICKET_KEYS, "jrnyList")),  # Tk.java:54 mask 63
+    ("list_pbp_acceptances", (), ("tkList",)),  # DeliveredTicketOut.java:50 mask 8
+    ("list_pbp_acceptances", ("tkList", 0), (*PBP_TICKET_KEYS, "jrnyList")),  # Tk.java:54 mask 63
     (
-        "get_pbp_acceptance_specifications",
+        "list_pbp_acceptances",
         ("tkList", 0, "jrnyList", 0),
         (*PBP_JOURNEY_KEYS, "seatList"),
     ),  # Jrny.java:60 mask 1023
     (
-        "get_pbp_acceptance_specifications",
+        "list_pbp_acceptances",
         ("tkList", 0, "jrnyList", 0, "seatList", 0),
         (*PBP_SEAT_KEYS, "scarNo"),
     ),  # Seat.java:53 mask 31
@@ -990,7 +1020,8 @@ def test_required_missing_preserves_entire_response(name, path, key, make_client
 
 
 @pytest.mark.parametrize(
-    "name,path,key", [r for r in MISSING_CASES if not (r[0] == "get_recent_delivery_history" and r[1] == ())]
+    "name,path,key",
+    [r for r in MISSING_CASES if not (r[0] == "list_recent_delivery_recipients" and r[1] == ())],
 )
 def test_required_nonnullable_null_rejected(name, path, key, make_client) -> None:
     """ReceiptInfo.java:87-156; Seat.java:53-70; DptnBank.java:46-58: non-null fields."""
@@ -1009,7 +1040,7 @@ def test_recent_required_nullable_is_not_missing(key, make_client) -> None:
     payload = deepcopy(RECENT_BODY)
     payload[key] = None
     client, _ = make_client(payload)
-    result = client.get_recent_delivery_history()
+    result = client.list_recent_delivery_recipients()
     assert result.raw == payload
     assert (
         (result.recipients == ()) if key == "acepList" else (result.changed_acceptance_reservation_no is None)
@@ -1043,7 +1074,7 @@ def test_required_string_wrong_type_preserves_raw(value, make_client) -> None:
     payload["tkList"][0]["jrnyList"][0]["seatList"][0]["seatNo"] = value
     client, _ = make_client(payload)
     with pytest.raises(KorailProtocolError) as error:
-        client.get_pbp_acceptance_specifications((FULL_REFERENCE,))
+        client.list_pbp_acceptances((FULL_REFERENCE,))
     assert error.value.raw == payload
 
 
@@ -1051,19 +1082,19 @@ def test_trip_date_string_array_integer_compatibility(make_client) -> None:
     """TipChgDateInquiryOut.java:28-30,53-64; String members follow §3.6 integer normalization."""
     payload = success(tripChgDates=[20300102, "20300103"])
     client, _ = make_client(payload)
-    assert client.get_trip_change_dates(DATE).trip_change_dates == (DATE, "20300103")
+    assert client.list_trip_change_dates(DATE).trip_change_dates == (DATE, "20300103")
 
 
 @pytest.mark.parametrize(
     "name,payload",
     [
         *[
-            ("get_trip_change_dates", success(tripChgDates=bad))
+            ("list_trip_change_dates", success(tripChgDates=bad))
             for bad in [None, {}, "20300102", [None], [True], [1.5], [{}]]
         ],
-        *[("get_customer_trip_info", success(mainList=bad)) for bad in ([1], {}, "TEST")],
+        *[("get_trip_preferences", success(mainList=bad)) for bad in ([1], {}, "TEST")],
         *[
-            ("get_recent_delivery_history", {**RECENT_BODY, "acepList": bad})
+            ("list_recent_delivery_recipients", {**RECENT_BODY, "acepList": bad})
             for bad in ([None], [1], {}, "TEST")
         ],
     ],
@@ -1089,14 +1120,14 @@ def test_recent_changed_reservation_no_is_lenient(value, make_client) -> None:
     else:
         payload["chgePbpRsvNo"] = value
     client, _ = make_client(payload)
-    result = client.get_recent_delivery_history()
+    result = client.list_recent_delivery_recipients()
     assert result.raw == payload and result.changed_acceptance_reservation_no is None
     assert len(result.recipients) == 1
 
 
 @pytest.mark.parametrize(
     "name,key",
-    [("check_self_checkin_seat", "consList"), *(("get_self_checkin_info", key) for key in CHECKIN_INFO_KEYS)],
+    [("check_self_checkin_seat", "consList"), *(("get_self_checkin", key) for key in CHECKIN_INFO_KEYS)],
 )
 def test_checkin_required_nullable_keys(name, key, make_client) -> None:
     """SelfCheckInPossibleOut.java:50-55 and SelfCheckInInfoOut.java:56-59: required keys whose value may
@@ -1140,12 +1171,12 @@ def test_delay_certificate_run_date_is_optional_like_the_live_server(make_client
 
 def test_checkin_forms_omit_the_journey_sequence_without_journeys(make_client) -> None:
     """TicketDetailOut.java:1718-1727: without journeys the app's jrnySqno is null, which the library omits."""
-    entry = BY_NAME["get_self_checkin_info"]
+    entry = BY_NAME["get_self_checkin"]
     client, calls = make_client(entry.response)
-    client.get_self_checkin_info(replace(DETAIL, journeys=()))
+    client.get_self_checkin(replace(DETAIL, journeys=()))
     assert "jrnySqno" not in dict(wire_pairs(calls[0]))
     with pytest.raises(KorailProtocolError):
-        client.get_self_checkin_info(replace(DETAIL, original_window_no=None))
+        client.get_self_checkin(replace(DETAIL, original_window_no=None))
     with pytest.raises(KorailProtocolError):
         client.check_self_checkin_seat(DETAIL, "")
     assert len(calls) == 1
@@ -1159,12 +1190,12 @@ def test_checkin_forms_omit_the_journey_sequence_without_journeys(make_client) -
         if c.method
         not in {
             "get_ticket_receipt",
-            "get_customer_trip_info",
-            "get_trip_change_dates",
+            "get_trip_preferences",
+            "list_trip_change_dates",
             "get_delivery_recipient",
-            "get_pbp_acceptance_specifications",
-            "get_recent_delivery_history",
-            "get_self_checkin_info",
+            "list_pbp_acceptances",
+            "list_recent_delivery_recipients",
+            "get_self_checkin",
             "check_self_checkin_seat",
         }
     ],
@@ -1182,7 +1213,7 @@ def test_optional_invalid_values_remain_raw(make_client) -> None:
     """RefundCommissionOut.java:62: optional scalars are tolerant, not newly mandatory."""
     payload = success(ret_amt={}, ret_fee=True, synthetic_unknown=[7])
     client, _ = make_client(payload)
-    result = client.get_refund_commission(REFERENCE)
+    result = client.get_refund_fee(REFERENCE)
     assert result.refund_amount is None and result.refund_fee is None
     assert result.raw == payload
 
@@ -1190,12 +1221,12 @@ def test_optional_invalid_values_remain_raw(make_client) -> None:
 @pytest.mark.parametrize(
     "entry,kwargs,expected",
     [
-        (BY_NAME["get_cart_list"], {}, {}),
-        (BY_NAME["get_discount_coupons"], {}, {"txtSelPage": "1"}),
-        (BY_NAME["get_product_reservations"], {}, {"txtSelPage": "1", "txtCntPerPage": "20"}),
+        (BY_NAME["list_cart_items"], {}, {}),
+        (BY_NAME["list_discount_coupons"], {}, {"txtSelPage": "1"}),
+        (BY_NAME["list_product_reservations"], {}, {"txtSelPage": "1", "txtCntPerPage": "20"}),
         (BY_NAME["get_product_detail"], {"reservation_no": "TEST-RSV"}, {"txtVrRsNo": "TEST-RSV"}),
         (
-            BY_NAME["get_refund_commission"],
+            BY_NAME["get_refund_fee"],
             {"ticket": REFERENCE},
             {
                 "h_orgtk_ret_sale_dt": "0102",
@@ -1205,12 +1236,19 @@ def test_optional_invalid_values_remain_raw(make_client) -> None:
             },
         ),
         (
-            BY_NAME["get_self_seat_change_info"],
-            {"request": p.SelfSeatChangeInfoRequest(DATE, "00999", "TEST-FROM", "TEST-TO")},
+            BY_NAME["get_self_seat_change_options"],
+            {
+                "request": api.SelfSeatChangeInfoRequest(
+                    run_date=DATE,
+                    train_no="00999",
+                    departure_station_code="TEST-FROM",
+                    arrival_station_code="TEST-TO",
+                )
+            },
             {"runDt": DATE, "trnNo": "00999", "dptRsStnCd": "TEST-FROM", "arvRsStnCd": "TEST-TO"},
         ),
         (
-            BY_NAME["get_ticket_list"],
+            BY_NAME["list_tickets"],
             {},
             {"txtDeviceId": "TEST-ADVERTISING", "txtIndex": "1", "h_page_no": "1", "hiduserYn": "Y"},
         ),
@@ -1220,33 +1258,33 @@ def test_default_empty_optional_request_fields_are_omitted(entry, kwargs, expect
     """NetworkService.java:15335-15344; MyTicketListIn.java:62: no fabricated type discriminator."""
     client, calls = make_client(entry.response, lang=None)
     getattr(client, entry.method)(**kwargs)
-    assert Counter(wire_pairs(calls[0], entry.query)) == Counter(COMMON + list(expected.items()))
-    assert "type" not in dict(wire_pairs(calls[0], entry.query))
+    assert Counter(wire_pairs(calls[0], query=entry.query)) == Counter(COMMON + list(expected.items()))
+    assert "type" not in dict(wire_pairs(calls[0], query=entry.query))
 
 
 @pytest.mark.parametrize(
     "method,kwargs,query",
     [
-        ("get_deposit_banks", {}, False),
+        ("list_deposit_banks", {}, False),
         ("get_commuter_kind_menu", {"commuter_kind_code": "TEST-KIND"}, True),
     ],
 )
 def test_direct_field_and_query_keep_empty_common_values(method, kwargs, query, make_client) -> None:
     """NetworkApi.java:392-393; PushService.java:16-17: explicit @Field/@Query bypass flattening."""
-    client, calls = make_client(BY_NAME[method].response)
-    object.__setattr__(client.config, "key", "")
+    client, calls = make_client(BY_NAME[method].response, key="")
     getattr(client, method)(**kwargs)
-    assert ("Key", "") in wire_pairs(calls[0], query)
-    assert "lang" not in dict(wire_pairs(calls[0], query))
-    if method == "get_deposit_banks":
-        assert wire_pairs(calls[0], query) == COMMON[:2] + [("Key", ""), COMMON[2]]
+    sent = wire_pairs(calls[0], query=query)
+    assert ("Key", "") in sent
+    assert "lang" not in dict(sent)
+    if method == "list_deposit_banks":
+        assert sent == COMMON[:2] + [("Key", ""), COMMON[2]]
     else:
-        assert "AppVersion" not in dict(wire_pairs(calls[0], query))
+        assert "AppVersion" not in dict(sent)
 
 
 def test_deposit_bank_direct_fields_allow_app_version_omission(make_client) -> None:
-    client, calls = make_client(BY_NAME["get_deposit_banks"].response, app_version=None)
-    client.get_deposit_banks()
+    client, calls = make_client(BY_NAME["list_deposit_banks"].response, app_version=None)
+    client.list_deposit_banks()
     assert wire_pairs(calls[0]) == [("Device", "TEST-DEVICE"), ("Version", "TEST-VERSION"), ("Key", "TEST-KEY")]
 
 
@@ -1269,7 +1307,7 @@ def test_reservation_detail_run_date_preserves_raw(value, expected, make_client)
     else:
         journey["h_run_dt"] = value
     client, _ = make_client(payload)
-    result = client.get_ticket_reservation_detail(p.TicketReservationDetailRequest("TEST-PNR"))
+    result = client.get_ticket_reservation_detail(api.TicketReservationDetailRequest(pnr_no="TEST-PNR"))
     assert result.journeys[0].run_date == expected
     assert result.journeys[0].raw == journey
 
@@ -1280,13 +1318,13 @@ def test_commuter_passengers_repeat_age_per_person(make_client) -> None:
     Intentional discrepancy: 2026-09-24 observation requires this primitive array
     key. Do not remove it just because the generic app flattener skips primitives.
     """
-    source = m.CommuterInfoResponse(
+    source = api.CommuterInfoResponse(
         passenger_options=(
-            m.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE-A"),
-            m.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE-B"),
+            api.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE-A"),
+            api.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE-B"),
         )
     )
-    request = p.CommuterPassengerRequest.from_response(PASS_DATA, source, (2, 1))
+    request = api.CommuterPassengerRequest.from_response(PASS_DATA, source, (2, 1))
     client, calls = make_client(BY_NAME["get_commuter_info"].response, lang=None)
     client.get_commuter_info(request)
     assert wire_pairs(calls[0]) == COMMON + [
@@ -1302,7 +1340,7 @@ def test_commuter_passengers_repeat_age_per_person(make_client) -> None:
 def test_commuter_original_ticket_stage(make_client) -> None:
     """CommutationInfoIn.java:64; SeatAssignViewModel.java:291: original-ticket query only."""
     client, calls = make_client(BY_NAME["get_commuter_info"].response, lang=None)
-    client.get_commuter_info(p.CommuterTicketInquiryRequest(REFERENCE, "1"))
+    client.get_commuter_info(api.CommuterTicketInquiryRequest(original_ticket=REFERENCE, inquiry_type="1"))
     assert wire_pairs(calls[0]) == COMMON + [
         ("jobDvCd", "c"),
         ("psgCnt", "0"),
@@ -1317,13 +1355,16 @@ def test_commuter_original_ticket_stage(make_client) -> None:
 @pytest.mark.parametrize(
     "method,code,kwargs",
     [
-        ("get_discount_coupons", "WRG000000", {}),
+        ("list_discount_coupons", "WRG000000", {}),
         ("get_pass_schedule", "WRG000000", BY_NAME["get_pass_schedule"].kwargs),
-        ("get_reservation_history", "P100", {}),
+        ("list_reservations", "P100", {}),
     ],
 )
 def test_known_empty_failures_are_not_successful_rows(method, code, kwargs, make_client) -> None:
-    """CouponOut.java:55; PassScheduleInfoListOut.java:55; ReservationViewOut.java:64; dated empty-result observations."""
+    """CouponOut.java:55; PassScheduleInfoListOut.java:55; ReservationViewOut.java:64; dated empty-result observations.
+
+    WRG000000 is the "no result" notice (assets/error_json.json:4173,14397); no app branch on it was found.
+    """
     payload = {"strResult": "FAIL", "h_msg_cd": code, "h_msg_txt": "SYNTHETIC EMPTY"}
     client, _ = make_client(payload)
     result = getattr(client, method)(**kwargs)
@@ -1345,23 +1386,108 @@ def test_p058_never_parsed_as_account_result(entry, make_client) -> None:
 def test_required_method_set_is_exact() -> None:
     """37 explicitly enumerated methods: no case silently substitutes a different read."""
     expected = set(
-        "get_cart_list get_deposit_banks get_delay_discount_tickets get_discount_coupons get_korail_point_summary get_mileage_history get_discount_card_usage_history get_discount_card_schedule get_pass_available_dates get_pass_schedule get_trip_menu get_pass_menu get_crew_request_list get_commuter_kind_menu get_commuter_info get_product_reservations get_product_detail get_ticket_receipt get_reservation_history get_seat_assignment_schedule get_multi_child_discount_targets get_customer_trip_info get_trip_change_dates get_delivery_recipient check_ticket_duplication get_pbp_acceptance_specifications get_original_ticket_inquiry get_self_seat_change_info get_recent_delivery_history get_ticket_reservation_detail get_refund_commission get_refund_ticket_detail get_ticket_list get_delay_certificate get_delay_return_receipt get_self_checkin_info check_self_checkin_seat".split()
+        "list_cart_items list_deposit_banks list_delay_discount_tickets list_discount_coupons get_point_summary get_mileage_history list_discount_card_usages get_discount_card_schedule get_pass_availability get_pass_schedule get_trip_menu get_pass_menu list_crew_request_reasons get_commuter_kind_menu get_commuter_info list_product_reservations get_product_detail get_ticket_receipt list_reservations get_seat_assignment_schedule list_multi_child_discount_targets get_trip_preferences list_trip_change_dates get_delivery_recipient check_ticket_duplication list_pbp_acceptances get_original_tickets get_self_seat_change_options list_recent_delivery_recipients get_ticket_reservation_detail get_refund_fee get_refund_ticket_detail list_tickets get_delay_certificate get_delay_return_receipt get_self_checkin check_self_checkin_seat".split()
     )
     assert set(BY_NAME) == expected and len(CASES) == 37
 
 
 @pytest.mark.parametrize(
-    "name", ["get_discount_card_usage_history", "get_discount_card_schedule", "get_delivery_recipient"]
+    "name", ["list_discount_card_usages", "get_discount_card_schedule", "get_delivery_recipient"]
 )
 def test_ncard_live_status_is_not_promoted(name) -> None:
     """The three N-card read docstrings keep 검증 못 함 (no N-card account to verify with)."""
     assert "검증 못 함" in (getattr(KorailClient, name).__doc__ or "")
 
 
+@pytest.mark.parametrize(
+    "management_no,kind",
+    [("B2N18120402", "B2N"), ("B2N18120403", "B2N"), ("B2N19060502", "MMM"), ("TEST-MANAGEMENT", "MMM")],
+)
+def test_discount_card_for_card_mapping_is_kept(management_no, kind) -> None:
+    """The library split is unchanged although the 7.0.6 NCardDefine switch singles out four B2N1906… products."""
+    request = api.DiscountCardScheduleRequest.for_card(
+        management_no, departure_station_name="TEST-FROM", arrival_station_name="TEST-TO", departure_date=DATE
+    )
+    assert request.card_kind_code == kind
+
+
+def test_discount_card_for_card_doc_points_to_explicit_kind_code() -> None:
+    doc = api.DiscountCardScheduleRequest.for_card.__doc__ or ""
+    assert "B2N1906" in doc and "다르" in doc and "card_kind_code" in doc
+
+
+def test_ncard_menu_id_stays_marked_unverified() -> None:
+    """ReservationMenuId.java:21-22 declares SEAT_ASSIGN and N_CARD separately; both values are protected."""
+    lines = inspect.getsource(passes_forms).splitlines()
+    index = lines.index('KORAIL_DISCOUNT_CARD_MENU_ID = "A2"')
+    assert any("미확인" in line for line in lines[index - 2 : index])
+
+
+@pytest.mark.parametrize("value", [None, 2])
+@pytest.mark.parametrize("name", [item.name for item in dataclass_fields(api.PassScheduleRequest)])
+def test_pass_schedule_request_rejects_non_text_when_built(name, value) -> None:
+    """Before 2.6.2 a None field went out as an empty key= (txtSelPage=); all 12 fields are now checked when built."""
+    with pytest.raises(api.KorailInvalidInputError, match=f"{name} must be a string"):
+        replace(BY_NAME["get_pass_schedule"].kwargs["request"], **{name: value})
+
+
+def test_pass_schedule_request_blank_field_is_still_omitted(make_client) -> None:
+    entry = BY_NAME["get_pass_schedule"]
+    client, calls = make_client(entry.response, lang=None)
+    client.get_pass_schedule(replace(entry.kwargs["request"], page_no=""))
+    assert "txtSelPage" not in dict(wire_pairs(calls[0]))
+
+
+@pytest.mark.parametrize(
+    "request_with,changes,message",
+    [
+        (
+            api.CommuterInitialRequest(pass_data=PASS_DATA),
+            {"pass_data": api.PassMenuData()},
+            "pass_data.commuter_kind_code",
+        ),
+        (
+            api.CommuterPassengerRequest.from_response(
+                PASS_DATA,
+                api.CommuterInfoResponse(
+                    passenger_options=(api.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE"),)
+                ),
+                (1,),
+            ),
+            {"source": api.CommuterInfoResponse(passenger_options=(api.CommuterPassengerOption(),))},
+            "commuter_usage_age_code",
+        ),
+    ],
+)
+def test_commuter_builder_sends_validated_text(request_with, changes, message, make_client) -> None:
+    """The builder uses the validators' str results instead of casting, so a bypassed construction fails before send."""
+    for name, value in changes.items():
+        object.__setattr__(request_with, name, value)
+    client, calls = make_client(BY_NAME["get_commuter_info"].response, lang=None)
+    with pytest.raises(KorailProtocolError, match=f"{message} must not be empty"):
+        client.get_commuter_info(request_with)
+    assert not calls
+
+
+@pytest.mark.parametrize(
+    "value,expected", [(ABSENT_LIST, 0), (None, 0), ("0002", 2), (7, 7), ("TEST", None), (True, None)]
+)
+def test_commuter_int_fields_default_to_zero(value, expected, make_client) -> None:
+    """Psg.java:30-31 and the commuter info avlPrnb* fields are Kotlin Int: missing/null is 0, unreadable is None."""
+    row: dict[str, Any] = {"cmtrUtlAgeCd": "TEST-AGE"}
+    payload = success(psgList=[row])
+    if value is not ABSENT_LIST:
+        row["custAgeFrom"] = payload["avlPrnbFrom"] = value
+    client, _ = make_client(payload)
+    result = client.get_commuter_info(api.CommuterInitialRequest(pass_data=PASS_DATA))
+    assert result.passenger_options[0].customer_age_from == expected
+    assert result.available_passenger_count_from == expected
+
+
 def test_mode_one_explicit_dates_are_not_silently_erased(make_client) -> None:
     """MyTicketListIn.java:62; builder preserves explicit dates regardless of txtIndex."""
     client, calls = make_client(success(pnr_list=[]), lang=None)
-    client.get_ticket_list(mode="1", boarding_date_from=DATE, boarding_date_to="20300103")
+    client.list_tickets(mode="1", boarding_date_from=DATE, boarding_date_to="20300103")
     form = dict(wire_pairs(calls[0]))
     assert form["h_abrd_dt_from"] == DATE and form["h_abrd_dt_to"] == "20300103"
 
@@ -1396,7 +1522,7 @@ def test_required_integer_still_rejects_other_signed_shapes(wire, make_client) -
         client.get_ticket_receipt(**BY_NAME["get_ticket_receipt"].kwargs)
 
 
-@pytest.mark.parametrize("method", ["get_pbp_acceptance_specifications", "get_original_ticket_inquiry"])
+@pytest.mark.parametrize("method", ["list_pbp_acceptances", "get_original_tickets"])
 def test_ticket_reference_list_is_sent_like_a_tuple(method, make_client) -> None:
     entry = BY_NAME[method]
     client, calls = make_client(entry.response)
@@ -1413,7 +1539,7 @@ def test_coupon_discount_values_keep_their_field(make_client) -> None:
     weekend = {"h_cpn_no": "TEST-WEEKEND", "h_disc_rt_amt_dv_cd": "1", "h_wknd_fare_disc_rt_amt": "10"}
     payload = success(coupon_infos={"coupon_info": [weekday, weekend]})
     client, _ = make_client(payload)
-    first, second = client.get_discount_coupons(**BY_NAME["get_discount_coupons"].kwargs).items
+    first, second = client.list_discount_coupons(**BY_NAME["list_discount_coupons"].kwargs).items
     assert (first.weekday_fare_discount, first.weekend_fare_discount) == ("10", None)
     assert (second.weekday_fare_discount, second.weekend_fare_discount) == (None, "10")
     assert first.discount_rate_amount_division_code == second.discount_rate_amount_division_code == "1"
@@ -1451,7 +1577,7 @@ def test_malformed_envelope_preserves_entire_response(entry, field, make_client)
     assert len(calls) == 1
 
 
-def test_cart_nested_pay_details_stay_in_raw() -> None:
+def test_cart_nested_pay_details_stay_in_raw(make_client) -> None:
     """CartInfo.java:28-61 declares six nested pay-detail objects; ACCEPTANCE.md L7 keeps them only in raw."""
     names = (
         "greenCarPayDetail",
@@ -1463,7 +1589,8 @@ def test_cart_nested_pay_details_stay_in_raw() -> None:
     )
     details = {name: {"SYNTH-KEY": f"SYNTH-{name}"} for name in names}
     row = {"h_pnr_no": "TEST-PNR", "h_rcvd_amt": "001200", **details}
-    item = parse_cart_list_response(success(cart_infos={"cart_info": [row]})).items[0]
+    client, _ = make_client(success(cart_infos={"cart_info": [row]}))
+    item = client.list_cart_items(**BY_NAME["list_cart_items"].kwargs).items[0]
     assert {name: item.raw[name] for name in names} == details
     for model_field in dataclass_fields(item):
         if model_field.name != "raw":
@@ -1471,26 +1598,43 @@ def test_cart_nested_pay_details_stay_in_raw() -> None:
 
 
 @pytest.mark.parametrize("value", [True, 1.5, [], {}, "20300102", 20300102, None])
-def test_optional_delay_run_date_uses_optional_scalar_policy(value: object) -> None:
+def test_optional_delay_run_date_uses_optional_scalar_policy(value: object, make_client) -> None:
     """DelayCertificate.java:57-60 differs from the observed optional runDt; checks/BEHAVIOR.md governs it."""
-    from korail_mobile_api.read_parsers import parse_delay_certificate_response
-
-    row = {
-        "runDay": "synthetic-day",
-        "trnNo": "00001",
-        "dptRsStnCd": "0001",
-        "arvRsStnCd": "0002",
-        "arvRsStnNm": "synthetic-station",
-        "dlayArvFlg": "Y",
-        "trnDlayTm": "20",
-        "runDt": value,
-    }
-    raw = {"strResult": "SUCC", "dlayList": [row]}
-    parsed = parse_delay_certificate_response(raw)
+    entry = BY_NAME["get_delay_certificate"]
+    payload = deepcopy(entry.response)
+    payload["dlayList"][0]["runDt"] = value
+    client, _ = make_client(payload)
+    parsed = client.get_delay_certificate(**entry.kwargs)
     expected = str(value) if type(value) in (int, str) else None
     assert parsed.delays[0].run_date == expected
-    assert parsed.delays[0].raw is row
-    assert parsed.raw is raw
+    assert parsed.raw == payload and parsed.delays[0].raw is parsed.raw["dlayList"][0]
+
+
+def test_ticket_list_parser_reads_the_response_mapping() -> None:
+    """Like the other read parsers it takes the raw mapping (it used to take a BaseKorailResponse, so a mapping
+    raised AttributeError). Rows keep their identity; a FAIL envelope is still an app error.
+    TicketListTrainInfo.java:72 declares h_srcar_no a String; live rows sent JSON integers."""
+    from korail_mobile_api._domains.tickets.parsers import parse_ticket_list_response
+
+    train = {"h_trn_no": 999, "h_srcar_no": 3}
+    ticket = {"h_pnr_no": "TEST-PNR", "jrn_info": [train, "not-a-row"]}
+    reservation = {"ticket_list": [ticket], "isFinished": True, "seatAssignCount": "2"}
+    raw = {"strResult": "SUCC", "h_msg_cd": 0, "pnr_list": [reservation], "h_total_cnt": 1}
+    parsed = parse_ticket_list_response(raw)
+    assert (parsed.raw, parsed.h_msg_cd, parsed.total_count) == (raw, "0", "1") and parsed.raw is raw
+    row = parsed.reservations[0]
+    assert (row.raw, row.is_finished, row.seat_assign_count, row.additional_service) == (
+        reservation,
+        True,
+        2,
+        None,
+    )
+    assert row.raw is reservation and row.tickets[0].raw is ticket
+    assert row.tickets[0].train_info == (train,) and row.tickets[0].trains[0].raw is train
+    assert (row.tickets[0].trains[0].train_no, row.tickets[0].trains[0].car_no) == ("999", "3")
+    with pytest.raises(api.KorailApiError) as error:
+        parse_ticket_list_response({"strResult": "FAIL", "h_msg_cd": "SYNTHETIC-FAIL"})
+    assert error.value.raw == {"strResult": "FAIL", "h_msg_cd": "SYNTHETIC-FAIL"}
 
 
 @pytest.mark.parametrize(
@@ -1507,11 +1651,54 @@ def test_optional_delay_run_date_uses_optional_scalar_policy(value: object) -> N
         ({}, None),
     ],
 )
-def test_nullable_field_map_preserves_optional_policy(value: object, expected: str | None) -> None:
+def test_nullable_str_preserves_optional_policy(value: object, expected: str | None) -> None:
     raw = {"wire": value}
-    fields = {"present": "wire", "missing": "absent"}
-    assert _nullable_scalar_fields(raw, fields) == {"present": expected, "missing": None}
-    assert _nullable_scalar_fields(raw, fields, "synthetic context") == {"present": expected, "missing": None}
+    assert (nullable_str(raw, "wire", "synthetic"), nullable_str(raw, "absent", "synthetic")) == (
+        expected,
+        None,
+    )
+
+
+@pytest.mark.parametrize(
+    "read,missing,null,wrong,integer",
+    [
+        (nullable_str, None, None, None, "17"),
+        (strict_str, None, None, KorailProtocolError, "17"),
+        (present_str, KorailProtocolError, None, KorailProtocolError, "17"),
+        (required_str, KorailProtocolError, KorailProtocolError, KorailProtocolError, "17"),
+        (defaulted_str, "", KorailProtocolError, KorailProtocolError, "17"),
+        (optional_int, None, None, None, 17),
+        (required_int, KorailProtocolError, KorailProtocolError, KorailProtocolError, 17),
+        (optional_bool, None, None, None, None),
+    ],
+    ids=lambda value: getattr(value, "__name__", None),
+)
+def test_wire_reader_kinds_follow_the_documented_table(read, missing, null, wrong, integer) -> None:
+    """The reader table in the _core/parsing.py docstring: missing / null / wrong type (a float) / JSON integer."""
+    for data, expected in (({}, missing), ({"k": None}, null), ({"k": 1.5}, wrong), ({"k": 17}, integer)):
+        if expected is KorailProtocolError:
+            with pytest.raises(KorailProtocolError, match="synthetic context field k"):
+                read(data, "k", "synthetic context")
+        else:
+            assert read(data, "k", "synthetic context") == expected
+
+
+def test_wire_fields_keep_constructor_defaults_and_raw_rules() -> None:
+    @dataclass(frozen=True)
+    class Synthetic:
+        required: str = wire("req", required_str)
+        optional: str | None = wire("opt")
+        raw: dict[str, object] = field(default_factory=dict)
+
+    row: dict[str, object] = {"req": 7, "opt": False}
+    parsed = wire_model(Synthetic, row, "synthetic", raw=row)
+    assert (parsed.required, parsed.optional) == ("7", None) and parsed.raw is row
+    assert wire_models(Synthetic, [row], "synthetic")[0].raw is row
+    copied = wire_models(Synthetic, [row], "synthetic", copy_raw=True)[0].raw
+    assert copied == row and copied is not row
+    assert Synthetic(required="x").optional is None
+    with pytest.raises(TypeError):
+        Synthetic()  # required at runtime, although type checkers see a default
 
 
 @pytest.mark.parametrize("container", [None, [], "invalid", {}, {"psg_info": None}, {"psg_info": {}}])
@@ -1527,3 +1714,17 @@ def test_passenger_rows_filter_only_non_mappings_and_copy_row_raw() -> None:
     assert result[0].discount_kind_code is None
     assert result[0].raw == row and result[0].raw is not row
     assert result[1].passenger_type_code is None
+
+
+def test_original_ticket_reference_from_a_ticket_list_ticket() -> None:
+    """3.0: from_ticket puts the MMDD return sale date in sale_date, like the documented examples."""
+    ticket = api.TicketListTicket(
+        sale_window_no="TEST-WINDOW",
+        sale_date="20990102",
+        return_sale_date="0102",
+        sale_sequence="TEST-SEQUENCE",
+        return_password="TEST-RETURN",
+    )
+    assert api.OriginalTicketReference.from_ticket(ticket) == REFERENCE
+    with pytest.raises(api.KorailInvalidInputError, match="return_sale_date"):
+        api.OriginalTicketReference.from_ticket(replace(ticket, return_sale_date=None))

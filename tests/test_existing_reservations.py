@@ -5,22 +5,27 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import fields
 from typing import Any
-from urllib.parse import parse_qs
 
 import httpx
 import pytest
+from conftest import wire_form
 
 from korail_mobile_api import (
     CardPayment,
     KorailAppError,
     KorailAuthError,
     KorailClient,
-    KorailConfig,
     KorailProtocolError,
     KorailSessionExpiredError,
     KorailTransportError,
     ReservationHoldResponse,
+    TicketReservationDetailResponse,
+)
+from korail_mobile_api._domains.reservations.parsers import (
+    parse_existing_reservation_hold_response,
+    parse_ticket_reservation_detail_response,
 )
 
 PNR = "SYNTHETIC-EXISTING-PNR"
@@ -66,16 +71,7 @@ def detail_raw() -> dict[str, Any]:
 
 @pytest.fixture
 def existing_client(detail_raw, scripted_client_factory, f8_logged_in_session):
-    client, requests, _ = scripted_client_factory(
-        [detail_raw],
-        config=KorailConfig(
-            base_url="https://api.example.invalid",
-            netfunnel_url="https://queue.example.invalid",
-            key="SYNTHETIC-APP-KEY",
-        ),
-        session=f8_logged_in_session,
-        repeat=True,
-    )
+    client, requests, _ = scripted_client_factory([detail_raw], session=f8_logged_in_session, repeat=True)
     client.http.cookies.set("JSESSIONID", f8_logged_in_session.jsessionid)
     return client, requests
 
@@ -102,7 +98,7 @@ def test_read_existing_reservation_then_explicitly_pay(
         if request.url.path == DETAIL_PATH:
             assert request.method == "POST"
             assert not request.url.query
-            assert parse_qs(request.content.decode()) == {
+            assert wire_form(request) == {
                 "Device": ["AD"],
                 "Version": ["250601003"],
                 "AppVersion": ["7.0.8"],
@@ -113,7 +109,7 @@ def test_read_existing_reservation_then_explicitly_pay(
         if request.url.path == "/ts.wseq":
             return httpx.Response(200, text="200:key=SYNTHETIC-QUEUE")
         assert request.url.path == PAYMENT_PATH
-        form = parse_qs(request.content.decode())
+        form = wire_form(request)
         assert form["hidPnrNo"] == [PNR]
         assert form["hidWctNo"] == ["SYNTHETIC-ACTUAL-WINDOW"]
         assert form["hidMnsStlAmt1"] == ["53900"]
@@ -137,7 +133,9 @@ def test_read_existing_reservation_then_explicitly_pay(
     assert hold.temporary_job_sequence_2 == ("005678" if sequences_present else None)
     assert hold.journeys[0].reservation_change_no == ("009" if sequences_present else None)
     assert len(calls) == 1  # Reading never reserves, queues, or charges.
-    result = client.pay_with_card(hold, CardPayment("0" * 16, "00", "9912", "000101"))
+    result = client.pay_with_card(
+        hold, CardPayment(card_number="0" * 16, card_password="00", card_expire="9912", birthday="000101")
+    )
     assert result.str_result == payment_result
     assert [request.url.params.get("opcode", request.url.path) for request in calls] == [
         DETAIL_PATH,
@@ -145,6 +143,25 @@ def test_read_existing_reservation_then_explicitly_pay(
         PAYMENT_PATH,
         "5004",
     ]
+
+
+def test_detail_and_existing_hold_read_shared_reservation_out_fields_alike(detail_raw: dict[str, Any]) -> None:
+    """MyReservationViewModel.java:1280-1302: ReservationList returns the ReservationOut a new hold returns.
+    The two models declare each shared key with one rule; only the hold's identifiers are strict."""
+    detail_fields = {item.name: item.metadata for item in fields(TicketReservationDetailResponse)}
+    hold_fields = {item.name: item.metadata for item in fields(ReservationHoldResponse)}
+    shared = {name for name in detail_fields.keys() & hold_fields.keys() if "wire" in hold_fields[name]}
+    for name in shared:
+        detail_raw.setdefault(hold_fields[name]["wire"], f"SYNTHETIC-{name}")
+    detail = parse_ticket_reservation_detail_response(detail_raw)
+    hold = parse_existing_reservation_hold_response(detail_raw, pnr_no=PNR)
+    assert len(shared) == 16
+    assert {name: getattr(hold, name) for name in shared} == {name: getattr(detail, name) for name in shared}
+    assert {name for name in shared if detail_fields[name]["read"] is not hold_fields[name]["read"]} == {
+        "pnr_no",
+        "journey_count",
+        "window_no",
+    }
 
 
 @pytest.mark.parametrize("declared", [ABSENT, "55200", "00055200", 55200])
@@ -263,20 +280,18 @@ def test_oversized_seat_sum_preserves_raw(existing_client, detail_raw: dict[str,
 
 
 @pytest.mark.parametrize("pnr_no", [None, "", " ", 123, False])
-def test_invalid_pnr_never_sends(pnr_no: Any, f8_client_factory: Callable[..., KorailClient]) -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        pytest.fail("invalid input must not send a request")
-
+def test_invalid_pnr_never_sends(pnr_no: Any, scripted_client_factory, f8_logged_in_session) -> None:
+    client, requests, _ = scripted_client_factory([], session=f8_logged_in_session)
     with pytest.raises(KorailProtocolError):
-        f8_client_factory(handler).get_reservation_hold(pnr_no)
+        client.get_reservation_hold(pnr_no)
+    assert not requests
 
 
-def test_login_required(f8_client_factory: Callable[..., KorailClient]) -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        pytest.fail("unauthenticated reads must not send a request")
-
+def test_login_required(scripted_client_factory) -> None:
+    client, requests, _ = scripted_client_factory([])
     with pytest.raises(KorailAuthError):
-        f8_client_factory(handler, logged_in=False).get_reservation_hold(PNR)
+        client.get_reservation_hold(PNR)
+    assert not requests
 
 
 @pytest.mark.parametrize("code", ["P058", "SYNTHETIC-MISSING-RESERVATION"])
@@ -296,9 +311,7 @@ def test_server_refusal_keeps_error_and_clears_expired_session(
 
 def test_transport_failure_is_not_retried(scripted_client_factory, f8_logged_in_session) -> None:
     client, requests, _ = scripted_client_factory(
-        [httpx.ReadTimeout("synthetic")],
-        config=KorailConfig(base_url="https://api.example.invalid"),
-        session=f8_logged_in_session,
+        [httpx.ReadTimeout("synthetic")], session=f8_logged_in_session
     )
     with pytest.raises(KorailTransportError):
         client.get_reservation_hold(PNR)

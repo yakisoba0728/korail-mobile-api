@@ -1,4 +1,8 @@
-"""Shared offline transports, network guards and release fixtures."""
+"""Shared offline transports, network guards, wire decoding and release fixtures.
+
+Test modules import ``synthetic_config``, ``wire_pairs`` and ``wire_form`` from here. CI's installed-wheel
+job copies this file with the tests, so shared helpers live here rather than in a new module.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,8 @@ import socket
 from collections.abc import Callable, Iterator, Sequence
 from json import dumps
 from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qsl
 
 import httpx
 import pytest
@@ -27,6 +33,29 @@ for _name in ("connect", "connect_ex", "sendto", "sendmsg"):
     if hasattr(socket.socket, _name):
         setattr(socket.socket, _name, _f8_denied)
 """
+
+
+def synthetic_config(**overrides: Any) -> KorailConfig:
+    """Synthetic hosts and app key; a test passes only the settings its expectations depend on."""
+    defaults: dict[str, Any] = {
+        "base_url": "https://api.example.invalid",
+        "netfunnel_url": "https://queue.example.invalid",
+        "key": "SYNTHETIC-APP-KEY",
+    }
+    return KorailConfig(**{**defaults, **overrides})
+
+
+def wire_pairs(request: httpx.Request, *, query: bool = False) -> list[tuple[str, str]]:
+    """The form body (or, with ``query=True``, the query string) as ordered (key, value) pairs, blanks kept."""
+    return parse_qsl((request.url.query if query else request.content).decode(), keep_blank_values=True)
+
+
+def wire_form(request: httpx.Request, *, query: bool = False) -> dict[str, list[str]]:
+    """``wire_pairs`` grouped by key; values keep their sent order, so a repeated key is a longer list."""
+    grouped: dict[str, list[str]] = {}
+    for key, value in wire_pairs(request, query=query):
+        grouped.setdefault(key, []).append(value)
+    return grouped
 
 
 @pytest.fixture(autouse=True)
@@ -69,15 +98,7 @@ def f8_client_factory(
         logged_in: bool = True,
         config: KorailConfig | None = None,
     ) -> KorailClient:
-        client = KorailClient(
-            config
-            or KorailConfig(
-                base_url="https://api.example.invalid",
-                netfunnel_url="https://queue.example.invalid",
-                key="SYNTHETIC-APP-KEY",
-            ),
-            transport=httpx.MockTransport(handler),
-        )
+        client = KorailClient(config or synthetic_config(), transport=httpx.MockTransport(handler))
         clients.append(client)
         if logged_in:
             client.session.current = f8_logged_in_session
@@ -98,10 +119,11 @@ def scripted_client_factory(
     def make(
         replies: Sequence[object],
         *,
-        config: KorailConfig,
+        config: KorailConfig | None = None,
         session: KorailSession | None = None,
         repeat: bool = False,
     ) -> tuple[KorailClient, list[httpx.Request], list[object]]:
+        config = config or synthetic_config()
         pending = list(replies)
         requests: list[httpx.Request] = []
 

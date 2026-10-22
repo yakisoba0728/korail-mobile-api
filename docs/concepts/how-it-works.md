@@ -1,9 +1,8 @@
 # 요청 흐름
 
 이 페이지는 메서드 하나를 호출했을 때 라이브러리 안에서 일어나는 일을 순서대로 설명합니다.
-각 단계는 코레일+ 안드로이드 앱 7.0.8에서 확인한 계약을 기준으로 합니다.
-2.6.0에 포함한 요청 순서 정정과 환불 대상 연결은 [7.0.10 정적 검토](../verification-7010.md)에 구분합니다.
-요청 기본 `AppVersion=7.0.8`은 유지하며 새 실서버 호환을 확인한 것은 아닙니다.
+각 단계는 코레일+ 안드로이드 앱 7.0.8에서 확인한 계약과 [7.0.10 정적 검토](../verification-7010.md)를 근거로 합니다.
+기본 요청 버전(`AppVersion=7.0.8`·API `Version=250601003`)의 현재 실서버 상태는 [실서버 확인 현황](../status.md#current)에 있습니다.
 
 ![요청 흐름](../assets/flow-light.svg#only-light)
 ![요청 흐름](../assets/flow-dark.svg#only-dark)
@@ -17,7 +16,7 @@
 - **공통 필드**: 환불·환불 수수료 조회를 포함한 공통 폼은 맨 앞에 `Device`, `Version`, `AppVersion`, `Key`를 싣습니다. 은행 조회의 직접 `@Field` 경로는 `Device`, `Version`, `Key`, `AppVersion` 순서입니다. 두 순서 정정의 서버 영향은 미확인입니다.
 - **언어**: `KorailConfig.lang`을 설정하면 `Key` 다음에 `lang`을 보냅니다. 설정하지 않으면 보내지 않습니다.
 - **빈 값**: 값이 빈 문자열인 필드는 보내지 않습니다. 운임 조회의 상품번호처럼 앱이 빈 값을 그대로 보내는 필드는 예외로 보냅니다.
-- **입력 검사**: 카드번호 자릿수, 승객 수, 환승 구간 순서처럼 앱이 화면에서 막는 입력은 요청을 보내기 전에 검사하고 `KorailProtocolError`를 발생시킵니다.
+- **입력 검사**: 카드번호 자릿수, 승객 수, 환승 구간 순서처럼 앱이 화면에서 막는 입력은 요청을 보내기 전에 검사하고 [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError]를 발생시킵니다.
 
 ## 2. 대기열 통과
 
@@ -26,9 +25,9 @@
 - 열차 조회: [`search_trains`](../api/trains.md#search_trains), [`search_transfer_trains`](../api/trains.md#search_transfer_trains), [`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback), [`get_seat_assignment_schedule`](../api/trains.md#get_seat_assignment_schedule)
 - 예약: [`reserve`](../api/reservations.md#reserve), [`reserve_transfer`](../api/reservations.md#reserve_transfer), [`reserve_with_discount_card`](../api/passes.md#reserve_with_discount_card)
 - 카드 결제: [`pay_with_card`](../api/payments.md#pay_with_card)
-- 예약 내역 조회: [`get_reservation_history`](../api/reservations.md#get_reservation_history)
+- 예약 내역 조회: [`list_reservations`](../api/reservations.md#list_reservations)
 
-[`reserve_merge`](../api/reservations.md#reserve_merge), [`reserve_limousine`](../api/airport-bus.md#reserve_limousine)을 비롯한 그 밖의 메서드는 대기열을 거치지 않습니다.
+[`reserve_merge`](../api/reservations.md#reserve_merge), [`reserve_airport_bus`](../api/airport-bus.md#reserve_airport_bus)를 비롯한 그 밖의 메서드는 대기열을 거치지 않습니다.
 대기열은 앱과 같은 순서로 진행합니다.
 
 1. 대기열 서버에 입장 키를 요청합니다(`5101`).
@@ -51,7 +50,7 @@
 
 - **헤더**: API 요청은 앱과 같은 `User-Agent: korailtalk`에 `Connection: Keep-Alive`, `Accept-Encoding: gzip`을 보내고 `Accept`는 보내지 않습니다.
   대기열 요청은 앱의 대기열 SDK처럼 안드로이드 기본 User-Agent(`Dalvik/2.1.0 (...)`)를 사용하며, 본문이 빈 POST로 보냅니다.
-- **DynaPath**: 로그인, 열차 조회, 운임 조회, 예약처럼 앱이 보호하는 경로에는 DynaPath 토큰 헤더를 붙입니다. 기본값으로 켜져 있습니다.
+- **DynaPath**: 로그인, 열차 조회, 운임 조회, 예약처럼 앱이 보호하는 경로에는 DynaPath 토큰 헤더를 붙입니다. 기본값으로 켜져 있으며 기본 토큰은 SDK 2.0.1 `2!` 진단입니다([DynaPath 설정](../guide/configuration.md#dynapath)).
 - **로그인 비밀번호**: 서버에서 받은 암호화 정보로 AES 암호화한 뒤 보냅니다. 암호화 정보가 없으면 평문으로 보내지 않고 거절합니다.
 
 ## 4. 응답 판정
@@ -64,8 +63,8 @@
 | `h_msg_cd` | 결과 코드 (예: `IRZ000001`) |
 | `h_msg_txt` | 결과 메시지 |
 
-- `strResult`가 `FAIL`이면 실패입니다. 결과 코드에 따라 [`KorailAppError`][korail_mobile_api.errors.KorailAppError]의 하위 예외(예: 매진, 결과 없음)를 발생시킵니다.
-- 실패 코드가 `P058`이면 세션 만료로 보고 [`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError]를 발생시키며, 로컬 세션을 비웁니다.
+- `strResult`가 `FAIL`이면 실패입니다. 결과 코드에 따라 [`KorailAppError`][korail_mobile_api.KorailAppError]의 하위 예외(예: 매진, 결과 없음)를 발생시킵니다.
+- 실패 코드가 `P058`이면 세션 만료로 보고 [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError]를 발생시키며, 로컬 세션을 비웁니다.
 - 카드 결제처럼 실패도 정상 응답으로 돌려줘야 하는 메서드는 예외 대신 `str_result`가 `FAIL`인 응답 모델을 반환합니다. 각 메서드 설명에 표시했습니다.
 
 ## 5. 응답 읽기
@@ -74,8 +73,8 @@
 
 - **정수와 문자열**: 앱이 문자열로 선언한 필드를 서버가 JSON 정수로 보내는 경우가 있습니다(예: `"0001"` 대신 `1`). 이런 값은 `str()`로 바꿔 `"1"`로 담으며, 앞자리 `0`은 복원하지 않습니다. `true`/`false`는 정수로 취급하지 않습니다.
 - **선택 필드**: 응답에 없거나 `null`이거나 타입이 맞지 않는 선택 필드는 `None`입니다. 아래 [앱 기본값을 쓰는 필드](#앱-기본값을-쓰는-필드) 18개는 예외입니다.
-- **필수 필드**: 다음 요청에 다시 보내야 하는 값(예약 번호, 반환 식별자 등)이 없거나 타입이 틀리면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
-- **원본 보존**: 조회 응답의 `raw`는 대체로 서버가 보낸 원본 객체를 참조합니다. 변경 응답·기존 예약의 홀드 복원과 일부 하위 행·검색 메타데이터는 얕게 복사합니다. 별도 `raw`가 없는 하위 모델의 원본도 최상위 `raw`에 남으며, 중첩 사전·목록은 복사하거나 동결하지 않습니다.
+- **필수 필드**: 다음 요청에 다시 보내야 하는 값(예약번호, 반환 식별자 등)이 없거나 타입이 틀리면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
+- **원문 보존**: 조회 응답의 `raw`는 대체로 서버가 보낸 원문 객체를 참조합니다. 변경 응답·기존 예약의 홀드 복원과 일부 하위 행·검색 메타데이터는 얕게 복사합니다. 별도 `raw`가 없는 하위 모델의 원문도 최상위 `raw`에 남으며, 중첩 사전·목록은 복사하거나 동결하지 않습니다.
 
 ### 앱 기본값을 쓰는 필드
 
@@ -83,7 +82,7 @@
 
 - 문자열 필드는 응답에서 빠지면 `None` 대신 앱과 같은 기본값 `""`을 씁니다.
 - 숫자로 바꾸는 필드(`h_srcar_no`, `h_rest_seat_cnt`, `st_loc_rt`, `cls_loc_rt`)는 빠지거나 `""`이면 `None`입니다.
-- 18개 필드 모두 값이 `null`이거나 타입이 맞지 않으면 `None`으로 바꾸지 않고 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
+- 18개 필드 모두 값이 `null`이거나 읽을 수 없는 타입(불리언·목록·객체 등)이면 `None`으로 바꾸지 않고 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다. 문자열 필드의 JSON 정수는 다른 필드처럼 문자열로 읽습니다.
 
 | 위치 | 필드 | 개수 |
 |---|---|---:|
@@ -95,10 +94,11 @@
 
 ## 6. 실패했을 때
 
-- 응답을 읽지 못하면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] 등의 예외를 발생시킵니다.
+- 응답을 읽지 못하면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] 등의 예외를 발생시킵니다.
   예외의 `raw`에는 서버가 보낸 응답 전체가, `parser_raw`에는 읽다가 멈춘 부분이 들어 있습니다.
 - 예약·결제·환불 같은 변경 요청은 자동으로 다시 보내지 않습니다. 응답을 읽지 못했어도 서버에서는 이미 처리됐을 수 있기 때문입니다.
-  이때는 예외의 `raw`를 먼저 확인하고, 예약은 [`get_reservation_history()`](../api/reservations.md#get_reservation_history), 결제·환불은 [`get_ticket_list()`](../api/account.md#get_ticket_list)로 결과를 확인한 뒤에 다시 호출할지 정하세요.
+  요청을 보낸 뒤의 실패이면 예외의 `request_sent`가 `True`이고, 요청 전에 거절했으면 `None`입니다.
+  이때는 예외의 `raw`를 먼저 확인하고, 예약은 [`list_reservations()`](../api/reservations.md#list_reservations), 결제·환불은 [`list_tickets()`](../api/account.md#list_tickets)로 결과를 확인한 뒤에 다시 호출할지 정하세요.
 
 ## 앱과 다르게 처리한 부분
 
@@ -107,7 +107,7 @@
 - **환불 대상 연결**: 실제 수수료 조회 성공 응답의 비공개 문맥과 원표 식별자·동반자 정보가 일치해야 환불합니다. 직접 생성·파싱한 응답이나 원표 반환일이 없는 입력은 요청 전에 거절합니다. 금액 유효기간·서버 승인을 보장하지 않으며 자동 조회·재시도는 하지 않습니다.
 - **좌석배정 번호 그룹**: `seatAttCdN/psgNumN/stlbDturDvNmN` 중 `*2` 이상은 기존 SDK 확장으로 유지합니다. 7.0.10 앱 DTO의 단일 묶음과 동등하다고 보지 않습니다.
 - **기존 예약 가져오기**: [`get_reservation_hold`](../api/reservations.md#get_reservation_hold)는 상세의 PNR·실제 창구번호·여정·좌석·정산액을 검사합니다. 실서버 상세에서 생략되는 결제 플래그는 `None`으로 유지하고 명시된 경우에만 `Y`인지 검사합니다. 이는 라이브러리의 보수적 검증 정책이며 앱의 모든 상태 판정을 재현한 것은 아닙니다. 상세 조회 후에도 예약 상태는 바뀔 수 있습니다.
-- **로그인 확인**: 로그인이 필요한 메서드를 로그인하지 않은 상태에서 호출하면 요청을 보내지 않고 [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError]를 발생시킵니다. 앱에는 없는 검사입니다.
+- **로그인 확인**: 로그인이 필요한 메서드를 로그인하지 않은 상태에서 호출하면 요청을 보내지 않고 [`KorailAuthError`][korail_mobile_api.KorailAuthError]를 발생시킵니다. 앱에는 없는 검사입니다.
 - **로그인 암호화 정보**: 앱은 앱을 시작할 때 받아 둔 암호화 키를 쓰고, 키가 비어 있을 때만 다시 받습니다. 라이브러리는 로그인할 때마다 새로 받습니다.
 - **0원 결제**: 앱은 결제할 금액이 0원이면 카드 없이 발권을 요청합니다. 라이브러리는 이 경로를 구현하지 않으며, 0원 홀드를 [`pay_with_card`](../api/payments.md#pay_with_card)로 결제하려고 하면 요청 전에 거절합니다.
 - **환승 조회 전환**: [`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback)은 직통 열차가 없다는 결과 코드(`WRD000061`)를 받으면 같은 조건으로 환승 조회 첫 페이지를 받습니다. 앱과 달리 확인 창을 띄우거나 열차군을 바꾸지 않습니다.
@@ -118,9 +118,9 @@
 
 - **대기열 관문 식별값**: 라이브러리의 기본값이 앱의 값과 같은지 확인하지 못했습니다. 기본 조회(`inquiry`), 예약(`reserve`), 결제(`pay`), 예약 내역(`reservation_view`) 관문에서는 실서버 확인을 마친 메서드의 요청이 이 기본값으로 처리됐습니다. 성수기 조회(`peak_season_inquiry`)와 특가 상품 조회(`product_inquiry`) 관문은 실서버에서 확인하지 못했습니다.
 - **성수기 판정**: 앱이 출발일을 성수기로 판정하는 기준은 확인하지 못했습니다. 라이브러리에서는 호출자가 `peak_season`으로 정합니다.
-- **DynaPath 차단 판정**: 7.0.10의 조건부 문자열·nullable code·응답 gate를 포함한 정확한 기준은 미확정입니다. 기존 heuristic을 새 앱과 동등하다고 보거나 임의로 교체하지 않습니다.
-- **통합결제·서비스 상태 요청**: 일반 회원 결제 분기와 서비스 상태 기본값의 실제 전송 여부가 미확정이므로 endpoint·필드를 임의 변경하지 않습니다.
+- **DynaPath 차단 판정**: 7.0.10의 조건부 문자열·nullable code·응답 gate를 포함한 정확한 기준은 미확인입니다. 기존 heuristic을 새 앱과 동등하다고 보거나 임의로 교체하지 않습니다.
+- **통합결제·서비스 상태 요청**: 일반 회원 결제 분기와 서비스 상태 기본값의 실제 전송 여부가 미확인이므로 endpoint·필드를 임의 변경하지 않습니다.
 - **N카드 할인 코드**: [`reserve_with_discount_card`](../api/passes.md#reserve_with_discount_card)가 보내는 할인 코드는 실서버에서 확인하지 못했습니다.
 - **일부 환불 제어값**: 값을 알 수 없는 제어값은 추측하지 않고 요청에서 뺍니다.
 
-메서드별 실서버 확인 여부는 [실서버 확인 현황](../status.md)에 있습니다.
+영역별 현재 상태는 [실서버 확인 현황](../status.md), 메서드별 과거 결과는 [날짜별 실서버 기록](../records.md)과 [7.0.8 재검증](../verification-708.md)에 있습니다.

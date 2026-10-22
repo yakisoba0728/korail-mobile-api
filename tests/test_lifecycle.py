@@ -121,3 +121,29 @@ def test_failed_cleanup_diagnostics_cannot_replace_original_error(monkeypatch: p
         with korail:
             raise original
     assert caught.value is original and calls == ["HTTP", "queue"]
+
+
+@pytest.mark.parametrize("cleanup_fails", [False, True])
+def test_client_context_manager_closes_and_keeps_the_block_error(
+    monkeypatch: pytest.MonkeyPatch, cleanup_fails: bool
+) -> None:
+    errors = (RuntimeError("HTTP cleanup"), None) if cleanup_fails else (None, None)
+    korail, calls = _rig(monkeypatch, errors)
+    original = KorailAuthError("synthetic body failure")
+    with pytest.raises(KorailAuthError) as caught:
+        with korail.client as client:
+            assert client is korail.client
+            raise original
+    assert caught.value is original and calls == ["HTTP", "queue"]
+    assert ("HTTP cleanup" in " ".join(getattr(original, "__notes__", []))) is cleanup_fails
+    assert korail.client.http._client.is_closed and korail.client.netfunnel._client.is_closed
+
+
+def test_client_context_manager_raises_the_first_cleanup_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    errors = (RuntimeError("HTTP cleanup"), RuntimeError("queue cleanup"))
+    korail, calls = _rig(monkeypatch, errors)
+    with pytest.raises(RuntimeError) as caught:
+        with korail.client:
+            pass
+    assert caught.value is errors[0] and calls == ["HTTP", "queue"]
+    assert "queue cleanup" in " ".join(errors[0].__notes__)

@@ -18,10 +18,10 @@ from contextlib import closing
 from datetime import datetime, timezone
 from functools import cache
 from types import SimpleNamespace
-from urllib.parse import parse_qs
 
 import httpx
 import pytest
+from conftest import synthetic_config, wire_form
 
 import korail_mobile_api
 
@@ -198,7 +198,7 @@ def test_documented_search_and_pagination_keep_connections_open(
             )
         assert request.url.path.endswith("seatMovie.ScheduleView")
         events.append("search")
-        forms.append(parse_qs(request.content.decode(), keep_blank_values=True))
+        forms.append(wire_form(request))
         assert len(forms) <= 2, "the example must not fetch extra pages"
         first_page = len(forms) == 1
         trains = [
@@ -216,10 +216,8 @@ def test_documented_search_and_pagination_keep_connections_open(
             },
         )
 
-    config = korail_mobile_api.KorailConfig(
-        base_url="https://api.example.invalid",
-        netfunnel_url="https://queue.example.invalid",
-        dynapath=korail_mobile_api.DynapathConfig(enabled=True, token_provider=lambda _: "SYNTHETIC-TOKEN"),
+    config = synthetic_config(
+        dynapath=korail_mobile_api.DynapathConfig(enabled=True, token_provider=lambda _: "SYNTHETIC-TOKEN")
     )
     client_type, korail_type = korail_mobile_api.KorailClient, korail_mobile_api.Korail
     clients: list[korail_mobile_api.KorailClient] = []
@@ -239,7 +237,9 @@ def test_documented_search_and_pagination_keep_connections_open(
     namespace: dict[str, object] = {}
     try:
         exec(compile(block, path, "exec"), namespace)
-        assert len(clients) == 1 and clients[0].http._client.is_closed
+        assert len(clients) == 1
+        with pytest.raises(korail_mobile_api.KorailProtocolError, match="closed"):  # the example closed it
+            clients[0].get_service_status()
         assert len(forms) == 2
         assert all(form["txtGoAbrdDt"] == [expected_date] for form in forms)
         assert forms[0].get("qryStTrnNo") in (None, [""])
@@ -276,9 +276,7 @@ def test_documented_reservation_keeps_search_passengers(
             if source == path and "option=KorailReserveOption.GENERAL_FIRST" in block
         ]
         block = block.split("hold = ", 1)[0] + option
-    config = korail_mobile_api.KorailConfig(
-        base_url="https://api.example.invalid", netfunnel_enabled=False, disable_dynapath=True
-    )
+    config = synthetic_config(netfunnel_enabled=False, disable_dynapath=True)
     row = {
         "h_trn_no": "90001",
         "h_trn_gp_cd": "101",
@@ -319,11 +317,12 @@ def test_documented_reservation_keeps_search_passengers(
     )
     with closing(client):
         exec(compile(block, str(path), "exec"), {"korail": korail})
-    assert client.http._client.is_closed
+    with pytest.raises(korail_mobile_api.KorailProtocolError, match="closed"):
+        client.get_service_status()
     assert len(requests) == 2 and pending == []
     assert requests[0].url.path.endswith("seatMovie.ScheduleView")
     assert requests[1].url.path.endswith("certification.TicketReservation")
-    search, reservation = [parse_qs(request.content.decode()) for request in requests]
+    search, reservation = [wire_form(request) for request in requests]
     assert search["txtPsgFlg_1"] == ["2"] and search["txtPsgFlg_2"] == ["1"]
     assert reservation["txtTotPsgCnt"] == ["3"]
     assert reservation["txtCompaCnt1"] == ["2"] and reservation["txtPsgTpCd1"] == ["1"]

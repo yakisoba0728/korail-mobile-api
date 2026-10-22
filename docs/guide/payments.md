@@ -23,8 +23,8 @@ client = KorailClient()
 client.login(input("회원번호·전화번호·이메일: "), getpass("비밀번호: "))
 
 query = TrainSearchQuery(
-    departure_station_code="서울",
-    arrival_station_code="부산",
+    departure_station="서울",
+    arrival_station="부산",
     departure_date=departure_date,
     departure_time="090000",
 )
@@ -37,11 +37,9 @@ print(hold.pnr_no, hold.received_amount, hold.payment_deadline_date, hold.paymen
 결제하지 않을 홀드는 [`cancel_unpaid_hold`](../api/reservations.md#cancel_unpaid_hold)로 취소하세요.
 
 !!! warning "실제로 처리됩니다"
-    [`reserve`](../api/reservations.md#reserve)를 호출하면 좌석이 실제로 잡힙니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 [`get_reservation_history`](../api/reservations.md#get_reservation_history)로 결과를 확인하세요.
+    [`reserve`](../api/reservations.md#reserve)를 호출하면 좌석이 실제로 잡힙니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 [`list_reservations`](../api/reservations.md#list_reservations)로 결과를 확인하세요.
 
 ## 기존 예약 가져오기 {#existing-reservation}
-
-2.3.0부터 제공하는 기능입니다.
 
 앱이나 다른 패키지에서 같은 계정으로 예약한 표는 로그인한 `client`에서
 [`get_reservation_hold`](../api/reservations.md#get_reservation_hold)로 가져올 수 있습니다.
@@ -49,7 +47,7 @@ print(hold.pnr_no, hold.received_amount, hold.payment_deadline_date, hold.paymen
 이 단계는 예약 상세를 조회하며 새 예약이나 결제를 만들지 않습니다.
 
 ```python
-history = client.get_reservation_history()
+history = client.list_reservations()
 for row in history.items:
     print(row.pnr_no, row.train_no, row.run_date, row.departure_time, row.reserved_amount)
 
@@ -79,37 +77,33 @@ PNR이 다르거나 창구번호·여정·좌석이 누락되거나, 금액이 �
 
 기존 예약을 실서버에서 가져오고, 실제 창구번호·정산액이 로컬 결제 폼에 보존되는 것까지 확인했습니다.
 카드 결제 요청은 보내지 않았고, N카드 예약 복원도 별도 검증하지 않았습니다.
-관측 결과와 한계는 [실서버 확인 현황](../status.md)에 있습니다.
+관측 결과와 한계는 [2.3.0 추가 기능 기록](../records.md#230-추가-기능-2026-09-29)에 있습니다.
 
 ## 할인 재계산 {#recalculation}
 
 할인을 바꾸지 않으면 이 단계를 건너뜁니다.
 홀드의 할인 조합을 바꾸려면 결제 전에 [`recalculate_price`](../api/payments.md#recalculate_price)를 호출합니다.
-요청은 [`PriceRecalculationRequest`][korail_mobile_api.mutation_models.PriceRecalculationRequest]의 `for_hold()`로 만듭니다.
+요청은 [`PriceRecalculationRequest`][korail_mobile_api.PriceRecalculationRequest]의 `for_hold()`로 만듭니다.
 
 - `for_hold(hold, requested_discount_codes)`는 성공한 홀드의 첫 여정 좌석마다 한 행을 만들고, 좌석의 승객 유형·객실·현재 할인 코드·증빙 번호를 복사합니다.
 - `requested_discount_codes`는 좌석마다 새로 요청할 할인 코드를 좌석 순서대로 담은 목록입니다. 빈 문자열도 그 좌석의 자리를 지키도록 그대로 보냅니다.
 - 코드 개수가 첫 여정 좌석 수와 다르면 `KorailProtocolError`가 발생하며, 메시지에 좌석 수가 들어 있습니다.
-- 2.6.2부터 `payable`이 `False`인 홀드(예약대기)는 `KorailProtocolError`로 거절합니다. 예약대기 홀드는 카드로 결제하지 않습니다.
+- `payable`이 `False`인 홀드(예약대기)는 요청 전에 거절합니다. 예약대기 홀드는 카드로 결제하지 않습니다.
 
-재계산 결과는 새 [`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse]입니다. 결제는 원래 홀드가 아니라 이 반환값으로 합니다.
+재계산 결과는 새 [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse]입니다. 결제는 원래 홀드가 아니라 이 반환값으로 합니다.
 
-`add_to_cart=True`를 넘기면 재계산이 성공한 뒤 같은 PNR을 장바구니에 추가합니다.
-장바구니 추가가 실패 응답이어도 예외는 나지 않고 결과가 반환값의 `cart_addition`에 남습니다.
-재계산 자체가 실패하면 예외가 발생하고 장바구니 요청은 보내지 않습니다.
-2.6.2부터 장바구니 단계에서 라이브러리 예외(전송 오류, 응답 파싱 실패, 세션 만료)가 나도 이미 서버에 반영된 재계산 홀드를 반환합니다.
-이때 `cart_addition`은 `None`이고 그 예외는 새 필드 `cart_addition_error`에 들어 있습니다. 이전에는 예외가 그대로 전파돼 재계산된 홀드를 받을 수 없었습니다.
-장바구니 추가가 필요하면 결과를 확인한 뒤 [`add_to_cart`](../api/reservations.md#add_to_cart)를 직접 호출하세요.
+앱은 재계산이 성공하면 같은 PNR을 장바구니에 추가합니다. 같은 순서가 필요하면 재계산 결과를 확인한 뒤 [`add_to_cart`](../api/reservations.md#add_to_cart)를 직접 호출하세요.
+장바구니 요청이 실패해도 재계산은 이미 서버에 반영돼 있으므로 `recalculated`로 결제합니다.
+3.0에서 `recalculate_price(..., add_to_cart=True)`와 `cart_addition`·`cart_addition_error`(2.6.2에서 추가)를 제거했습니다.
 
 ```python
-from korail_mobile_api import PriceRecalculationRequest
+from korail_mobile_api import CartAddRequest, PriceRecalculationRequest
 
 request = PriceRecalculationRequest.for_hold(hold, [input("요청할 할인 코드: ")])
-recalculated = client.recalculate_price(request, add_to_cart=True)
+recalculated = client.recalculate_price(request)
 print(hold.received_amount, "->", recalculated.received_amount)
-cart = recalculated.cart_addition
-if cart is not None and cart.str_result != "SUCC":
-    print("장바구니 추가 실패:", cart.h_msg_cd, cart.h_msg_txt)
+cart = client.add_to_cart(CartAddRequest(pnr_no=recalculated.pnr_no))  # 선택: 앱처럼 장바구니에 담습니다
+print(cart.str_result, cart.h_msg_cd)
 
 hold = recalculated  # 결제는 재계산된 홀드로 합니다
 ```
@@ -119,7 +113,7 @@ hold = recalculated  # 결제는 재계산된 홀드로 합니다
 
 ## 카드 결제 {#card-payment}
 
-카드 정보는 [`CardPayment`][korail_mobile_api.mutation_models.CardPayment]로 만들어 [`pay_with_card`](../api/payments.md#pay_with_card)에 넘깁니다.
+카드 정보는 [`CardPayment`][korail_mobile_api.CardPayment]로 만들어 [`pay_with_card`](../api/payments.md#pay_with_card)에 넘깁니다.
 
 | 필드 | 기본값 | 형식 |
 |---|---|---|
@@ -130,8 +124,8 @@ hold = recalculated  # 결제는 재계산된 홀드로 합니다
 | `installment` | `"0"` | 할부 개월 수입니다. 숫자 1~2자리이며 `"0"`은 일시불입니다. |
 | `card_type` | `"J"` | `"J"`(개인) 또는 `"S"`(법인)입니다. |
 
-`card_type`은 `CardPayment`를 만들 때 검사하고, 나머지 필드는 `pay_with_card`가 요청을 보내기 전에 검사합니다. 2.5.0부터 `repr(card)`와 `str(card)`가 모든 입력 필드를 숨겨 `CardPayment()`로 표시합니다. 직접 속성이나 `dataclasses.asdict(card)`에는 실제 값이 남고, 결제 폼도 실제 값을 사용합니다.
-어느 쪽이든 형식이 틀리면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생하고 요청은 나가지 않습니다.
+형식은 `CardPayment`를 만들 때 검사하고, 유효기간 경과는 `pay_with_card`가 요청을 보내기 전에 검사합니다. `repr(card)`와 `str(card)`가 모든 입력 필드를 숨겨 `CardPayment()`로 표시합니다. 직접 속성이나 `dataclasses.asdict(card)`에는 실제 값이 남고, 결제 폼도 실제 값을 사용합니다.
+어느 쪽이든 형식이 틀리면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생하고 요청은 나가지 않습니다.
 유효기간이 한국 시간 기준 이번 달이면 허용하고, 그보다 이전이면 만료로 보고 거절합니다.
 검사는 형식과 유효기간만 확인하며, 카드를 실제로 쓸 수 있는지는 확인하지 않습니다.
 
@@ -162,7 +156,7 @@ else:
 
 ### 카드 거절 확인 {#card-decline}
 
-`pay_with_card`는 카드 거절을 포함해 세션 만료(`P058`)를 뺀 모든 실패를 예외 없이 [`ReservationPaymentResponse`][korail_mobile_api.mutation_models.ReservationPaymentResponse]로 반환합니다.
+`pay_with_card`는 카드 거절을 포함해 세션 만료(`P058`)를 뺀 모든 실패를 예외 없이 [`ReservationPaymentResponse`][korail_mobile_api.ReservationPaymentResponse]로 반환합니다.
 이때 `str_result`는 `"FAIL"`(또는 `strResult`가 없으면 `None`)이고, 사유는 `h_msg_cd`와 `h_msg_txt`에 들어 있습니다.
 반환값을 받았다는 것만으로 결제가 끝났다고 판단하지 말고 `str_result`가 `"SUCC"`인지 확인하세요.
 결제 응답에는 PNR이 없으므로 이후 단계에서는 `hold.pnr_no`를 씁니다.
@@ -171,24 +165,24 @@ else:
 
 다음 홀드는 요청을 보내기 전에 `KorailProtocolError`로 거절합니다.
 
-- **예약대기 홀드**: `payable`이 `False`입니다. 예약대기는 좌석을 확보한 것이 아니므로 결제하지 않고, 대기 옵션만 [`confirm_standby_hold`](../api/reservations.md#confirm_standby_hold)로 저장합니다.
+- **예약대기 홀드**: `payable`이 `False`입니다. 예약대기는 좌석을 확보한 것이 아니므로 결제하지 않고, 대기 옵션만 [`set_standby_options`](../api/reservations.md#set_standby_options)로 저장합니다.
 - **0원 홀드**: `received_amount`가 0인 홀드입니다. 앱은 이런 홀드를 카드 없이 발권하며, 라이브러리는 그 경로를 구현하지 않습니다.
 - **실패했거나 식별자가 빠진 홀드**: `str_result`가 `"SUCC"`가 아니거나, `pnr_no`·`window_no`가 비었거나, `received_amount`가 숫자가 아닌 홀드입니다.
 
 !!! warning "실제로 처리됩니다"
-    `pay_with_card`를 호출하면 카드로 실제 금액이 청구됩니다. 응답을 읽지 못해 예외가 나도 결제는 처리됐을 수 있으므로 다시 결제하기 전에 [`get_reservation_history`](../api/reservations.md#get_reservation_history)나 [`get_ticket_list`](../api/account.md#get_ticket_list)로 결과를 확인하세요.
+    `pay_with_card`를 호출하면 카드로 실제 금액이 청구됩니다. 응답을 읽지 못해 예외가 나도 결제는 처리됐을 수 있으므로 다시 결제하기 전에 [`list_reservations`](../api/reservations.md#list_reservations)나 [`list_tickets`](../api/account.md#list_tickets)로 결과를 확인하세요.
 
 ## 환불할 승차권 조회 {#find-ticket}
 
 환불은 발권된 승차권 한 장 단위로 합니다.
-먼저 [`get_ticket_list`](../api/account.md#get_ticket_list)에서 환불할 승차권을 찾고, 그 반환 식별자로 [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference]를 만듭니다.
+먼저 [`list_tickets`](../api/account.md#list_tickets)에서 환불할 승차권을 찾고, 그 반환 식별자로 [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]를 만듭니다.
 `sale_date`에는 승차권의 `sale_date`가 아니라 `return_sale_date`를 넣습니다.
 넘긴 값이 `None`이거나 비어 있으면 `OriginalTicketReference`를 만들 때 `KorailProtocolError`가 발생합니다.
 
 ```python
 from korail_mobile_api import OriginalTicketReference
 
-tickets = client.get_ticket_list()
+tickets = client.list_tickets()
 ticket = next(t for reservation in tickets.reservations for t in reservation.tickets if t.pnr_no == hold.pnr_no)
 reference = OriginalTicketReference(
     sale_window_no=ticket.sale_window_no,
@@ -204,10 +198,10 @@ reference = OriginalTicketReference(
 
 1. [`get_refund_ticket_detail`](../api/payments.md#get_refund_ticket_detail)로 승차권 상세를 조회하고, `PaidTicket.from_refund_detail()`로 환불 입력을 만듭니다.
    상세에 PNR, 현재 판매일, 원표 창구번호·일련번호·반환 비밀번호 중 빠진 값이 있으면 `KorailProtocolError`가 발생합니다.
-2. [`get_refund_commission`](../api/payments.md#get_refund_commission)으로 같은 원표 식별자와 동반자 정보의 예상 환불액·수수료를 조회합니다. 이 응답은 환불 요청에 그대로 넘깁니다.
+2. [`get_refund_fee`](../api/payments.md#get_refund_fee)로 같은 원표 식별자와 동반자 정보의 예상 환불액·수수료를 조회합니다. 이 응답은 환불 요청에 그대로 넘깁니다.
 
 두 단계는 판매일을 다르게 씁니다. 상세 조회와 수수료 조회는 `reference`의 원표 반환일을 쓰고, 환불 요청은 상세 응답의 판매일을 씁니다.
-`from_refund_detail()`이 이 차이를 처리하므로 [`PaidTicket`][korail_mobile_api.mutation_models.PaidTicket]을 직접 만들기보다 이 메서드를 쓰세요.
+`from_refund_detail()`이 이 차이를 처리하므로 [`PaidTicket`][korail_mobile_api.PaidTicket]을 직접 만들기보다 이 메서드를 쓰세요.
 상세의 `original_sale_date`는 `paid.return_sale_date`로, `companion_name`과 `companion_birth_date`는
 `paid.companion_name`과 `paid.companion_certificate_no`로 복사합니다. 현재 판매일은 `paid.sale_date`에 따로 남습니다.
 수동 생성 시 새 키워드 인자 `return_sale_date`에 원표 반환일을 명시하고 필요한 동반자 정보도 넣어야 합니다.
@@ -223,20 +217,20 @@ companion = RefundCompanion(
     name=paid.companion_name,
     certificate_no=paid.companion_certificate_no,
 )
-commission = client.get_refund_commission(reference, companion)
+commission = client.get_refund_fee(reference, companion)
 print("환불액", commission.refund_amount, "수수료", commission.refund_fee)
 print("사용 가능 마일리지", commission.usable_mileage)
 ```
 
 상세의 `refund_possible_flag`는 환불 성공을 보장하지 않습니다.
-이미 환불한 승차권이나 승차일이 지난 승차권은 수수료 조회에서 [`KorailAppError`][korail_mobile_api.errors.KorailAppError]가 발생합니다.
+이미 환불한 승차권이나 승차일이 지난 승차권은 수수료 조회에서 [`KorailAppError`][korail_mobile_api.KorailAppError]가 발생합니다.
 
 ## 환불 {#refund}
 
 [`refund`](../api/payments.md#refund)에 `PaidTicket`과 수수료 조회 응답을 넘깁니다. 수수료 조회 응답은 `commission=` 키워드 인자로 넘깁니다.
-`commission`은 필수입니다. [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse]가 아닌 값은 `None`을 포함해 요청 전에 거절합니다.
+`commission`은 필수입니다. [`RefundCommissionResponse`][korail_mobile_api.RefundCommissionResponse]가 아닌 값은 `None`을 포함해 요청 전에 거절합니다.
 성공 응답(`str_result`가 `"SUCC"`)이 아닌 수수료 조회 응답도 요청 전에 거절합니다.
-2.6.0부터 환불은 **fail-closed 정책**입니다. 실제 `get_refund_commission` 반환 시 비공개로 연결된 조회 문맥과
+환불은 **fail-closed 정책**입니다. 실제 `get_refund_fee` 반환 시 비공개로 연결된 조회 문맥과
 환불할 `PaidTicket`의 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호가 모두 일치해야 합니다.
 `RefundCommissionResponse`를 직접 생성하거나 원문에서 직접 파싱한 값, 다른 표의 수수료 응답,
 원표 반환일이 없는 수동 생성 `PaidTicket`은 `KorailProtocolError`로 거절합니다.
@@ -250,7 +244,7 @@ print("사용 가능 마일리지", commission.usable_mileage)
 사용 가능 마일리지(`commission.usable_mileage`)가 수수료(`commission.refund_fee`) 이상일 때만 허용하며, 부족하면 요청 전에 `KorailProtocolError`가 발생합니다.
 두 값이 없거나 정수로 읽을 수 없으면 0으로 봅니다.
 
-대리수령 대상 플래그는 승차권 상세에 보통 들어 있지 않으므로, 아래 예제는 앱처럼 [`get_ticket_list`](../api/account.md#get_ticket_list) 승차권(`ticket`)의 값을 넘깁니다.
+대리수령 대상 플래그는 승차권 상세에 보통 들어 있지 않으므로, 아래 예제는 앱처럼 [`list_tickets`](../api/account.md#list_tickets) 승차권(`ticket`)의 값을 넘깁니다.
 
 ```python
 answer = input(f"수수료 {commission.refund_fee}원을 빼고 환불하려면 y를 입력하세요: ")
@@ -266,22 +260,22 @@ if answer == "y":
 서버가 실패로 응답하면 예외가 발생합니다. 한 PNR에 승차권이 여러 장이면 상세 조회부터 환불까지를 장마다 반복합니다.
 
 !!! warning "실제로 처리됩니다"
-    `refund`를 호출하면 승차권 한 장이 실제로 환불되며 수수료가 빠질 수 있습니다. 응답을 읽지 못해 예외가 나도 환불은 처리됐을 수 있으므로 다시 호출하기 전에 [`get_ticket_list`](../api/account.md#get_ticket_list)로 승차권 상태를 확인하세요.
+    `refund`를 호출하면 승차권 한 장이 실제로 환불되며 수수료가 빠질 수 있습니다. 응답을 읽지 못해 예외가 나도 환불은 처리됐을 수 있으므로 다시 호출하기 전에 [`list_tickets`](../api/account.md#list_tickets)로 승차권 상태를 확인하세요.
 
 ## 역에서 발권한 승차권 환불 {#station-refund}
 
 역에서 발권한 승차권은 확인과 실행 두 단계로 환불합니다. 두 메서드 모두 실서버에서 확인하지 못했습니다.
 
-1. [`verify_station_ticket_refund`](../api/payments.md#verify_station_ticket_refund)에 이름과 반환번호 네 칸을 넘겨 환불 가능 여부와 금액을 확인합니다. 이 단계에서는 환불하지 않습니다.
+1. [`check_station_ticket_refund`](../api/payments.md#check_station_ticket_refund)에 이름과 반환번호 네 칸을 넘겨 환불 가능 여부와 금액을 확인합니다. 이 단계에서는 환불하지 않습니다.
 2. `StationRefundExecutionRequest.from_verification()`으로 확인 결과의 첫 원표와 금액을 옮겨 담고 연락처와 이름을 더해 실행 입력을 만듭니다.
    확인 응답의 `str_result`가 `"SUCC"`가 아니거나 원표가 없으면 `KorailProtocolError`가 발생합니다.
-3. [`execute_station_ticket_refund`](../api/payments.md#execute_station_ticket_refund)로 환불을 요청하고, 반환값의 결과와 `refund_division_code`를 확인합니다.
+3. [`refund_station_ticket`](../api/payments.md#refund_station_ticket)로 환불을 요청하고, 반환값의 결과와 `refund_division_code`를 확인합니다.
 
 ```python
 from korail_mobile_api import StationRefundExecutionRequest, StationRefundVerificationRequest
 
 name = input("이름: ")
-verification = client.verify_station_ticket_refund(
+verification = client.check_station_ticket_refund(
     StationRefundVerificationRequest(
         customer_name=name,
         return_no_1=input("반환번호 1: "),
@@ -298,12 +292,12 @@ request = StationRefundExecutionRequest.from_verification(
     customer_name=name,
 )
 if input("환불하려면 y를 입력하세요: ") == "y":
-    result = client.execute_station_ticket_refund(request)
+    result = client.refund_station_ticket(request)
     print(result.str_result, result.refund_division_code)
 ```
 
 !!! warning "실제로 처리됩니다"
-    `execute_station_ticket_refund`를 호출하면 역에서 발권한 승차권의 환불이 실제로 요청됩니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
+    `refund_station_ticket`를 호출하면 역에서 발권한 승차권의 환불이 실제로 요청됩니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
 
 ## 정리 {#cleanup}
 

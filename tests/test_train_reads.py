@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import time
 from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
-from urllib.parse import parse_qsl
 
 import pytest
+from conftest import synthetic_config, wire_pairs
+from records._travel_search_unsupported import TravelProductSearchQuery
 
 from korail_mobile_api import (
     DynapathConfig,
@@ -15,7 +17,7 @@ from korail_mobile_api import (
     GuideSeatConditionRequest,
     KorailApiError,
     KorailAuthError,
-    KorailConfig,
+    KorailInvalidInputError,
     KorailProtocolError,
     KorailSession,
     KorailSessionExpiredError,
@@ -28,7 +30,6 @@ from korail_mobile_api import (
     TrainSummary,
     TransferSearchResult,
 )
-from korail_mobile_api.read_payloads import TravelProductSearchQuery
 
 P = "/classes/com.korail.mobile."
 DATE = "20300102"
@@ -62,7 +63,9 @@ ROW = {
     "h_trn_seq": "A",
 }
 TRAIN = TrainSummary.from_raw(ROW)
-QUERY = TrainSearchQuery("SYNTH_DEP", "SYNTH_ARR", DATE, "090000")
+QUERY = TrainSearchQuery(
+    departure_station="SYNTH_DEP", arrival_station="SYNTH_ARR", departure_date=DATE, departure_time="090000"
+)
 SEARCH_FORM = {
     **COMMON,
     "txtMenuId": "11",
@@ -183,12 +186,44 @@ APP = {
     "railplus_cardinfo": "SYNTH_CARDINFO",
     "unknown": {"retained": True},
 }
-FREE_REQUEST = FreeSeatCarRequest(DATE, "7", "1", "3", "1", "3")
-MERGE_REQUEST = MergeSeatsInquiryRequest(
-    DATE + "090000", DATE + "090000", "7", "SYNTH_DEP", "SYNTH_ARR", "SYNTH_MID", "1", "015", 2
+FREE_REQUEST = FreeSeatCarRequest(
+    run_date=DATE,
+    train_no="7",
+    departure_construction_order="1",
+    arrival_construction_order="3",
+    departure_run_order="1",
+    arrival_run_order="3",
 )
-FARE_LEG = PriceFareLeg("0001", "0099", DATE, "00007", "015", "101", "00")
-FARE_REQUEST = PriceFareQuoteRequest((FARE_LEG,))
+MERGE_REQUEST = MergeSeatsInquiryRequest(
+    boarding_datetime=DATE + "090000",
+    run_datetime=DATE + "090000",
+    train_no="7",
+    departure_station_name="SYNTH_DEP",
+    arrival_station_name="SYNTH_ARR",
+    selected_station_name="SYNTH_MID",
+    room_class_code="1",
+    seat_attribute_code="015",
+    passenger_count=2,
+)
+FARE_LEG = PriceFareLeg(
+    departure_station_code="0001",
+    arrival_station_code="0099",
+    run_date=DATE,
+    train_no="00007",
+    requested_seat_attribute_code="015",
+    train_group_code="101",
+    train_class_code="00",
+)
+SECOND_FARE_LEG = PriceFareLeg(
+    departure_station_code="0099",
+    arrival_station_code="0100",
+    run_date=DATE,
+    train_no="00008",
+    requested_seat_attribute_code="031",
+    train_group_code="102",
+    train_class_code="01",
+)
+FARE_REQUEST = PriceFareQuoteRequest(legs=(FARE_LEG,))
 FARE_FORM = {
     **COMMON,
     "txtMenuId": "11",
@@ -238,6 +273,7 @@ CASES = [
         {"trains.0.train_no": "7"},
         False,
     ),
+    # ActualTrainScheduleIn.java:53; CommonIn.java:40,432,467-474: no Key, configured lang kept, 5-digit train.
     (
         "get_train_schedule",
         (DATE, "7"),
@@ -256,7 +292,7 @@ CASES = [
         False,
     ),
     (
-        "get_transfer_stations",
+        "list_transfer_stations",
         ("0001", "0099"),
         {},
         P + "qry.chtnStn.do",
@@ -276,7 +312,7 @@ CASES = [
         False,
     ),
     (
-        "get_seat_cars",
+        "list_seat_cars",
         (TRAIN,),
         {"passenger_count": 2},
         P + "research.TrainResearch",
@@ -296,7 +332,7 @@ CASES = [
         True,
     ),
     (
-        "get_free_seat_car_info",
+        "get_free_seat_cars",
         (FREE_REQUEST,),
         {},
         P + "trn.fresScar.do",
@@ -313,9 +349,10 @@ CASES = [
         {"car_no": "2", "title": "SYNTH"},
         False,
     ),
+    # TrainOptionViewModel.java:270 sends SeatType.HELPER's code (protected); the request takes it explicitly.
     (
         "get_guide_seat_condition",
-        (GuideSeatConditionRequest("015"),),
+        (GuideSeatConditionRequest(seat_attribute_code="015"),),
         {},
         P + "reservation.guideSeatCnd.do",
         {**COMMON, "rqSeatAttCd": "015"},
@@ -324,7 +361,7 @@ CASES = [
         False,
     ),
     (
-        "get_merge_seats_inquiry",
+        "get_merge_seat_options",
         (MERGE_REQUEST,),
         {},
         P + "research.mergeSeatsC.do",
@@ -354,7 +391,7 @@ CASES = [
         False,
     ),
     (
-        "get_price_fare_quote",
+        "get_fare_quote",
         (FARE_REQUEST,),
         {},
         P + "trn.prcFare.do",
@@ -376,7 +413,7 @@ CASES = [
         False,
     ),
     (
-        "get_station_info",
+        "get_station_list_version",
         (),
         {},
         P + "common.stationinfo",
@@ -386,7 +423,7 @@ CASES = [
         False,
     ),
     (
-        "get_station_data",
+        "list_stations",
         (),
         {},
         P + "common.stationdata",
@@ -396,7 +433,7 @@ CASES = [
         False,
     ),
     (
-        "get_common_code",
+        "get_common_codes",
         (["SYNTH_A", "SYNTH_B"],),
         {},
         P + "common.code.do",
@@ -418,17 +455,14 @@ CASES = [
         "/file/CACHE/prdMobilePlusMain.cache",
         {**COMMON, "timeStamp": "1700000000000", "srtCheckYn": "Y"},
         APP,
-        {"version.new_version": "9", "notice.post_title": "SYNTH_TITLE"},
-        False,
-    ),
-    (
-        "get_notice",
-        (),
-        {},
-        "/file/CACHE/prdMobilePlusMain.cache",
-        {**COMMON, "timeStamp": "1700000000000", "srtCheckYn": "Y"},
-        APP,
-        {"board_id": "1", "post_content": "SYNTH_BODY"},
+        # CNTAURL is the app's store link (AppKt.java:1240,1323,1635).
+        {
+            "version.new_version": "9",
+            "version.store_url": "https://example.invalid/store",
+            "notice.post_title": "SYNTH_TITLE",
+            "notice.board_id": "1",
+            "notice.post_content": "SYNTH_BODY",
+        },
         False,
     ),
     (
@@ -452,7 +486,7 @@ CASES = [
         False,
     ),
     (
-        "get_maas_menu_list",
+        "list_maas_menus",
         (),
         {},
         P + "copt.gdMenuLt.do",
@@ -474,7 +508,7 @@ CASES = [
         False,
     ),
     (
-        "get_maas_station_data",
+        "list_maas_stations",
         ("SYNTH_SERVICE",),
         {},
         "/ebizmaas/EbizMaasStationList.do",
@@ -484,7 +518,7 @@ CASES = [
         False,
     ),
     (
-        "get_maas_service_details",
+        "list_maas_services",
         (),
         {},
         P + "copt.gdReqQry.do",
@@ -527,13 +561,13 @@ ABSENT = object()
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
-    monkeypatch.setattr("korail_mobile_api.payloads.time.time", lambda: 1700000000.0)
+    monkeypatch.setattr(time, "time", lambda: 1700000000.0)
 
 
 @pytest.fixture
 def rig(scripted_client_factory):
     def make(responses, *, auth=False):
-        config = KorailConfig(
+        config = synthetic_config(
             base_url="https://example.invalid",
             device=COMMON["Device"],
             version=COMMON["Version"],
@@ -557,9 +591,9 @@ def exact_request(request, route, form, *, dynapath=False):
     assert request.url.path == route
     assert not request.url.query
     expected = [(k, str(vv)) for k, v in form.items() for vv in (v if isinstance(v, list) else [v])]
-    assert Counter(parse_qsl(request.content.decode(), keep_blank_values=True)) == Counter(expected)
+    assert Counter(wire_pairs(request)) == Counter(expected)
     assert (request.headers.get("x-dynapath-m-token") == "SYNTH-TOKEN") is dynapath
-    assert "Sid" not in dict(parse_qsl(request.content.decode()))
+    assert "Sid" not in dict(wire_pairs(request))
     if not form and route in {P + "common.stationinfo", P + "common.stationdata", "/ebizcross/getUUID.do"}:
         assert request.content == b""
         assert "content-type" not in request.headers
@@ -577,7 +611,7 @@ def test_public_method_form_and_representative_parse(case, rig):
     client, calls, pending = rig([raw], auth=auth)
     result = getattr(client, name)(*args, **kwargs)
     assert len(calls) == 1 and not pending
-    exact_request(calls[0], route, form, dynapath=name == "get_price_fare_quote")
+    exact_request(calls[0], route, form, dynapath=name == "get_fare_quote")
     for path, value in fields.items():
         assert lookup(result, path) == value
     assert result.raw == raw
@@ -588,19 +622,19 @@ OPTIONAL = [
     ("search_transfer_trains", "trn_infos.trn_info.0.h_arv_tm", "trains.0.arrival_time"),
     ("search_trains_with_transfer_fallback", "trn_infos.trn_info.0.h_arv_tm", "trains.0.arrival_time"),
     ("get_train_schedule", "dlayList.0.stopStnNm", "stops.0.station_name"),
-    ("get_transfer_stations", "chtnList.0.chtnRsStnCd", "stations.0.station_code"),
+    ("list_transfer_stations", "chtnList.0.chtnRsStnCd", "stations.0.station_code"),
     ("get_train_calendar", "runningCalendar.0.runDt", "days.0.run_date"),
-    ("get_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttCd", "cars.0.attributes.0.code"),
+    ("list_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttCd", "cars.0.attributes.0.code"),
     ("get_seat_inventory", "seatList.0.etc_seat_att_cd", "seats.0.other_attribute_code"),
-    ("get_free_seat_car_info", "fresScarNo", "car_no"),
-    ("get_merge_seats_inquiry", "midStnList.0.runOrdr", "intermediate_stations.0.run_order"),
-    ("get_price_fare_quote", "prcList.0.sumAmt", "fares.0.total_amount"),
-    ("get_station_data", "stns.stn.0.latitude", "stations.0.latitude"),
-    ("get_maas_station_data", "stns.stn.0.longitude", "stations.0.longitude"),
+    ("get_free_seat_cars", "fresScarNo", "car_no"),
+    ("get_merge_seat_options", "midStnList.0.runOrdr", "intermediate_stations.0.run_order"),
+    ("get_fare_quote", "prcList.0.sumAmt", "fares.0.total_amount"),
+    ("list_stations", "stns.stn.0.latitude", "stations.0.latitude"),
+    ("list_maas_stations", "stns.stn.0.longitude", "stations.0.longitude"),
     ("get_app_data", "version.NEWDVERSION", "version.new_version"),
-    ("get_notice", "notice.PtwtTtl", "post_title"),
-    ("get_maas_menu_list", "menuList.0.addSrvDvCd", "items.0.additional_service_code"),
-    ("get_maas_service_details", "addSrvList.0.reqQnty", "details.0.request_quantity"),
+    ("get_app_data", "notice.PtwtTtl", "notice.post_title"),
+    ("list_maas_menus", "menuList.0.addSrvDvCd", "items.0.additional_service_code"),
+    ("list_maas_services", "addSrvList.0.reqQnty", "details.0.request_quantity"),
 ]
 
 
@@ -622,7 +656,11 @@ OPTIONAL = [
 )
 def test_optional_strings_are_lenient_and_accept_integers(name, wire, model, value, expected, rig):
     """Optional constructors: TrainScheduleOutTrainInfo.java:172-563; seat:62-105;
-    RunDateOutItem.java:104-161.
+    RunDateOutItem.java:104-161; MobilePlusMainVersion.java:52. MaaS detail rows and ticket addSrvInfo share AddSrvItem
+    (AddSrvItem.java:28-49, MaasDetailOut.java:27, MyTicketListOutReservation.java:39); without @SerialName its keys
+    follow property names. ActualTrainScheduleOutDlay.java:30,71-76 (String actArvDlayTnum; stopStnNm has an app
+    default the library does not reproduce); ActualTrainScheduleOut.java:38,47,75-85 (protected trnNo1/runDt1
+    defaults); ChtnStnOut.java:54-60, ChtnStnOutItem.java:51-61 (missing chtnList is empty, codes optional).
     """
     case = BY_NAME[name]
     raw = deepcopy(case[5])
@@ -645,7 +683,7 @@ def test_station_info_serializer_required_mask(key, value, rig):
     put(raw, key, value)
     client, calls, _ = rig([raw])
     with pytest.raises(KorailProtocolError) as error:
-        client.get_station_info()
+        client.get_station_list_version()
     assert error.value.raw == raw
     assert len(calls) == 1
 
@@ -654,13 +692,13 @@ def test_station_info_serializer_required_mask(key, value, rig):
 def test_station_info_required_string_accepts_integers_and_empty(raw, rig):
     """StationInfoOut.java:47-53 required presence; checks/BEHAVIOR.md allows integers."""
     client, _, _ = rig([raw])
-    result = client.get_station_info()
+    result = client.get_station_list_version()
     assert result.count == str(raw["count"])
     assert result.map_version == str(raw["map_version"])
     assert result.raw == raw
 
 
-@pytest.mark.parametrize("name", ["get_station_data", "get_maas_station_data"])
+@pytest.mark.parametrize("name", ["list_stations", "list_maas_stations"])
 @pytest.mark.parametrize(
     "raw", [{}, {"stns": None}, {"stns": {}}, {"stns": {"stn": None}}, {"stns": {"stn": {}}}]
 )
@@ -678,8 +716,8 @@ def test_station_container_required_masks(name, raw, rig):
     [
         ("get_seat_inventory", "seatList.0.sqr_no", "seats.0.sequence_no"),
         ("get_seat_inventory", "seat_ary_cd", "arrangement_code"),
-        ("get_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name"),
-        ("get_station_data", "stns.stn.0.stn_cd", "stations.0.code"),
+        ("list_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name"),
+        ("list_stations", "stns.stn.0.stn_cd", "stations.0.code"),
         ("get_uuid", "mutMrkVrfCd", "verification_code"),
     ],
 )
@@ -707,12 +745,12 @@ DEFAULTED_FIELDS = [
     ("get_seat_inventory", "seatList.0.intg_msg", "seats.0.message", ""),
     ("get_seat_inventory", "windowList.0.st_loc_rt", "windows.0.start_location_ratio", None),
     ("get_seat_inventory", "windowList.0.cls_loc_rt", "windows.0.close_location_ratio", None),
-    ("get_seat_cars", "srcar_infos.srcar_info.0.h_srcar_no", "cars.0.car_no", None),
-    ("get_seat_cars", "srcar_infos.srcar_info.0.h_rest_seat_cnt", "cars.0.remaining_seat_count", None),
-    ("get_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name", ""),
-    ("get_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttNm", "cars.0.attributes.0.name", ""),
-    ("get_station_data", "stns.stn.0.stn_cd", "stations.0.code", ""),
-    ("get_station_data", "stns.stn.0.stn_nm", "stations.0.name", ""),
+    ("list_seat_cars", "srcar_infos.srcar_info.0.h_srcar_no", "cars.0.car_no", None),
+    ("list_seat_cars", "srcar_infos.srcar_info.0.h_rest_seat_cnt", "cars.0.remaining_seat_count", None),
+    ("list_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name", ""),
+    ("list_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttNm", "cars.0.attributes.0.name", ""),
+    ("list_stations", "stns.stn.0.stn_cd", "stations.0.code", ""),
+    ("list_stations", "stns.stn.0.stn_nm", "stations.0.name", ""),
 ]
 
 
@@ -786,9 +824,13 @@ def test_next_page_empty_page_and_cursor_choice(name, empty, rig):
     if empty:
         assert cursor is None
     elif name == "search_trains":
-        assert cursor == TrainSearchContinuation("9", "00008", "")
+        assert cursor == TrainSearchContinuation(
+            query_station_no="9", query_train_no="00008", query_train_no2=""
+        )
     else:
-        assert cursor == TrainSearchContinuation("9", "00009", "00010")
+        assert cursor == TrainSearchContinuation(
+            query_station_no="9", query_train_no="00009", query_train_no2="00010"
+        )
 
 
 @pytest.mark.parametrize("name", ["search_trains", "search_transfer_trains"])
@@ -811,7 +853,7 @@ def test_numeric_zero_cursor_survives_parsing(rig):
     raw = {**SEARCH, "h_qry_st_no_next": 0, "h_trn_no_next": 0}
     client, _, _ = rig([raw])
     cursor = client.search_trains(QUERY).next_page()
-    assert cursor == TrainSearchContinuation("0", "0", "")
+    assert cursor == TrainSearchContinuation(query_station_no="0", query_train_no="0", query_train_no2="")
 
 
 def test_transfer_incomplete_cursor_policy_is_not_app_proof(rig):
@@ -819,7 +861,9 @@ def test_transfer_incomplete_cursor_policy_is_not_app_proof(rig):
     raw = {**TRANSFER, "h_ectb_trn_no_next": None}
     client, _, _ = rig([raw])
     cursor = client.search_transfer_trains(QUERY).next_page()
-    assert cursor == TrainSearchContinuation("9", "00008", "")  # retained library-only rule
+    assert cursor == TrainSearchContinuation(
+        query_station_no="9", query_train_no="00008", query_train_no2=""
+    )  # retained library-only rule
 
 
 def test_interleaved_transfer_grouping_uses_h_trn_seq_not_change_seq(rig):
@@ -858,7 +902,7 @@ def test_search_groups_teenager_infant_and_guide_dog_like_the_app(rig):
     )
     client, calls, _ = rig([SEARCH])
     client.search_trains(query)
-    sent = dict(parse_qsl(calls[0].content.decode()))
+    sent = dict(wire_pairs(calls[0]))
     assert [sent[f"txtPsgFlg_{index}"] for index in range(1, 6)] == ["4", "2", "1", "0", "0"]
     with pytest.raises(KorailProtocolError):
         client.search_trains(replace(QUERY, infant_passengers="1"))
@@ -884,7 +928,9 @@ def test_exact_form_options_and_three_continuation_fields(special, rig):
     client, calls, _ = rig([SEARCH], auth=True)
     client.session.current = KorailSession(jsessionid="SYNTH-SESSION", member_card_no="SYNTH-MEMBER")
     client.search_trains(
-        query, continuation=TrainSearchContinuation("S", "A", "B"), use_special_schedule=special
+        query,
+        continuation=TrainSearchContinuation(query_station_no="S", query_train_no="A", query_train_no2="B"),
+        use_special_schedule=special,
     )
     form = {
         **SEARCH_FORM,
@@ -911,13 +957,40 @@ def test_exact_form_options_and_three_continuation_fields(special, rig):
     exact_request(calls[0], P + "seatMovie.ScheduleView" + ("Special" if special else ""), form)
 
 
+def test_special_search_sends_the_normal_form_byte_for_byte(rig):
+    """ScheduleViewSpecial reuses the normal builder: the ordered body is identical and only the route differs.
+    Blank date/time/third cursor and an absent member card are left out by the transport on both routes."""
+    query = replace(
+        QUERY, departure_time="", connection_station_codes=("0050",), connection_train_group_code="G"
+    )
+    client, calls, _ = rig([SEARCH] * 4, auth=True)
+    for member_card_no in ("SYNTH-MEMBER", None):
+        client.session.current = KorailSession(jsessionid="SYNTH-SESSION", member_card_no=member_card_no)
+        for special in (False, True):
+            client.search_transfer_trains(
+                query,
+                continuation=TrainSearchContinuation(query_station_no="S", query_train_no="A"),
+                use_special_schedule=special,
+            )
+    assert [call.url.path for call in calls] == [
+        P + "seatMovie.ScheduleView",
+        P + "seatMovie.ScheduleViewSpecial",
+    ] * 2
+    assert calls[0].content == calls[1].content and calls[2].content == calls[3].content
+    keys = [key for key, _ in wire_pairs(calls[1])]
+    assert (
+        "txtGoHour" not in keys and "qryStTrnNo2" not in keys and keys.index("mbCrdNo") < keys.index("qryDvCd")
+    )
+    assert "mbCrdNo" not in dict(wire_pairs(calls[3]))
+
+
 def test_numeric_station_codes_are_resolved_once_then_cached(rig):
     """StationDataOut.java:44-49, TrainScheduleIn.java:95-285 expects departure/arrival names."""
     raw = {
         "stns": {"stn": [{"stn_cd": "0001", "stn_nm": "SYNTH_DEP"}, {"stn_cd": "0099", "stn_nm": "SYNTH_ARR"}]}
     }
     client, calls, _ = rig([raw, SEARCH, SEARCH])
-    query = replace(QUERY, departure_station_code="0001", arrival_station_code="0099")
+    query = replace(QUERY, departure_station="0001", arrival_station="0099")
     client.search_trains(query)
     client.search_trains(query)
     exact_request(calls[0], P + "common.stationdata", {})
@@ -925,21 +998,51 @@ def test_numeric_station_codes_are_resolved_once_then_cached(rig):
         exact_request(request, P + "seatMovie.ScheduleView", SEARCH_FORM)
 
 
-def test_direct_no_results_falls_back_once_and_resets_continuation(rig):
+def test_station_names_come_from_the_parsed_station_list(rig):
+    """StationDataRepositoryImpl.java:282-283: the app looks names up in the station list it parsed. An integer
+    stn_cd reads as its string, a row without a name is skipped, and an unknown code sends no search."""
+    raw = {
+        "stns": {
+            "stn": [
+                {"stn_cd": 1, "stn_nm": "SYNTH_DEP"},
+                {"stn_cd": "0099", "stn_nm": "SYNTH_ARR"},
+                {"stn_cd": "0050"},
+            ]
+        }
+    }
+    client, calls, _ = rig([raw, SEARCH])
+    client.search_trains(replace(QUERY, departure_station="1", arrival_station="0099"))
+    exact_request(calls[1], P + "seatMovie.ScheduleView", SEARCH_FORM)
+    with pytest.raises(KorailProtocolError, match="station code is unknown: 0050"):
+        client.search_trains(replace(QUERY, departure_station="0050"))
+    assert len(calls) == 2
+
+
+def test_free_seat_and_merge_requests_copy_the_searched_train():
+    """3.0 factories copy what the hand-built requests above take from a search row; missing values raise."""
+    assert FreeSeatCarRequest.from_train(TRAIN) == FREE_REQUEST
+    merge = MergeSeatsInquiryRequest.from_train(TRAIN, selected_station_name="SYNTH_MID", passenger_count=2)
+    assert merge == MERGE_REQUEST
+    assert (
+        MergeSeatsInquiryRequest.from_train(replace(TRAIN, seat_attribute_code=None)).seat_attribute_code
+        == "015"
+    )
+    with pytest.raises(KorailInvalidInputError, match="arrival_run_order"):
+        FreeSeatCarRequest.from_train(replace(TRAIN, arrival_run_order=None))
+    with pytest.raises(KorailInvalidInputError, match="departure_station_name"):
+        MergeSeatsInquiryRequest.from_train(replace(TRAIN, departure_station_name=None))
+
+
+def test_direct_no_results_falls_back_once_to_the_first_transfer_page(rig):
     """TrainScheduleViewModel.smali:35513-35566 confirms dialog, not plaintext WRD000061 (protected).
+    The app's filter switch is TrainScheduleViewModel.java:3216-3219,11051-11079 (request field TrainScheduleIn.java:95).
     Library WRD000061 policy is fixed; user confirmation/filter reset are not emulated.
     """
     failure = {"strResult": "FAIL", "h_msg_cd": "WRD000061", "h_msg_txt": "SYNTH_NO_DIRECT"}
     client, calls, _ = rig([failure, TRANSFER])
-    result = client.search_trains_with_transfer_fallback(
-        QUERY, continuation=TrainSearchContinuation("S", "T", "U")
-    )
+    result = client.search_trains_with_transfer_fallback(QUERY)
     assert isinstance(result, TransferSearchResult)
-    exact_request(
-        calls[0],
-        P + "seatMovie.ScheduleView",
-        {**SEARCH_FORM, "qryStNo": "S", "qryStTrnNo": "T", "qryStTrnNo2": "U"},
-    )
+    exact_request(calls[0], P + "seatMovie.ScheduleView", SEARCH_FORM)
     exact_request(calls[1], P + "seatMovie.ScheduleView", {**SEARCH_FORM, "radJobId": "2"})
 
 
@@ -986,22 +1089,22 @@ def test_failure_no_automatic_read_retry_and_raw_preserved(case, raw, error_type
 
 
 @pytest.mark.parametrize(
-    "name", ["search_trains", "get_guide_seat_condition", "get_seat_inventory", "get_maas_service_details"]
+    "name", ["search_trains", "get_guide_seat_condition", "get_seat_inventory", "list_maas_services"]
 )
 def test_p058_clears_session_even_on_guidance_path(name, rig):
     """CommonOut.java:426-438 has protected code; P058 mapping is supplied library policy."""
     case = BY_NAME[name]
     raw = {"strResult": "FAIL", "h_msg_cd": "P058", "h_msg_txt": "SYNTH_EXPIRED"}
     client, calls, _ = rig([raw], auth=True)
-    client.http._client.cookies.set("JSESSIONID", "SYNTH-SESSION")
+    client.http.cookies.set("JSESSIONID", "SYNTH-SESSION")
     with pytest.raises(KorailSessionExpiredError) as error:
         getattr(client, name)(*case[1], **case[2])
     assert error.value.raw == raw
-    assert client.session.current is None and not client.http._client.cookies
+    assert client.session.current is None and not client.http.cookies
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize("name", ["get_seat_cars", "get_seat_inventory", "get_maas_service_details"])
+@pytest.mark.parametrize("name", ["list_seat_cars", "get_seat_inventory", "list_maas_services"])
 def test_local_auth_guard_is_retained_not_app_equivalence(name, rig):
     """Retained library-only check; app DTOs do not imply this preflight restriction."""
     case = BY_NAME[name]
@@ -1012,25 +1115,17 @@ def test_local_auth_guard_is_retained_not_app_equivalence(name, rig):
 
 
 def test_ticket_maas_repeated_return_numbers_and_history_dates(rig):
-    """NetworkApi.java:403-404 @Field(tkRetNo) List; MaasDetailIn.java:51-63 dates."""
+    """NetworkApi.java:402-404 @Field(tkRetNo) List; MaasDetailIn.java:51-63 dates."""
     client, calls, _ = rig([ENVELOPE, ENVELOPE], auth=True)
-    client.get_maas_menu_list(pnr_no="SYNTH-PNR", ticket_return_numbers=["SYNTH-RETURN-A", "SYNTH-RETURN-B"])
+    client.list_maas_menus(pnr_no="SYNTH-PNR", ticket_return_numbers=["SYNTH-RETURN-A", "SYNTH-RETURN-B"])
     exact_request(
         calls[0],
         P + "copt.gdMenuLt.do",
         {**COMMON, "pnrNo": "SYNTH-PNR", "tkRetNo": ["SYNTH-RETURN-A", "SYNTH-RETURN-B"]},
     )
-    assert [key for key, _ in parse_qsl(calls[0].content.decode())] == [
-        "Device",
-        "Version",
-        "AppVersion",
-        "Key",
-        "lang",
-        "pnrNo",
-        "tkRetNo",
-        "tkRetNo",
-    ]
-    client.get_maas_service_details(MaasServiceDetailQuery.history("20290101", "20291231"))
+    keys = [key for key, _ in wire_pairs(calls[0])]
+    assert keys == "Device Version AppVersion Key lang pnrNo tkRetNo tkRetNo".split()
+    client.list_maas_services(MaasServiceDetailQuery.history("20290101", "20291231"))
     exact_request(calls[1], P + "copt.gdReqQry.do", {**DEVICE, "qryDtFrom": "20290101", "qryDtTo": "20291231"})
     assert len(calls) == 2
 
@@ -1053,14 +1148,14 @@ def test_ticket_maas_repeated_return_numbers_and_history_dates(rig):
 def test_ticket_maas_invalid_fields_do_not_send(pnr_no, numbers, message, rig):
     client, calls, _ = rig([], auth=True)
     with pytest.raises(KorailProtocolError, match=message):
-        client.get_maas_menu_list(pnr_no=pnr_no, ticket_return_numbers=numbers)
+        client.list_maas_menus(pnr_no=pnr_no, ticket_return_numbers=numbers)
     assert calls == []
 
 
 def test_ticket_maas_authentication_precedes_field_validation(rig):
     client, calls, _ = rig([])
     with pytest.raises(KorailAuthError):
-        client.get_maas_menu_list(pnr_no="", ticket_return_numbers=[])
+        client.list_maas_menus(pnr_no="", ticket_return_numbers=[])
     assert calls == []
 
 
@@ -1069,9 +1164,9 @@ def test_two_leg_fare_and_goods_column_order(rig):
     The comma literals here deliberately freeze library policy, not decryption claims.
     """
     first = replace(FARE_LEG, goods_no="SYNTH-G1")
-    second = PriceFareLeg("0099", "0100", DATE, "00008", "031", "102", "01", "SYNTH-G2")
+    second = replace(SECOND_FARE_LEG, goods_no="SYNTH-G2")
     client, calls, _ = rig([ENVELOPE])
-    client.get_price_fare_quote(PriceFareQuoteRequest((first, second)))
+    client.get_fare_quote(PriceFareQuoteRequest(legs=(first, second)))
     form = {
         **COMMON,
         "txtMenuId": "11",
@@ -1087,43 +1182,52 @@ def test_two_leg_fare_and_goods_column_order(rig):
         "stlbTrnClsfCd": "00,01",
     }
     exact_request(calls[0], P + "trn.prcFare.do", form, dynapath=True)
-    keys = [k for k, _ in parse_qsl(calls[0].content.decode())]
+    keys = [k for k, _ in wire_pairs(calls[0])]
     assert keys.index("trnNo") < keys.index("gdNo") < keys.index("rqSeatAttCd")
 
 
 def test_price_fare_quote_sends_empty_goods_numbers_like_the_app(rig):
     """TrainOpInfoViewModel.java:794 passes null gdNo, so both legs carry the empty default and the joined
-    column is just the separator."""
-    second = PriceFareLeg("0099", "0100", DATE, "00008", "031", "102", "01")
+    column is just the separator. TrainOpInfoViewModel.java:941-962: the quote is a display fare; payment uses the
+    hold's received_amount."""
     client, calls, _ = rig([ENVELOPE, ENVELOPE])
-    client.get_price_fare_quote(PriceFareQuoteRequest((FARE_LEG,)))
-    client.get_price_fare_quote(PriceFareQuoteRequest((FARE_LEG, second)))
-    sent = [dict(parse_qsl(call.content.decode(), keep_blank_values=True)) for call in calls]
+    client.get_fare_quote(PriceFareQuoteRequest(legs=(FARE_LEG,)))
+    client.get_fare_quote(PriceFareQuoteRequest(legs=(FARE_LEG, SECOND_FARE_LEG)))
+    sent = [dict(wire_pairs(call)) for call in calls]
     assert sent[0]["gdNo"] == "" and sent[1]["gdNo"] == ","
 
 
-@pytest.mark.parametrize("method", ["get_seat_cars", "get_seat_inventory"])
+def test_fare_quote_rejects_goods_numbers_on_one_leg_at_construction():
+    """F2 B7: a request whose legs disagree on goods_no used to construct fine and fail only when sent."""
+    with pytest.raises(KorailInvalidInputError, match="every leg or on none"):
+        PriceFareQuoteRequest(legs=(replace(FARE_LEG, goods_no="SYNTH-G1"), FARE_LEG))
+    with pytest.raises(KorailInvalidInputError, match="every leg or on none"):
+        PriceFareQuoteRequest(legs=(FARE_LEG, replace(FARE_LEG, goods_no="SYNTH-G2")))
+
+
+@pytest.mark.parametrize("method", ["list_seat_cars", "get_seat_inventory"])
 def test_optional_goods_and_seat_attribute_are_not_invented(method, rig):
     """TrainResearchIn.java:68-110; TResidualSeatsResearchIn.java:107-110,127-130.
     Empty primitives omitted by NetworkService.java:15335-15343; null encoding protected.
     """
     train = replace(TRAIN, goods_no=None, seat_attribute_code=None)
-    response = CARS if method == "get_seat_cars" else INVENTORY
+    response = CARS if method == "list_seat_cars" else INVENTORY
     client, calls, _ = rig([response], auth=True)
-    args = (train,) if method == "get_seat_cars" else (train, 2)
+    args = (train,) if method == "list_seat_cars" else (train, 2)
     getattr(client, method)(*args, passenger_count=2)
-    expected = dict(CAR_FORM if method == "get_seat_cars" else INVENTORY_FORM)
+    expected = dict(CAR_FORM if method == "list_seat_cars" else INVENTORY_FORM)
     for key in ("txtGdNo", "txtSeatAttCd", "gdNo", "seatAttCd"):
         expected.pop(key, None)
     exact_request(calls[0], BY_NAME[method][3], expected)
 
 
-@pytest.mark.parametrize("method", ["get_seat_cars", "get_seat_inventory"])
+@pytest.mark.parametrize("method", ["list_seat_cars", "get_seat_inventory"])
 def test_seat_attribute_override_follows_one_rule_for_both_seat_reads(method, rig):
     """An explicit value replaces the row value (even an unusable one); "" and None both fall back to the
-    row."""
-    response = CARS if method == "get_seat_cars" else INVENTORY
-    key = "txtSeatAttCd" if method == "get_seat_cars" else "seatAttCd"
+    row. The app copies the selected segment's attribute (TrainSeatMapViewModel.java:2527,2546,2573-2577;
+    TrainResearchIn.java:39,43,68)."""
+    response = CARS if method == "list_seat_cars" else INVENTORY
+    key = "txtSeatAttCd" if method == "list_seat_cars" else "seatAttCd"
     args = (1,) if method == "get_seat_inventory" else ()
     client, calls, _ = rig([response, response], auth=True)
     getattr(client, method)(
@@ -1132,7 +1236,7 @@ def test_seat_attribute_override_follows_one_rule_for_both_seat_reads(method, ri
     getattr(client, method)(
         replace(TRAIN, seat_attribute_code="031"), *args, passenger_count=2, seat_attribute_code=""
     )
-    sent = [dict(parse_qsl(call.content.decode()))[key] for call in calls]
+    sent = [dict(wire_pairs(call))[key] for call in calls]
     assert sent == ["021", "031"]
     with pytest.raises(KorailProtocolError):
         getattr(client, method)(TRAIN, *args, passenger_count=2, seat_attribute_code="abc")
@@ -1140,22 +1244,23 @@ def test_seat_attribute_override_follows_one_rule_for_both_seat_reads(method, ri
 
 
 def test_notice_missing_and_optional_lists_empty(rig):
-    """MobilePlusMainOut.java:57-77; RunDateOut.java:55-62; optional list defaults."""
+    """MobilePlusMainOut.java:57-77; MobilePlusMainNotice.java:52; RunDateOut.java:55-62; optional list
+    defaults."""
     client, _, _ = rig([{}, ENVELOPE, ENVELOPE, ENVELOPE])
-    notice = client.get_notice()
-    assert notice.post_title is None and notice.raw == {}
+    assert client.get_app_data().notice is None
     assert client.get_train_calendar().days == ()
     assert client.get_train_schedule(DATE, "7").stops == ()
-    assert client.get_price_fare_quote(FARE_REQUEST).fares == ()
+    assert client.get_fare_quote(FARE_REQUEST).fares == ()
 
 
 @pytest.mark.parametrize("value", [ABSENT, None, True, [], {}, 1.5])
 def test_optional_long_on_guidance_is_lenient(value, rig):
-    """GuideSeatCndOut.java:50-57 optional Long timeStamp; descriptor plaintext protected."""
+    """GuideSeatCndOut.java:29,50-57 optional Long timeStamp (key guessed from the attribute name; descriptor
+    plaintext protected). TrainOptionViewModel.java:290-300 shows a FAIL's h_msg_txt, so FAIL is returned."""
     raw = {**ENVELOPE, "timeStamp": 1}
     put(raw, "timeStamp", value)
     client, _, _ = rig([raw])
-    result = client.get_guide_seat_condition(GuideSeatConditionRequest("015"))
+    result = client.get_guide_seat_condition(GuideSeatConditionRequest(seat_attribute_code="015"))
     assert result.time_stamp is None and result.raw == raw
 
 
@@ -1163,7 +1268,7 @@ def test_travel_search_is_record_only_and_keeps_the_dto_order(rig):
     """TravelSearchProductIn.java:60-81: funcDvCd, keyword field, bltnLstOrdr, nowPgNo, pgPrCnt. The app's codes
     are protected and the 2026-09-25 server refused a search without funcDvCd (WRR000100), so the call is
     record-only."""
-    from korail_mobile_api import _travel_search_unsupported as record
+    from records import _travel_search_unsupported as record
 
     query = TravelProductSearchQuery(
         "SYNTH", "theme", page_no=2, function_code="SYNTH-F", order_code="SYNTH-O", page_size="SYNTH-P"
@@ -1175,13 +1280,8 @@ def test_travel_search_is_record_only_and_keeps_the_dto_order(rig):
     result = record.search_travel_products(client, query)
     assert (result.products[0].goods_no, result.page_count) == ("SYNTH_GOODS", "1")
     assert calls[0].url.path == "/ebizcom/gdLstDtl.do"
-    assert [key for key, _ in parse_qsl(calls[0].content.decode())][len(COMMON) :] == [
-        "funcDvCd",
-        "gdThmNm",
-        "bltnLstOrdr",
-        "nowPgNo",
-        "pgPrCnt",
-    ]
+    keys = [key for key, _ in wire_pairs(calls[0])]
+    assert keys[len(COMMON) :] == "funcDvCd gdThmNm bltnLstOrdr nowPgNo pgPrCnt".split()
     assert record.search_travel_products(client, query).products == ()
     with pytest.raises(KorailProtocolError):
         record.search_travel_products(client, query)
@@ -1191,7 +1291,7 @@ def test_travel_search_is_record_only_and_keeps_the_dto_order(rig):
 
 
 def test_all_public_methods_have_contract_cases():
-    assert len(CASES) == len(BY_NAME) == 22
+    assert len(CASES) == len(BY_NAME) == 21
     assert len(DEFAULTED_FIELDS) == 18
 
 
@@ -1199,7 +1299,7 @@ def test_all_public_methods_have_contract_cases():
     "name,expected",
     [
         (
-            "get_seat_cars",
+            "list_seat_cars",
             "Device Version AppVersion Key lang txtMenuId txtRunDt txtDptDt txtTrnNo txtDptTm txtTrnClsfCd txtTrnGpCd "
             "txtDptRsStnCd txtArvRsStnCd txtPsrmClCd txtSeatAttCd txtDptStnRunOrdr txtArvStnRunOrdr "
             "txtTotPsgCnt txtGdNo",
@@ -1211,27 +1311,28 @@ def test_all_public_methods_have_contract_cases():
             "dptStnRunOrdr arvStnRunOrdr totPsgCnt gdNo isArrow",
         ),
         (
-            "get_merge_seats_inquiry",
+            "get_merge_seat_options",
             "Device Version AppVersion Key lang abrdDt runDt trnNo dptRsStnNm arvRsStnNm selRsStnNm psrmClCd seatAttCd "
             "totPsgNum",
         ),
-        ("get_common_code", "Device Version AppVersion Key lang code code deviceWidth deviceHeight OSVersion"),
-        ("get_maas_menu_list", "Device Version AppVersion Key lang timeStamp"),
+        ("get_common_codes", "Device Version AppVersion Key lang code code deviceWidth deviceHeight OSVersion"),
+        ("list_maas_menus", "Device Version AppVersion Key lang timeStamp"),
     ],
 )
 def test_read_forms_follow_the_app_dto_order(name, expected, rig):
-    """TrainResearchIn.java:68; TResidualSeatsResearchIn.java:65; MergeSeatsCIn.java:63; CommonCodeIn.java:55;
+    """TrainResearchIn.java:68; TResidualSeatsResearchIn.java:65; MergeSeatsCIn.java:63; CommonCodeIn.java:31-34,55;
     MaasMenuLtIn.java:58: the app flattens each DTO in declaration order (NetworkService.java:15335-15392),
-    Key before lang."""
+    Key before lang. The general MaaS menu uses the CommonIn default constructor (GdMenuLtIn.java:59-61,
+    CommonIn.java:448-465)."""
     case = BY_NAME[name]
     client, calls, _ = rig([case[5]], auth=case[7])
     getattr(client, name)(*case[1], **case[2])
-    assert [key for key, _ in parse_qsl(calls[0].content.decode(), keep_blank_values=True)] == expected.split()
+    assert [key for key, _ in wire_pairs(calls[0])] == expected.split()
 
 
 def test_nested_parser_raw_promotes_partial_context(rig, monkeypatch):
     """_preserve_read_raw contract: preserve full response AND existing partial evidence."""
-    from korail_mobile_api import parsers
+    from korail_mobile_api._domains.trains import parsers
 
     partial = {"synthetic": "partial"}
 
@@ -1240,7 +1341,7 @@ def test_nested_parser_raw_promotes_partial_context(rig, monkeypatch):
         error.raw = partial
         raise error
 
-    monkeypatch.setattr(parsers, "_inventory_string", fail)
+    monkeypatch.setattr(parsers, "_inventory_ratio", fail)
     client, _, _ = rig([INVENTORY], auth=True)
     with pytest.raises(KorailProtocolError) as error:
         client.get_seat_inventory(TRAIN, 2, passenger_count=2)
@@ -1250,10 +1351,11 @@ def test_nested_parser_raw_promotes_partial_context(rig, monkeypatch):
 
 @pytest.mark.parametrize("bad", [True, [], {}, 1.5])
 def test_optional_merge_flag_is_lenient_and_raw_survives(bad, rig):
-    """MergeSeatsCOutTrnInfos.java:54-61 optional merge flag."""
+    """MergeSeatsCOutTrnInfos.java:25-26,54-61,85 optional merge flag; TrainScheduleOutTrainInfos.java:25-26,78
+    declares only trn_info, so seat assignment never reads it."""
     raw = {**ENVELOPE, "trn_infos": {"h_merge_rsv_psb_flg": bad, "trn_info": []}}
     client, _, _ = rig([raw])
-    result = client.get_merge_seats_inquiry(MERGE_REQUEST)
+    result = client.get_merge_seat_options(MERGE_REQUEST)
     assert result.merge_reservation_possible_flag is None and result.raw == raw
 
 
@@ -1261,7 +1363,7 @@ def test_zero_merge_flag_and_numeric_metadata(rig):
     """MergeSeatsCOutTrnInfos.java:54-61; TrainScheduleOut.java:67-109 optional Strings."""
     raw = {**ENVELOPE, "trn_infos": {"h_merge_rsv_psb_flg": 0, "trn_info": []}}
     client, _, _ = rig([raw, {**SEARCH, "h_rslt_cnt": 0, "h_rest_seat_cnt": 0}])
-    assert client.get_merge_seats_inquiry(MERGE_REQUEST).merge_reservation_possible_flag == "0"
+    assert client.get_merge_seat_options(MERGE_REQUEST).merge_reservation_possible_flag == "0"
     result = client.search_trains(QUERY)
     assert result.metadata.result_count == "0" and result.metadata.remaining_seat_count == "0"
 
@@ -1271,10 +1373,10 @@ def test_zero_merge_flag_and_numeric_metadata(rig):
     [
         ("get_train_schedule", "dlayList", "stops"),
         ("get_train_calendar", "runningCalendar", "days"),
-        ("get_maas_menu_list", "menuList", "items"),
-        ("get_maas_service_details", "addSrvList", "details"),
-        ("get_price_fare_quote", "prcList", "fares"),
-        ("get_merge_seats_inquiry", "midStnList", "intermediate_stations"),
+        ("list_maas_menus", "menuList", "items"),
+        ("list_maas_services", "addSrvList", "details"),
+        ("get_fare_quote", "prcList", "fares"),
+        ("get_merge_seat_options", "midStnList", "intermediate_stations"),
     ],
 )
 @pytest.mark.parametrize("bad", [None, "not-a-list", 3, {}, ["bad-row", None, 5]])
@@ -1306,7 +1408,7 @@ def test_common_code_and_status_unmodeled_values_remain_raw(rig):
     """CommonCodeOut.java:88-164; MobileServiceOut.java:49-56: raw-only data stays available."""
     raw = {**ENVELOPE, "timeStamp": {"malformed": True}, "SYNTH_CODE": [None, {"x": 1}]}
     client, calls, _ = rig([raw, raw])
-    assert client.get_common_code("SYNTH_CODE").raw == raw
+    assert client.get_common_codes("SYNTH_CODE").raw == raw
     assert client.get_service_status().raw == raw
     exact_request(
         calls[0],
@@ -1315,40 +1417,20 @@ def test_common_code_and_status_unmodeled_values_remain_raw(rig):
     )
 
 
-@pytest.mark.parametrize(
-    "peak,special,expected",
-    [
-        (False, False, "inquiry"),
-        (True, False, "peak_season_inquiry"),
-        (False, True, "product_inquiry"),
-        (True, True, "product_inquiry"),
-    ],
-)
-def test_search_queue_gate_wraps_request_without_extra_posts(peak, special, expected, rig):
-    """TrainScheduleViewModel.java:5213-5235; aid plaintext protected, names are library settings."""
-    client, calls, _ = rig([SEARCH])
-    events = []
-
-    class LocalQueue:
-        def run(self, gate, send):
-            events.append((gate, "enter", len(calls)))
-            try:
-                return send()
-            finally:
-                events.append((gate, "exit", len(calls)))
-
-        def close(self):
-            pass
-
-    client.netfunnel = LocalQueue()
-    client.search_trains(QUERY, peak_season=peak, use_special_schedule=special)
-    assert events == [(expected, "enter", 0), (expected, "exit", 1)]
+def test_common_code_default_sends_one_blank_code_and_empty_list_none(rig):
+    """The default "" is one blank code field; an empty sequence leaves the repeated field out."""
+    client, calls, _ = rig([ENVELOPE, ENVELOPE])
+    client.get_common_codes()
+    client.get_common_codes([])
+    form = {**COMMON, "deviceWidth": "101", "deviceHeight": "202", "OSVersion": "33"}
+    exact_request(calls[0], P + "common.code.do", {**form, "code": ""})
+    exact_request(calls[1], P + "common.code.do", form)
 
 
 def test_cars_then_inventory_stays_two_read_posts(rig):
     """TrainSeatMapViewModel.java:1974-1976,2527-2577; no implicit reservation/payment."""
     client, calls, _ = rig([CARS, INVENTORY], auth=True)
-    cars = client.get_seat_cars(TRAIN, passenger_count=2)
+    cars = client.list_seat_cars(TRAIN, passenger_count=2)
     client.get_seat_inventory(TRAIN, cars.cars[0].car_no, passenger_count=2)
     assert [r.url.path for r in calls] == [
         P + "research.TrainResearch",

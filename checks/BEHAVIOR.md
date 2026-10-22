@@ -1,7 +1,9 @@
 # 동작 계약과 확인 한계
 
-2.6.2부터 기본 DynaPath는 SDK 2.0.1 `2!` native-unavailable 진단입니다. 기기값은 기본 토큰에 합성하지 않으며
-profile/env로 제공한 값만 padding 없는 Base64url로 추가합니다. 명시적 v1/외부 공급자·기존 경로 gate·필수 토큰·대기열·무재시도 계약은 유지합니다.
+이 문서는 규칙만 적습니다. 규칙을 고정하는 테스트는 괄호에 적고, 날짜별 실서버 관측은 [실서버 확인 현황](../docs/status.md)에 둡니다.
+
+기본 DynaPath는 SDK 2.0.1 `2!` native-unavailable 진단입니다. 기기값은 기본 토큰에 합성하지 않으며
+profile/env로 제공한 값만 padding 없는 Base64url로 추가합니다. 명시적 v1/외부 공급자·경로 목록·필수 토큰·대기열·무재시도 계약은 같습니다.
 [실서버 관측의 버전·입력·한계](../docs/verification-7010.md#diagnostic-20261023)는 별도로 기록합니다.
 
 ## 전송과 원문
@@ -13,14 +15,13 @@ DTO 필드는 선언 순서로 평탄화하고 배열은 1기반 인덱스를 �
 두 순서 정정은 앱 근거와의 정합성 수정으로, 보호된 최종 map과 서버 순서 민감성·실서버 영향은 미확인입니다.
 빈 문자열을 생략하는 기본 규칙과 빈 값을 명시적으로 보내야 하는 운임 조회 등 예외를 구분합니다.
 `lang=None`이면 언어값을 추측하지 않고 생략합니다.
-2.6.2부터 폼에 들어갈 값이 `None`인 요청 필드는 `key=`로 보내지 않고 요청 전에 `KorailProtocolError`로 거절합니다.
-`""`은 이전처럼 생략합니다. `lang=None`처럼 폼을 만들기 전에 생략을 정한 선택값은 이 규칙과 별개입니다.
-숫자 입력은 ASCII 숫자만 받습니다. `²`·`١`·전각 `１` 같은 유니코드 숫자는 요청 전에 `KorailProtocolError`로 거절합니다
-(이전에는 일부가 일반 `ValueError`로 끝나거나 그대로 전송됐습니다).
+폼에 들어갈 값이 `None`인 요청 필드는 `key=`로 보내지 않고 요청 전에 `KorailProtocolError`로 거절합니다.
+`""`은 생략합니다. `lang=None`처럼 폼을 만들기 전에 생략을 정한 선택값은 이 규칙과 별개입니다.
+숫자 입력은 ASCII 숫자만 받습니다. `²`·`١`·전각 `１` 같은 유니코드 숫자는 요청 전에 거절합니다.
 
 좌석배정 조회의 `seatAttCdN/psgNumN/stlbDturDvNmN` 중 `*2` 이상은 기존 SDK 확장입니다.
 7.0.10 앱 DTO에서 확인한 한 묶음과 동등하다고 주장하지 않으며, 1~9명 지원을 제거하거나 무음 축소하지 않습니다.
-패키지 버전은 `2.6.2`이며 요청 기본 `AppVersion=7.0.8`과 API `Version=250601003`은 유지합니다.
+요청 기본값은 `AppVersion=7.0.8`, API `Version=250601003`입니다.
 `KorailConfig(app_version=..., version=...)` override와 `build_config_from_env()`의 `KORAIL_APP_VERSION`(`app_version`)·
 `KORAIL_API_VERSION`(`version`)은 지원하지만 새 버전의 실서버 호환을 뜻하지 않습니다.
 2026-10-21부터 보고된 `-8204` 거절과 기록된 관측 범위는 [실서버 확인 현황](../docs/status.md#current)에 둡니다.
@@ -42,9 +43,11 @@ DynaPath 차단 판정 경로는 내장 목록이 아니라 `config.dynapath.all
 네트워크 단계 실패의 `KorailTransportError.__cause__`(httpx 예외)는 예외 종류·객체를 유지하되, 붙은 요청에는
 메서드와 쿼리를 뺀 URL만 남기고 본문·쿠키·DynaPath 토큰을 제거합니다. 응답 모델·`raw`·`dataclasses.asdict`·pickle은 마스킹하지 않습니다.
 
-응답 모델은 자동 마스킹하지 않습니다. `frozen=True`는 중첩 사전·목록의 불변성을 뜻하지 않습니다.
+응답 모델은 자동 마스킹하지 않습니다. dataclass `repr`은 `raw`와 호출자가 넣은 비밀값(세션 쿠키, 반환 비밀번호, 카드 정보,
+입력 모델의 이름·전화번호·생년월일·고객번호, 기기 식별자)만 싣지 않으며 속성·`raw`·`asdict`·pickle 값은 그대로입니다.
+`frozen=True`는 중첩 사전·목록의 불변성을 뜻하지 않습니다.
 공개 `raw` 타입은 읽기 인터페이스인 `Mapping[str, object]`입니다. 조회 응답은 대체로 원문 객체를 그대로 참조하지만,
-`mutation_parsers`의 변경 응답·기존 홀드 복원과 일부 하위 행·검색 메타데이터는 사전을 얕게 복사합니다.
+변경 응답 파서(`_domains/*/parsers.py`)의 변경 응답·기존 홀드 복원과 일부 하위 행·검색 메타데이터는 사전을 얕게 복사합니다.
 어느 쪽도 중첩 객체를 복사하거나 동결하지 않습니다.
 거절한 응답의 전체 원문은 예외 `raw`, 파서가 남긴 부분 원문은 `parser_raw`입니다.
 
@@ -57,7 +60,7 @@ DynaPath 차단 판정 경로는 내장 목록이 아니라 `config.dynapath.all
 Python의 정수 문자열 변환 한도를 넘는 봉투 값도 `KorailProtocolError`로 처리하고 원문을 남깁니다.
 
 `BaseKorailResponse.from_raw`는 객체·봉투 타입을 검사하되 성공·실패를 판정하지 않습니다.
-`http.parse_base_response`는 `FAIL` 또는 필수 `strResult`의 누락을 실패로 봅니다.
+`_core.http.parse_base_response`는 `FAIL` 또는 필수 `strResult`의 누락을 실패로 봅니다.
 `null`·빈 문자열·미지의 결과 코드를 임의로 `FAIL`로 바꾸지는 않습니다.
 서버 코드 `-8204`(#32 관측값, 앱 리터럴 아님)는 로그인을 포함한 모든 경로에서 `KorailAppUpdateRequiredError`이며
 서버 메시지를 보존합니다. `SUPDATE`와 같은 하위 예외이고 자동 재시도나 버전 자동 변경으로 이어지지 않습니다.
@@ -104,24 +107,24 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 `close`는 연결만 닫습니다. `clear_session`은 로컬 상태만 폐기합니다.
 `logout`은 서버 요청이 실패해도 로컬 상태를 정리하며 서버 무효화 성공을 보장하지 않습니다.
 
-예약대기는 좌석 확보와 다르고 `payable=False`입니다. `confirm_standby_hold`는 기존 대기 홀드에 옵션만 저장합니다.
-일반 열차 예약의 승객 종류는 `PassengerType.basicList()`의 일곱 종류입니다. `teenager > 0`은 직통·좌석 지정·
+예약대기는 좌석 확보와 다르고 `payable=False`입니다. `set_standby_options`는 기존 대기 홀드에 옵션만 저장합니다.
+일반 열차 예약의 승객 종류는 앱 `PassengerType.basicList()`(Java)의 일곱 종류입니다. `teenager > 0`은 직통·좌석 지정·
 예약대기·환승·병합 예약과 간편 API에서 대기열·예약 요청 전에 `KorailProtocolError`로 거절합니다.
 검색에서는 기존처럼 청소년을 어른 인원에 합산하지만 예약 인원을 자동으로 어른으로 바꾸지 않습니다.
-`P11`은 청소년드림 상품(`SpecialOffer.YOUTH`, 발권 할인 코드 `508`)과 다른 경로입니다.
+`P11`은 청소년드림 상품(앱 `SpecialOffer.YOUTH`, 발권 할인 코드 `508`; 라이브러리에 해당 이름은 없음)과 다른 경로입니다.
 `ERR299943`은 지원하지 않는 예약 할인으로 `KorailReservationRefusedError`에 속하며,
 회원 자격 코드 `WRC000419`·`WRC800030`은 `KorailNotEntitledError`로 유지합니다.
 병합은 첫 홀드→병합 조회→첫 홀드 취소→후속 홀드 순서이며 첫 홀드는 호출자가 취소해야 합니다.
-`reserve_merge`는 `job_type=MERGE_STANDING`(기본값)만 받고 다른 값은 요청 전에 `KorailProtocolError`로 거절합니다.
-이전에는 `STANDBY`·`IMMEDIATE`도 그대로 보내 결제 가능한 홀드가 반환될 수 있었습니다.
+`reserve_merge`는 작업 유형 인자 없이 항상 `MERGE_STANDING`으로 보냅니다. 다른 유형은 입석 플래그를 덮어써
+예약대기 홀드가 결제 가능한 결과로 돌아올 수 있기 때문입니다(`tests/test_mutations.py::test_merge_reservation_takes_no_job_type`).
 `cancel_unpaid_hold`는 기본적으로 가능 여부 확인 후 실제 취소합니다.
 예약 응답의 파싱 실패 때 PNR은 예외 `raw`에 남지만 `get_reservation_hold`도 같은 파서로 실패할 수 있습니다.
-알려진 한계로, 취소는 `ReservationHoldResponse(str_result="SUCC", pnr_no=..., journey_count=...)`를 직접 만들어 넘기는 방법뿐이며
-전용 API는 3.0에서 제공할 예정입니다.
+이때는 PNR·여정 수만 요구하는 `HoldReference.from_raw(error.raw)`를 `cancel_unpaid_hold`에 넘기며, 같은 값이면 홀드로 취소할 때와
+같은 요청입니다(`tests/test_mutations.py::test_cancel_by_reference_sends_the_hold_bytes`·`test_hold_reference_needs_a_pnr_and_journey_count`).
 
 카드 결제액은 홀드 `received_amount`이며 기준 운임이나 `total_price`로 대체하지 않습니다.
 카드 거절은 FAIL 모델입니다. 환불은 성공한 수수료 응답을 명시적으로 받아 승차권 한 장씩 수행합니다.
-`get_refund_commission` 반환 시 응답에 비공개 조회 문맥을 연결하고 `repr`에서 숨깁니다.
+`get_refund_fee` 반환 시 응답에 비공개 조회 문맥을 연결하고 `repr`에서 숨깁니다.
 `refund`는 그 문맥과 환불 대상의 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호 일치를 요구합니다.
 직접 생성·직접 파싱한 수수료 응답, 다른 대상의 응답, 원표 반환일이 없는 입력은 요청 전에
 `KorailProtocolError`로 거절하는 fail-closed 동작 변경입니다. 자동 조회·재시도는 하지 않습니다.
@@ -148,19 +151,68 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 `original_sale_date`→`return_sale_date`, `companion_name`→동명 필드,
 `companion_birth_date`→`companion_certificate_no`를 복사하고 현재 `sale_date`는 별도로 유지합니다.
 수동 생성한 `PaidTicket`으로 환불하려면 원표 반환일을 명시해야 하며 현재 판매일로 대신하지 않습니다.
-기존 `get_refund_commission(ticket, companion=RefundCompanion())` 시그니처는 유지하고,
-간편 API는 `TicketResource.refund_fee(ticket, *, companion=RefundCompanion())`로 같은 동반자 정보를 받습니다.
+기존 `get_refund_fee(ticket, companion=RefundCompanion())` 시그니처는 유지하고,
+간편 API는 `TicketResource.refund_quote(ticket, *, companion=RefundCompanion())`로 같은 동반자 정보를 받습니다.
 
 재계산의 승객별 여섯 목록은 동일 인덱스를 유지하도록 빈 문자열도 보존합니다.
 `for_hold`는 첫 여정의 좌석 정보를 복사하며 요청 할인 수가 좌석 수와 같아야 합니다. `payable=False`(예약대기) 홀드는 `KorailProtocolError`로 거절합니다.
-`add_to_cart=True`는 재계산 성공 후 장바구니에 추가하고 FAIL 응답을 `cart_addition`에 남깁니다.
-장바구니 단계의 라이브러리 예외(전송·파싱·세션 만료)는 전파하지 않고, 이미 적용된 재계산 홀드를 `cart_addition=None`과
-`cart_addition_error=<예외>`로 반환합니다. 장바구니 요청은 자동으로 다시 보내지 않습니다.
+`recalculate_price`는 재계산 요청 하나만 보냅니다. 앱처럼 장바구니에 담으려면 호출자가 재계산 성공 뒤 `add_to_cart`를 따로 부릅니다.
 
 간편 검색의 `continuation`에는 첫 페이지의 `depart_after`가 필요하며(없으면 `ValueError`) 이어보기를 지난 시각으로 거절하지 않습니다.
 간편 검색은 역 목록을 받기 전에 승객 구성을 검사하고, 역 목록은 한 번만 받아 간편 API와 클라이언트가 공유합니다.
 
+## 메서드 분류와 예외
+
+**상태 변경 메서드(17개):** `reserve`, `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `reserve_airport_bus`,
+`set_standby_options`, `cancel_unpaid_hold`, `pay_with_card`, `recalculate_price`, `add_to_cart`, `refund`, `refund_station_ticket`,
+`extend_discount_card`, `cancel_product_reservation`, `recall_delivered_ticket`, `register_self_checkin`, `cancel_self_checkin`.
+모두 `KorailClient._send_mutation`을 거치며 자동 재전송하지 않습니다. 응답을 해석하지 못하면 전체 응답을 `raw`, 파서의 부분 원문을 `parser_raw`에 둡니다.
+요청을 전송 계층에 넘긴 뒤의 전송·해석 실패는 `request_sent=True`이고 서버가 처리했을 수 있다는 note가 붙습니다.
+읽기 메서드도 같은 경우 `request_sent=True`이지만 note는 없습니다. `check_station_ticket_refund`는 상태를 바꾸지 않지만 같은 원문 보존 파서를 씁니다.
+`login`·`logout`은 위 로그인 규칙을 따릅니다.
+(`tests/test_mutations.py`의 `cases()` 표·`test_parser_failure_retains_whole_response_and_never_retries`,
+`tests/test_auth_transport.py::test_mutation_failure_after_handoff_is_marked_sent_with_a_note`·`test_read_failure_after_handoff_is_marked_sent_without_the_mutation_note`)
+
+**입력 거절:** 입력 모델·폼·인자 검사가 요청 전에 거절하면 `KorailInvalidInputError`(`KorailProtocolError`이자 `ValueError`)이고 `request_sent`는 `None`입니다.
+응답 해석 실패, 닫힌 클라이언트, DynaPath 공급자 오류처럼 입력이 아닌 사유는 `KorailProtocolError`입니다.
+(`tests/test_auth_transport.py::test_invalid_input_error_is_both_a_protocol_error_and_a_value_error`·`test_mutation_refused_before_sending_keeps_request_sent_unset`, `tests/test_rejects_before_send.py`)
+
+**결과 코드 → 예외:** 실패 응답의 결과 코드는 `errors.py`의 표 하나(`classify_app_error`)로 `KorailAppError` 하위 예외를 고릅니다.
+표에 없는 코드는 `KorailAppError`이고, `P058` 세션 만료는 이 표가 아니라 봉투 판정이 정합니다. 코드 목록과 개수는 테스트에만 둡니다.
+(`tests/test_auth_transport.py::test_error_table_each_code_type_message_and_raw`·`test_error_table_has_no_hidden_extra_or_overlapping_codes`·`test_unclassified_codes_and_p058_classifier_boundary`)
+
+**예외 identity·cause·pickle:** 하위 계층이 던진 라이브러리 예외는 같은 객체로 전파합니다. 파서가 거절하면 그 객체의 `raw`를 전체 응답으로 바꾸고 원래 값을 `parser_raw`로 옮깁니다.
+라이브러리 밖 예외는 `KorailProtocolError`로 감싸 원래 예외를 `__cause__`에 둡니다. 네트워크 실패의 `KorailTransportError.__cause__`는 httpx 예외 객체이고,
+2xx가 아닌 응답의 `KorailTransportError.status_code`는 그 상태 코드입니다. 정리 단계의 실패는 원래 예외를 바꾸지 않고 note로 붙습니다.
+예외 pickle은 `__init__`을 거치지 않고 `args`와 속성(`raw`, `parser_raw`, `request_sent`, note 등)을 복원하며 2.x가 만든 pickle도 읽습니다.
+(`tests/test_auth_transport.py::test_transport_errors_are_wrapped_without_retry`·`test_queue_http_status_error_carries_status_code`,
+`tests/test_lifecycle.py::test_failed_operation_keeps_original_error`, `tests/test_error_messages.py::test_errors_pickled_by_2x_still_load`·`test_errors_survive_pickle_and_copy_with_notes_and_3x_fields`)
+
+**닫힌 클라이언트:** `close()` 뒤의 API·대기열 요청은 보내지 않고 `KorailProtocolError`입니다. `with KorailClient()`·`with Korail()`는 블록이 끝나면
+`close`만 부르고 서버 로그아웃은 하지 않으며, 정리 실패가 블록의 예외를 가리지 않습니다.
+(`tests/test_auth_transport.py::test_closed_client_raises_library_error_without_sending`, `tests/test_netfunnel_limousine.py::test_closed_queue_client_sends_nothing`,
+`tests/test_lifecycle.py::test_client_context_manager_closes_and_keeps_the_block_error`)
+
+**DynaPath 경로와 차단 코드:** 기본 `DynapathConfig.allowlist_paths`는 `login.Login`, `seatMovie.ScheduleView`, `seatMovie.ScheduleViewSpecial`,
+`trn.prcFare.do`, `certification.TicketReservation`, `nonMember.NonMemTicket` 여섯 경로입니다. 헤더와 차단 판정은 설정의 목록(사용자 지정 포함)에만 적용합니다.
+이 경로의 응답은 HTTP 상태·봉투보다 먼저 검사하며, 최상위 JSON 정수가 `-1203`, `-1406`, `-2000`, `-8005`, `-8201`, `-8202`, `-8203` 중 하나이거나
+봉투 없는 응답의 `code`가 문자열 `"-2000"`이면 `KorailDynaPathError`입니다. `-8204`는 차단 코드가 아니며 위 봉투 규칙의 `KorailAppUpdateRequiredError`입니다.
+DynaPath를 끈 설정에서 로그인은 요청 전에 `KorailDynaPathRequiredError`입니다.
+(`tests/test_auth_transport.py::test_dynapath_detection_precedes_status_and_envelope`·`test_dynapath_detection_limited_to_fixed_paths`·`test_dynapath_detection_follows_a_custom_allowlist`·`test_string_restriction_is_limited_to_protected_paths`·`test_login_special_errors`)
+
 ## 대기열과 미확인 항목
+
+관문별 메서드는 다음과 같습니다. 조회 관문은 대기열 서버 오류 때 요청을 그대로 보내고, 나머지 관문은 성공해야만 요청을 보냅니다.
+
+| 관문 | 메서드 |
+|---|---|
+| `inquiry`(`peak_season=True`이면 `peak_season_inquiry`, `use_special_schedule=True`이면 `product_inquiry`) | `search_trains`, `search_transfer_trains`, `search_trains_with_transfer_fallback`, `get_seat_assignment_schedule`(특가 일정 없음) |
+| `reserve` | `reserve`, `reserve_transfer`, `reserve_with_discount_card` |
+| `pay` | `pay_with_card` |
+| `reservation_view` | `list_reservations` |
+
+그 밖의 메서드(`reserve_merge`, `reserve_airport_bus` 포함)는 대기열을 거치지 않습니다.
+(`tests/test_netfunnel_limousine.py::test_all_public_methods_have_expected_queue_exchanges`·`test_gate_defaults_and_action_overrides`·`test_inquiry_gate_selection`)
 
 대기열은 빈 본문 POST와 URL 쿼리를 사용합니다. SDK의 `setDoOutput(true)` 동작을 반영했습니다
 (`com/netfunnel/api/http/Client.java:252–260`). 5101 진입, 201/202일 때만 TTL 대기와 5002 반복,
@@ -177,7 +229,7 @@ SDK는 잘못된 숫자에서 전체 응답을 거절하므로, 이 차이는 �
 서버가 준 노드가 허용 범위를 벗어나면 정문을 사용합니다.
 
 승객 요청 할인 값과 N카드 요청 코드 `153`은 7.0.8의 일반 할인 상수 복호화로 확인했습니다.
-요청의 `ReqDiscount.CHILD=000`·`N_CARD=153`과 발권 응답의 `ResDiscount.CHILD=201`·`N_CARD=443`은 구분합니다.
+앱의 요청 상수 `ReqDiscount.CHILD=000`·`N_CARD=153`과 발권 응답 상수 `ResDiscount.CHILD=201`·`N_CARD=443`(Java 이름)은 구분합니다.
 일부 보호된 aid·mode·enum·JSON 설정, DynaPath 차단 키의 정확한 범위, 결제·환불 제어값은 미확인입니다.
 DynaPath 차단 판정은 보호된 키 대신 최상위 정수를 검사하므로 다른 필드의 같은 값을 오인할 수 있습니다.
 접근 제한 관련 보호 문자열은 해독하지 않습니다.
@@ -187,9 +239,10 @@ DynaPath 차단 판정은 보호된 키 대신 최상위 정수를 검사하므�
 N카드 예약 메뉴 ID `A2`는 좌석배정 값을 재사용한 미확인 값이고, `DiscountCardScheduleRequest.for_card()`의 `B2N`·`MMM` 구분은
 7.0.6 정적 근거(`B2N1906…` 네 상품)와 다릅니다. N카드 일정 조회의 `usable_trip_count` 생략은 7.0.6 시기 실서버에서 `WRR000100(usePsbTno)`로 거절됐습니다.
 Android push ACK·비회원 UI·진단 화면은 이식하지 않습니다.
-공개 메서드 85개 행의 정적 검토는 완전한 wire 계약·모든 분기·실서버 검증이 아닙니다.
+2.x 공개 메서드 85개 행의 7.0.10 정적 검토는 완전한 wire 계약·모든 분기·실서버 검증이 아닙니다.
 범위와 한계는 [7.0.10 정적 검토](../docs/verification-7010.md)에 정리합니다.
 
 N카드 일부 기능, 채워진 지연료 영수증, 셀프 체크인 좌석 확인·등록·취소 및 전달표 회수는 실서버 수용을 확인하지 않았습니다.
 저장소의 테스트와 검사기는 모두 오프라인이며 실서버 수용을 증명하지 않습니다.
-세 `_*_unsupported.py`는 기록용으로 유지하고 공개 클라이언트에서 import하지 않습니다.
+세 `_*_unsupported.py`와 그 호출만 쓰는 빌더·파서·모델은 기록용으로 `tests/records/`에 두며 배포 패키지에 넣지 않고
+패키지 소스에서 import하지 않습니다.

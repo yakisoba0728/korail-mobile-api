@@ -7,8 +7,14 @@ import pathlib
 import sys
 import traceback
 from collections.abc import Callable
-from typing import Any
+from functools import partial
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs
+
+if TYPE_CHECKING:
+    import httpx
+
+    from korail_mobile_api import KorailClient
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
@@ -19,7 +25,7 @@ KORAIL_SEARCH = {"strResult": "SUCC", "h_msg_cd": "IRG000000", "h_msg_txt": "syn
 NODE = "ip=rnf12.letskorail.com&port=443"
 
 
-def check(name: str, ok: bool, detail: str = "") -> None:
+def check(name: str, ok: bool, detail: str = "") -> None:  # noqa: FBT001 - assert-style helper
     if not ok:
         failures.append(f"{name}: {detail}")
 
@@ -31,13 +37,13 @@ class World:
         self,
         queue: list[str | Exception],
         *,
-        korail: dict[str, Any] | Exception = KORAIL_EMPTY,
+        korail: dict[str, object] | Exception = KORAIL_EMPTY,
     ) -> None:
         self.queue = list(queue)  # 5101/5002 에 차례로 줄 답
         self.korail = korail
         self.log: list[tuple[str, str, dict[str, str]]] = []
 
-    def handler(self, request: Any) -> Any:
+    def handler(self, request: httpx.Request) -> httpx.Response:
         import httpx
 
         host = request.url.host
@@ -68,11 +74,10 @@ class World:
         ]
 
 
-def make_client(world: World, **config: Any) -> tuple[Any, list[float]]:
+def make_client(world: World, **config: object) -> tuple[KorailClient, list[float]]:
     import httpx
 
-    from korail_mobile_api import KorailClient, KorailConfig
-    from korail_mobile_api.models import KorailSession
+    from korail_mobile_api import KorailClient, KorailConfig, KorailSession
 
     client = KorailClient(KorailConfig(**config), transport=httpx.MockTransport(world.handler))
     client.session.current = KorailSession(jsessionid="SYNTHETIC-JSESSIONID", member_no="0000000000")
@@ -92,18 +97,18 @@ def make_client(world: World, **config: Any) -> tuple[Any, list[float]]:
 def raises(call: Callable[[], object]) -> BaseException | None:
     try:
         call()
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         return error
     return None
 
 
-def search(client: Any) -> object:
+def search(client: KorailClient) -> object:
     from korail_mobile_api import TrainSearchQuery
 
     return client.search_trains(
         TrainSearchQuery(
-            departure_station_code="서울",
-            arrival_station_code="부산",
+            departure_station="서울",
+            arrival_station="부산",
             departure_date="20260801",
             departure_time="060000",
         )
@@ -114,7 +119,7 @@ def search(client: Any) -> object:
 def case_immediate_pass() -> None:
     world = World([f"200:key=K1&nwait=0&{NODE}"])
     client, sleeps = make_client(world)
-    client.get_reservation_history()
+    client.list_reservations()
     check("a", world.opcodes() == ["5101", "KORAIL", "5004"], f"순서 {world.opcodes()}")
     check("a", world.completes() == [("rnf12.letskorail.com", "K1")], f"반납 {world.completes()}")
     check("a", sleeps == [], f"잠 {sleeps}")
@@ -133,7 +138,7 @@ def case_wait_then_pass() -> None:
         ]
     )
     client, sleeps = make_client(world)
-    client.get_reservation_history()
+    client.list_reservations()
     check("b", world.opcodes() == ["5101", "5002", "5002", "5002", "KORAIL", "5004"], f"순서 {world.opcodes()}")
     keys = [q.get("key") for kind, _h, q in world.log if q.get("opcode") == "5002"]
     check("b", keys == ["K0", "K1", "K2"], f"5002 키 {keys}")
@@ -151,10 +156,10 @@ def case_wait_then_pass() -> None:
 def case_blocked() -> None:
     from korail_mobile_api import KorailQueueRejectedError
 
-    for label, call in (("reservation_view", lambda c: c.get_reservation_history()), ("inquiry", search)):
+    for label, call in (("reservation_view", lambda c: c.list_reservations()), ("inquiry", search)):
         world = World([f"301:key=KB&{NODE}"], korail=KORAIL_SEARCH)
         client, _ = make_client(world)
-        error = raises(lambda: call(client))
+        error = raises(partial(call, client))
         check("c", isinstance(error, KorailQueueRejectedError), f"{label}: {type(error).__name__}")
         check("c", "KORAIL" not in world.opcodes(), f"{label}: KORAIL 요청이 나감")
         check("c", world.completes() == [("rnf12.letskorail.com", "KB")], f"{label}: 반납 {world.completes()}")
@@ -165,7 +170,7 @@ def case_korail_raises() -> None:
 
     world = World([f"200:key=K1&{NODE}"], korail=RuntimeError("synthetic down"))
     client, _ = make_client(world)
-    error = raises(client.get_reservation_history)
+    error = raises(client.list_reservations)
     check("d", isinstance(error, KorailTransportError), f"{type(error).__name__}")
     check("d", world.opcodes() == ["5101", "KORAIL", "5004"], f"순서 {world.opcodes()}")
     check("d", world.completes() == [("rnf12.letskorail.com", "K1")], f"반납 {world.completes()}")
@@ -174,7 +179,7 @@ def case_korail_raises() -> None:
 def case_disabled() -> None:
     world = World([])
     client, _ = make_client(world, netfunnel_enabled=False)
-    client.get_reservation_history()
+    client.list_reservations()
     check("e", client.netfunnel is None, "대기열 클라이언트가 만들어짐")
     check("e", world.opcodes() == ["KORAIL"], f"순서 {world.opcodes()}")
 
@@ -185,7 +190,7 @@ def case_queue_down() -> None:
 
     world = World([RuntimeError("down"), RuntimeError("down")])
     client, sleeps = make_client(world)
-    error = raises(client.get_reservation_history)
+    error = raises(client.list_reservations)
     check("f", isinstance(error, KorailNetFunnelError), f"mode=0: {type(error).__name__}")
     check("f", world.opcodes() == ["5101", "5101"], f"mode=0 순서 {world.opcodes()}")
     check("f", sleeps == [3.0, 3.0], f"마지막 실패도 timeout 대기 {sleeps}")
@@ -203,7 +208,7 @@ def case_mode0_non_200() -> None:
 
     world = World(["300:key=&nwait=0"])
     client, _ = make_client(world)
-    error = raises(client.get_reservation_history)
+    error = raises(client.list_reservations)
     check("g", isinstance(error, KorailNetFunnelError), f"mode=0: {type(error).__name__}")
     check("g", world.opcodes() == ["5101"], f"mode=0 순서 {world.opcodes()}")
 
@@ -222,7 +227,7 @@ def case_wait_limit_and_override() -> None:
     client, sleeps = make_client(
         world, netfunnel_wait_limit=30.0, netfunnel_actions={"reservation_view": "act_99"}
     )
-    error = raises(client.get_reservation_history)
+    error = raises(client.list_reservations)
     check("h", isinstance(error, KorailNetFunnelError), f"{type(error).__name__}")
     check("h", "KORAIL" not in world.opcodes(), f"순서 {world.opcodes()}")
     check("h", sleeps == [20], f"대기 {sleeps}")
@@ -234,7 +239,7 @@ def case_bad_node() -> None:
     """허용 범위 밖 노드는 무시하고 정문으로 반납합니다. 그 호스트로는 아무것도 보내지 않습니다."""
     world = World(["200:key=K1&ip=evil.example.com&port=443"])
     client, _ = make_client(world)
-    error = raises(client.get_reservation_history)
+    error = raises(client.list_reservations)
     check("i", error is None, f"{type(error).__name__}: {error}")
     check("i", world.opcodes() == ["5101", "KORAIL", "5004"], f"순서 {world.opcodes()}")
     check("i", world.completes() == [("nf.letskorail.com", "K1")], f"반납 {world.completes()}")
@@ -258,7 +263,7 @@ def main() -> int:
         import httpx  # noqa: F401
 
         import korail_mobile_api  # noqa: F401
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         print(f"검사 불완전 — import 실패: {type(error).__name__}: {error}")
         return 2
     # case_queue_down 의 mode=1 우회는 경고 로그를 남깁니다 — 여기서는 소음입니다.
@@ -267,7 +272,7 @@ def main() -> int:
     for case in CASES:
         try:
             case()
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             where = traceback.extract_tb(error.__traceback__)[-1]
             incomplete.append(
                 f"{case.__name__}: {type(error).__name__}: {error}"

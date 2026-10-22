@@ -1,0 +1,263 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+
+"""로그인 성공 코드는 관측값이며 보호된 앱 리터럴을 확정하지 않습니다."""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping
+from typing import Literal
+
+from .._domains.common.forms import build_cache_query, build_common_code_form
+from .._domains.common.models import BaseKorailResponse, KorailSession, LoginCryptoInfo
+from ..constants import KorailLoginInputFlag
+from ..errors import (
+    ACCOUNT_LOCKED_CODES,
+    KorailAccountLockedError,
+    KorailAppUpdateRequiredError,
+    KorailAuthContinuationRequired,
+    KorailAuthError,
+    KorailInvalidInputError,
+    KorailRateLimitError,
+    KorailServiceUnavailableError,
+    _is_json_object,
+    classify_app_error,
+)
+from .crypto import transform_login_password
+from .http import KorailHttpClient
+from .parsing import _optional_scalar_string
+
+# evidence: app 7.0.6 LoginOut.java:1161-1180 (값은 보호돼 관측값을 씁니다)
+KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
+# 앱의 hashCode 분기 -699977554·-699974646 과 일치하는 코드입니다. 다른 거절은 웹 조치를 이어 가지 않습니다.
+# evidence: app 7.0.6 LoginViewModel.java:1390-1520
+KORAIL_LOGIN_CONTINUATION_CODES = frozenset({"WRC000116", "WRC000420"})
+KORAIL_LOGIN_TYPE_MEMBER_NO: KorailLoginInputFlag = "2"
+KORAIL_LOGIN_TYPE_PHONE: KorailLoginInputFlag = "4"
+KORAIL_LOGIN_TYPE_EMAIL: KorailLoginInputFlag = "5"
+KORAIL_COMMON_CODE_BOOTSTRAP_CODES = (
+    "app.display.image",
+    "app.menu.railpoint",
+    "app.main.popup",
+    "app.easyLogin.isShow",
+    "app.korail.boss",
+    "app.menu.buynow",
+    "app.menu.lost112",
+    "app.event.easyPay",
+    "app.hndy.athn",
+    "app.view.visibility",
+    "app.menu.biz",
+    "app.event.point",
+    "app.var.data",
+    "app.login.cphd",
+    "app.illegal.report",
+    "app.holiday.popup",
+    "app.MaaS.test",
+    "app.limousine.mainMsg",
+)
+
+
+def infer_login_input_flag(login_id: str) -> KorailLoginInputFlag:
+    """앱처럼 숫자·이메일 외 입력은 거절하되 보호된 전화번호 검사는 재현하지 않습니다."""
+    if "@" in login_id:
+        return KORAIL_LOGIN_TYPE_EMAIL
+    if not (login_id.isascii() and login_id.isdigit()):
+        raise KorailInvalidInputError(
+            "KORAIL login ID must be digits only (member number, or phone number without hyphens) or an email"
+        )
+    if len(login_id) == 11:
+        return KORAIL_LOGIN_TYPE_PHONE
+    return KORAIL_LOGIN_TYPE_MEMBER_NO
+
+
+def extract_login_crypto_payload(raw: Mapping[str, object]) -> dict[str, object]:
+    """암호화 파라미터는 최상위가 아닌 app.login.cphd 객체에서만 읽습니다."""
+    value = raw.get("app.login.cphd")
+    return value if _is_json_object(value) else {}
+
+
+def _text(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
+class KorailSessionClient:
+    """로그인·로그아웃 요청과 로컬 세션 상태를 관리합니다. :attr:`current` = 살아 있는 세션 또는 ``None``. :attr:`pending` = 웹 단계(휴면
+    해제·비밀번호 변경)가 필요한 예외."""
+
+    def __init__(self, http: KorailHttpClient) -> None:
+        self.http = http
+        self.current: KorailSession | None = None
+        self.pending: KorailAuthContinuationRequired | None = None
+
+    def check_service(self) -> None:
+        """예매 서비스 상태를 조회하고 운영 중이 아니면 오류를 냅니다."""
+        self.http.post_form(
+            "/file/CACHE/MobileService.cache",
+            build_cache_query(),
+            include_common=False,
+        )
+
+    def get_login_crypto_info(self) -> LoginCryptoInfo:
+        """로그인에는 key를 바로 쓰고 pwdAESCphd는 참고값으로만 남깁니다."""
+        response = self.http.post_form(
+            "/classes/com.korail.mobile.common.code.do",
+            build_common_code_form(
+                self.http.config,
+                list(KORAIL_COMMON_CODE_BOOTSTRAP_CODES),
+            ),
+            include_common=False,
+        )
+        raw = extract_login_crypto_payload(response.raw)
+        idx = _text(raw.get("idx"))
+        key = _text(raw.get("key"))
+        # 앱에서 pwdAESCphd 는 결제 금액 암호화에만 쓰입니다.
+        pwd_aes_cphd = _text(raw.get("pwdAESCphd")).upper()
+        # 키 검증은 transform_login_password 에서 하며 평문으로 폴백하지 않습니다. 빈 idx 는 폼에서 빠집니다.
+        return LoginCryptoInfo(idx=idx, key=key, pwd_aes_cphd=pwd_aes_cphd)
+
+    def login(
+        self,
+        member_no: str,
+        password: str,
+        *,
+        input_flag: KorailLoginInputFlag | None = None,
+        check_valid_pw: Literal["Y", "N"] = "Y",
+        cust_id: str | None = None,
+        etr_path: str | None = None,
+    ) -> KorailSession:
+        """폼 순서는 앱 DTO 선언을 따르며 거절 코드 처리는 _finish_login 에서 합니다."""
+        return self._run_login(
+            lambda: self._login(
+                member_no,
+                password,
+                input_flag=input_flag,
+                check_valid_pw=check_valid_pw,
+                cust_id=cust_id,
+                etr_path=etr_path,
+            )
+        )
+
+    def _run_login(self, attempt: Callable[[], KorailSession]) -> KorailSession:
+        """후속 인증만 pending 에 남기고 다른 실패는 세션을 남기지 않습니다."""
+        self.clear_session()
+        try:
+            return attempt()
+        except KorailAuthContinuationRequired as exc:
+            self.pending = exc
+            raise
+        except Exception:
+            self.clear_session()
+            raise
+
+    def _login(
+        self,
+        member_no: str,
+        password: str,
+        *,
+        input_flag: KorailLoginInputFlag | None,
+        check_valid_pw: Literal["Y", "N"],
+        cust_id: str | None,
+        etr_path: str | None,
+    ) -> KorailSession:
+        # 앱과 달리 로그인마다 키를 새로 받습니다. 캐시한 키가 서버에서 바뀌면 비밀번호 오류로 보이고, 반복되면 계정이 잠깁니다.
+        # 서비스 확인과 키 요청을 보내기 전에 입력을 검사합니다.
+        if not isinstance(member_no, str):
+            raise KorailInvalidInputError("KORAIL login member_no must be a str")
+        resolved_input_flag = input_flag or infer_login_input_flag(member_no)
+        if not isinstance(password, str):
+            raise KorailInvalidInputError("KORAIL login password must be a str")
+        try:
+            password.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise KorailInvalidInputError("KORAIL login password cannot be encoded as UTF-8") from exc
+        self.check_service()
+        crypto_info = self.get_login_crypto_info()
+        transformed = transform_login_password(password, crypto_info)
+        # CommonIn 뒤에 LoginIn 선언 순서로 붙이며, @FieldMap 은 null 값을 거절하므로 없는 값은 뺍니다.
+        form = {
+            "txtInputFlg": resolved_input_flag,
+            "txtMemberNo": member_no,
+            "txtPwd": transformed,
+            "custId": cust_id or None,
+            "checkValidPw": check_valid_pw,
+            "etrPath": etr_path or None,
+            "idx": crypto_info.idx or None,
+        }
+        response = self._post_login({name: value for name, value in form.items() if value is not None})
+        return self._finish_login(
+            response,
+            login_id=member_no,
+        )
+
+    def _post_login(self, form: dict[str, str]) -> BaseKorailResponse:
+        return self.http.post_form("/classes/com.korail.mobile.login.Login", form, raise_on_fail=False)
+
+    def _finish_login(
+        self,
+        response: BaseKorailResponse,
+        *,
+        login_id: str,
+    ) -> KorailSession:
+        code = response.h_msg_cd
+        if code not in KORAIL_LOGIN_SUCCESS_CODES:
+            if code in KORAIL_LOGIN_CONTINUATION_CODES:
+                redirect_url = response.raw.get("strRedirectUrl")
+                raise KorailAuthContinuationRequired(
+                    redirect_url if isinstance(redirect_url, str) else "",
+                    raw=response.raw,
+                )
+            error = classify_app_error(code, response.h_msg_txt, raw=response.raw)
+            if isinstance(
+                error, (KorailServiceUnavailableError, KorailAppUpdateRequiredError, KorailRateLimitError)
+            ):
+                raise error
+            if code in ACCOUNT_LOCKED_CODES:
+                raise KorailAccountLockedError(code, response.h_msg_txt, raw=response.raw)
+            raise KorailAuthError(
+                f"{response.h_msg_cd or 'UNKNOWN'}: {response.h_msg_txt or 'KORAIL login did not complete'}",
+                code=response.h_msg_cd,
+                message=response.h_msg_txt,
+                raw=response.raw,
+            )
+        jsessionid = next(
+            (cookie.value for cookie in self.http.cookies.jar if cookie.name == "JSESSIONID" and cookie.value),
+            None,
+        )
+        if not jsessionid:
+            raise KorailAuthError(
+                "KORAIL login did not return a usable session",
+                code=response.h_msg_cd,
+                raw=response.raw,
+            )
+        # 앱은 strMbCrdNo 를 읽습니다. 실서버 로그인 응답에 mbCrdNo 는 없었습니다.
+        member_card_no = _optional_scalar_string(response.raw, "strMbCrdNo") or None
+        customer_no = _optional_scalar_string(response.raw, "strCustNo")
+        customer_no = customer_no if customer_no and customer_no.strip() else None
+        self.current = KorailSession(
+            jsessionid=jsessionid,
+            member_no=login_id or None,
+            member_card_no=member_card_no,
+            customer_no=customer_no,
+            raw=response.raw,
+        )
+        return self.current
+
+    def logout(self) -> None:
+        """서버의 FAIL 봉투는 예외가 아니지만(FAIL/P058 만 세션 만료 예외) 전송 오류 같은 실패는 그대로 올라오며, 그때도 로컬 상태는 이미 비워져 있습니다. 서버 세션의
+        실제 무효화 여부는 이 메서드만으로 보장하지 않습니다."""
+        try:
+            if self.current is not None:
+                self.http.post_form(
+                    "/classes/com.korail.mobile.login.Logout",
+                    build_cache_query(),
+                    raise_on_fail=False,
+                )
+        finally:
+            self.clear_session()
+
+    def clear_session(self) -> None:
+        """쿠키 정리가 실패해도 current 를 남기지 않습니다."""
+        self.current = None
+        self.pending = None
+        self.http.cookies.clear()

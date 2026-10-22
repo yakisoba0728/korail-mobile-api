@@ -12,7 +12,6 @@ from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs
 
 import httpx
 import pytest
@@ -37,7 +36,7 @@ def _f8_bound_commission(ticket: api.OriginalTicketReference) -> api.RefundCommi
         )
     ) as client:
         client.session.current = api.KorailSession(jsessionid="SYNTHETIC-SESSION")
-        return client.get_refund_commission(ticket)
+        return client.get_refund_fee(ticket)
 
 
 def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
@@ -62,7 +61,12 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         general_reservation_code="11",
         general_reservation_flag="Y",
     )
-    query = api.TrainSearchQuery("출발시험역", "도착시험역", F8_DATE, "090000")
+    query = api.TrainSearchQuery(
+        departure_station="출발시험역",
+        arrival_station="도착시험역",
+        departure_date=F8_DATE,
+        departure_time="090000",
+    )
     hold = api.ReservationHoldResponse(
         str_result="SUCC",
         pnr_no="SYNTHETIC-PNR",
@@ -73,7 +77,12 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         total_price="1000",
         received_amount="1000",
     )
-    ticket = api.OriginalTicketReference("SYNTHETIC-WINDOW", F8_DATE, "1", "SYNTHETIC-RETURN")
+    ticket = api.OriginalTicketReference(
+        sale_window_no="SYNTHETIC-WINDOW",
+        sale_date=F8_DATE,
+        sale_sequence="1",
+        return_password="SYNTHETIC-RETURN",
+    )
     detail = api.RefundTicketDetailResponse(
         sale_date=F8_DATE,
         original_sale_date="0102",
@@ -83,8 +92,22 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         journeys=(api.RefundTicketJourney(journey_sequence="001"),),
     )
     checkin_seat = api.SelfCheckInSeat(
-        *("SYNTHETIC-PNR", "001", "01", F8_DATE, "90001", "1", "9901", "3", "9903", "11", "100", "0017", "5A"),
-        *(F8_DATE + "090000", F8_DATE + "110000", "SYNTHETIC-CPS"),
+        pnr_no="SYNTHETIC-PNR",
+        journey_sequence="001",
+        assignment_sequence="01",
+        run_date=F8_DATE,
+        train_no="90001",
+        departure_construction_order="1",
+        departure_station_code="9901",
+        arrival_construction_order="3",
+        arrival_station_code="9903",
+        ticket_kind_code="11",
+        train_group_code="100",
+        car_no="0017",
+        seat_no="5A",
+        departure_datetime=F8_DATE + "090000",
+        arrival_datetime=F8_DATE + "110000",
+        cps_no="SYNTHETIC-CPS",
     )
     delivered = api.PbpAcceptanceTicket(
         pnr_no="SYNTHETIC-PNR",
@@ -106,7 +129,7 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
             ),
         ),
     )
-    schedule = api.LimousineSchedule(
+    schedule = api.AirportBusSchedule(
         departure_date=F8_DATE,
         run_date=F8_DATE,
         departure_time="090000",
@@ -114,8 +137,8 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         arrival_station_code="9903",
         departure_run_order="1",
         arrival_run_order="3",
-        train_class_code="80",
-        service_code="800",
+        settlement_train_class_code="80",
+        train_group_code="800",
         train_no="90001",
         general_remaining_seat_count="2",
     )
@@ -128,65 +151,96 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         "search_transfer_trains": {"query": query},
         "search_trains_with_transfer_fallback": {"query": query},
         "get_train_schedule": {"run_date": F8_DATE, "train_no": "90001"},
-        "get_transfer_stations": {"departure_station_code": "9901", "arrival_station_code": "9903"},
+        "list_transfer_stations": {"departure_station_code": "9901", "arrival_station_code": "9903"},
         "get_train_calendar": {},
-        "get_seat_cars": {"train": train},
+        "list_seat_cars": {"train": train},
         "get_seat_inventory": {"train": train, "car_no": 1},
-        "get_free_seat_car_info": {"request": api.FreeSeatCarRequest(F8_DATE, "90001", "1", "3", "1", "3")},
-        "get_guide_seat_condition": {"request": api.GuideSeatConditionRequest("015")},
-        "get_merge_seats_inquiry": {
+        "get_free_seat_cars": {
+            "request": api.FreeSeatCarRequest(
+                run_date=F8_DATE,
+                train_no="90001",
+                departure_construction_order="1",
+                arrival_construction_order="3",
+                departure_run_order="1",
+                arrival_run_order="3",
+            )
+        },
+        "get_guide_seat_condition": {"request": api.GuideSeatConditionRequest(seat_attribute_code="015")},
+        "get_merge_seat_options": {
             "request": api.MergeSeatsInquiryRequest(
-                F8_DATE + "090000", F8_DATE + "090000", "90001", "출발시험역", "도착시험역", None, "1", "015", 1
+                boarding_datetime=F8_DATE + "090000",
+                run_datetime=F8_DATE + "090000",
+                train_no="90001",
+                departure_station_name="출발시험역",
+                arrival_station_name="도착시험역",
+                selected_station_name=None,
+                room_class_code="1",
+                seat_attribute_code="015",
+                passenger_count=1,
             )
         },
-        "get_price_fare_quote": {
+        "get_fare_quote": {
             "request": api.PriceFareQuoteRequest(
-                (api.PriceFareLeg("9901", "9903", F8_DATE, "90001", "015", "100", "00"),)
+                legs=(
+                    api.PriceFareLeg(
+                        departure_station_code="9901",
+                        arrival_station_code="9903",
+                        run_date=F8_DATE,
+                        train_no="90001",
+                        requested_seat_attribute_code="015",
+                        train_group_code="100",
+                        train_class_code="00",
+                    ),
+                )
             )
         },
-        "get_station_info": {},
-        "get_station_data": {},
-        "get_common_code": {"code": ["synthetic.code"]},
+        "get_station_list_version": {},
+        "list_stations": {},
+        "get_common_codes": {"code": ["synthetic.code"]},
         "get_app_data": {"timestamp_ms": 1},
-        "get_notice": {"timestamp_ms": 1},
         "get_uuid": {},
         "get_service_status": {"timestamp_ms": 1},
-        "get_maas_menu_list": {},
-        "get_maas_station_data": {"additional_service_code": "SYNTHETIC-SERVICE"},
-        "get_maas_service_details": {"query": api.MaasServiceDetailQuery(F8_DATE, F8_DATE)},
-        "get_cart_list": {"pnr_no": "SYNTHETIC-PNR"},
-        "get_deposit_banks": {},
-        "get_delay_discount_tickets": {"departure_date_to": F8_DATE},
-        "get_discount_coupons": {"page_no": 1, "pnr_no": "SYNTHETIC-PNR"},
-        "get_korail_point_summary": {},
-        "get_mileage_history": {"request": api.MileageHistoryRequest(F8_DATE, F8_DATE)},
-        "get_discount_card_usage_history": {"card_no": "SYNTHETIC-CARD"},
+        "list_maas_menus": {},
+        "list_maas_stations": {"additional_service_code": "SYNTHETIC-SERVICE"},
+        "list_maas_services": {"query": api.MaasServiceDetailQuery(start_date=F8_DATE, end_date=F8_DATE)},
+        "list_cart_items": {"pnr_no": "SYNTHETIC-PNR"},
+        "list_deposit_banks": {},
+        "list_delay_discount_tickets": {"departure_date_to": F8_DATE},
+        "list_discount_coupons": {"page_no": 1, "pnr_no": "SYNTHETIC-PNR"},
+        "get_point_summary": {},
+        "get_mileage_history": {"request": api.MileageHistoryRequest(start_date=F8_DATE, end_date=F8_DATE)},
+        "list_discount_card_usages": {"card_no": "SYNTHETIC-CARD"},
         "get_discount_card_schedule": {
-            "request": api.DiscountCardScheduleRequest("SYNTHETIC-KIND", "출발시험역", "도착시험역", F8_DATE)
+            "request": api.DiscountCardScheduleRequest(
+                card_kind_management_no="SYNTHETIC-KIND",
+                departure_station_name="출발시험역",
+                arrival_station_name="도착시험역",
+                departure_date=F8_DATE,
+            )
         },
-        "get_pass_available_dates": {"kind_code": "SYNTHETIC-KIND", "period_code": "1", "age_code": "1"},
+        "get_pass_availability": {"kind_code": "SYNTHETIC-KIND", "period_code": "1", "age_code": "1"},
         "get_pass_schedule": {
             "request": api.PassScheduleRequest(
-                "100",
-                F8_DATE,
-                "090000",
-                "1",
-                "SYNTHETIC-KIND",
-                "1",
-                "1",
-                "1",
-                "10",
-                "출발시험역",
-                "도착시험역",
-                "N",
+                selected_train_code="100",
+                departure_date=F8_DATE,
+                departure_time="090000",
+                transfer_type_code="1",
+                pass_kind_code="SYNTHETIC-KIND",
+                pass_period_code="1",
+                pass_age_code="1",
+                page_no="1",
+                page_size="10",
+                departure_station_name="출발시험역",
+                arrival_station_name="도착시험역",
+                weekend_use_flag="N",
             )
         },
         "get_trip_menu": {},
         "get_pass_menu": {"menu_no": "SYNTHETIC-MENU"},
-        "get_crew_request_list": {"timestamp_ms": 1},
+        "list_crew_request_reasons": {"timestamp_ms": 1},
         "get_commuter_kind_menu": {"commuter_kind_code": "SYNTHETIC-KIND"},
-        "get_commuter_info": {"request": api.CommuterTicketInquiryRequest(ticket)},
-        "get_product_reservations": {"page_no": 1, "page_size": 10},
+        "get_commuter_info": {"request": api.CommuterTicketInquiryRequest(original_ticket=ticket)},
+        "list_product_reservations": {"page_no": 1, "page_size": 10},
         "get_product_detail": {"reservation_no": "SYNTHETIC-RESERVATION", "reservation_sequence": "1"},
         "get_ticket_receipt": {
             "sale_date": "0102",
@@ -194,32 +248,47 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
             "sale_sequence": ticket.sale_sequence,
             "return_password": ticket.return_password,
         },
-        "get_reservation_history": {},
+        "list_reservations": {},
         "get_seat_assignment_schedule": {
             "request": api.SeatAssignmentScheduleRequest(
-                "11", F8_DATE, "090000", "출발시험역", "도착시험역", "100", "1", "015", 1, "N", "1", ""
+                menu_id="11",
+                departure_date=F8_DATE,
+                departure_time="090000",
+                departure_station_name="출발시험역",
+                arrival_station_name="도착시험역",
+                train_group_code="100",
+                room_class_code="1",
+                seat_attribute_code="015",
+                passenger_count=1,
+                standing_detour_division_name="N",
+                transfer_type_code="1",
+                connection_arrival_station_name="",
             )
         },
-        "get_multi_child_discount_targets": {"departure_date": F8_DATE},
-        "get_customer_trip_info": {},
-        "get_trip_change_dates": {"departure_date": F8_DATE},
+        "list_multi_child_discount_targets": {"departure_date": F8_DATE},
+        "get_trip_preferences": {},
+        "list_trip_change_dates": {"departure_date": F8_DATE},
         "get_delivery_recipient": {"ticket": ticket},
-        "check_ticket_duplication": {"request": api.TicketDuplicationCheckRequest("SYNTHETIC-PNR")},
-        "get_pbp_acceptance_specifications": {"tickets": (ticket,)},
-        "get_original_ticket_inquiry": {"tickets": (ticket,)},
-        "get_self_seat_change_info": {
-            "request": api.SelfSeatChangeInfoRequest(F8_DATE, "90001", "9901", "9903")
+        "check_ticket_duplication": {"request": api.TicketDuplicationCheckRequest(pnr_no="SYNTHETIC-PNR")},
+        "list_pbp_acceptances": {"tickets": (ticket,)},
+        "get_original_tickets": {"tickets": (ticket,)},
+        "get_self_seat_change_options": {
+            "request": api.SelfSeatChangeInfoRequest(
+                run_date=F8_DATE, train_no="90001", departure_station_code="9901", arrival_station_code="9903"
+            )
         },
-        "get_recent_delivery_history": {},
-        "get_ticket_reservation_detail": {"request": api.TicketReservationDetailRequest("SYNTHETIC-PNR")},
+        "list_recent_delivery_recipients": {},
+        "get_ticket_reservation_detail": {
+            "request": api.TicketReservationDetailRequest(pnr_no="SYNTHETIC-PNR")
+        },
         "get_reservation_hold": {"pnr_no": "SYNTHETIC-PNR"},
-        "get_refund_commission": {"ticket": ticket},
+        "get_refund_fee": {"ticket": ticket},
         "get_refund_ticket_detail": {"ticket": ticket},
-        "get_ticket_list": {},
+        "list_tickets": {},
         "get_delay_certificate": {"ticket": ticket},
         "get_delay_return_receipt": {"ticket": ticket},
-        "retrieve_delivered_ticket": {"ticket": delivered},
-        "get_self_checkin_info": {"detail": detail},
+        "recall_delivered_ticket": {"ticket": delivered},
+        "get_self_checkin": {"detail": detail},
         "check_self_checkin_seat": {"detail": detail, "qr_code": "SYNTHETIC-QR"},
         "register_self_checkin": {"detail": detail, "seat": checkin_seat},
         "cancel_self_checkin": {"detail": detail},
@@ -256,78 +325,98 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
             ),
         },
         "reserve_with_discount_card": {"train": train, "card_no": "SYNTHETIC-CARD"},
-        "confirm_standby_hold": {"hold": hold},
+        "set_standby_options": {"hold": hold},
         "cancel_unpaid_hold": {"hold": hold},
         "cancel_product_reservation": {
             "detail": api.ProductDetailResponse(
                 virtual_reservation_no="SYNTHETIC-RESERVATION", goods_sequence="1"
             )
         },
-        "pay_with_card": {"hold": hold, "card": api.CardPayment("0" * 16, "00", "9912", "000101")},
+        "pay_with_card": {
+            "hold": hold,
+            "card": api.CardPayment(
+                card_number="0" * 16, card_password="00", card_expire="9912", birthday="000101"
+            ),
+        },
         "refund": {
             "ticket": api.PaidTicket(
-                "SYNTHETIC-PNR",
-                F8_DATE,
-                ticket.sale_window_no,
-                ticket.sale_sequence,
-                ticket.return_password,
-                "90001",
+                pnr_no="SYNTHETIC-PNR",
+                sale_date=F8_DATE,
+                sale_window_no=ticket.sale_window_no,
+                sale_sequence=ticket.sale_sequence,
+                return_password=ticket.return_password,
+                train_no="90001",
                 return_sale_date=ticket.sale_date,
             ),
             "commission": _f8_bound_commission(ticket) if method_name == "refund" else None,
         },
-        "verify_station_ticket_refund": {
+        "check_station_ticket_refund": {
             "request": api.StationRefundVerificationRequest(
-                "SYNTHETIC-NAME", "00000", "00000000", "0000000", "00000"
+                customer_name="SYNTHETIC-NAME",
+                return_no_1="00000",
+                return_no_2="00000000",
+                return_no_3="0000000",
+                return_no_4="00000",
             )
         },
-        "execute_station_ticket_refund": {
+        "refund_station_ticket": {
             "request": api.StationRefundExecutionRequest(
-                "SYNTHETIC-PNR",
-                F8_DATE,
-                "SYNTHETIC-WINDOW",
-                "1",
-                "SYNTHETIC-RETURN",
-                "1",
-                "1",
-                "1",
-                "00000000000",
-                "1000",
-                "0",
-                "SYNTHETIC-NAME",
+                pnr_no="SYNTHETIC-PNR",
+                original_sale_date=F8_DATE,
+                original_sale_window_no="SYNTHETIC-WINDOW",
+                original_sale_sequence="1",
+                original_return_password="SYNTHETIC-RETURN",
+                refund_division_code="1",
+                refund_reason_code="1",
+                ticket_kind_code="1",
+                customer_phone="00000000000",
+                refund_amount="1000",
+                refund_fee="0",
+                customer_name="SYNTHETIC-NAME",
             )
         },
-        "add_to_cart": {"request": api.CartAddRequest("SYNTHETIC-PNR")},
-        "register_discount_card": {
-            "request": api.DiscountCardPurchaseRequest(
-                "SYNTHETIC-KIND",
-                "SYNTHETIC-CUSTOMER",
-                F8_DATE,
-                "1",
-                (api.DiscountCardSectionRequest(F8_DATE, "90001", "9901", "9903"),),
-            )
-        },
-        "extend_discount_card": {
-            "ticket": api.DiscountCardTicket(
-                ticket.sale_window_no, ticket.sale_date, ticket.sale_sequence, ticket.return_password
-            )
-        },
+        "add_to_cart": {"request": api.CartAddRequest(pnr_no="SYNTHETIC-PNR")},
+        "extend_discount_card": {"ticket": ticket},
         "recalculate_price": {
             "request": api.PriceRecalculationRequest(
-                "SYNTHETIC-PNR", (api.PriceRecalculationRow("1", "1", "000"),)
+                pnr_no="SYNTHETIC-PNR",
+                rows=(
+                    api.PriceRecalculationRow(
+                        passenger_type_code="1", room_class_code="1", discount_kind_code="000"
+                    ),
+                ),
             )
         },
-        "get_limousine_schedules": {
-            "query": api.LimousineScheduleQuery(
-                F8_DATE, "9901", "9903", "800", "1", "090000", "90001", "015", "1"
+        "list_airport_bus_schedules": {
+            "query": api.AirportBusScheduleQuery(
+                departure_date=F8_DATE,
+                departure_station_code="9901",
+                arrival_station_code="9903",
+                service_code="800",
+                room_class_code="1",
+                departure_time="090000",
+                train_no="90001",
+                seat_attribute_code="015",
+                reservation_sale_division_code="1",
             )
         },
-        "get_limousine_seat_inventory": {
-            "query": api.LimousineSeatInventoryQuery(
-                "80", "800", F8_DATE, "90001", "0001", "1", "9901", "9903", "015", "1", "3", 1
+        "get_airport_bus_seat_inventory": {
+            "query": api.AirportBusSeatInventoryQuery(
+                train_class_code="80",
+                service_code="800",
+                run_date=F8_DATE,
+                train_no="90001",
+                car_no="0001",
+                room_class_code="1",
+                departure_station_code="9901",
+                arrival_station_code="9903",
+                seat_attribute_code="015",
+                departure_run_order="1",
+                arrival_run_order="3",
+                passenger_count=1,
             )
         },
-        "reserve_limousine": {"schedule": schedule, "seat_nos": ("1A",)},
+        "reserve_airport_bus": {"schedule": schedule, "seat_nos": ("1A",)},
     }
     return result
 
@@ -343,79 +432,77 @@ F8_CASE_DATA: dict[str, Any] = json.loads(r"""
   "search_transfer_trains": {"return_type":"TransferSearchResult","exchanges":[{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5101"],"sid":["service_1"],"aid":["act_8"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"},{"method":"POST","path":"/classes/com.korail.mobile.seatMovie.ScheduleView","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"radJobId":["2"],"selGoTrain":["109"],"txtTrnGpCd":["109"],"txtGoStart":["출발시험역"],"txtGoEnd":["도착시험역"],"txtGoAbrdDt":["20990102"],"txtGoHour":["090000"],"txtPsgFlg_1":["1"],"txtPsgFlg_2":["0"],"txtPsgFlg_3":["0"],"txtPsgFlg_4":["0"],"txtPsgFlg_5":["0"],"txtSeatAttCd_2":["000"],"txtSeatAttCd_3":["000"],"txtSeatAttCd_4":["015"],"ebizCrossCheck":["N"],"srtCheckYn":["N"],"rtYn":["N"],"adjStnScdlOfrFlg":["N"],"mbCrdNo":["SYNTHETIC-MEMBER-CARD"],"qryDvCd":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","trn_infos":{"trn_info":[]},"f8_marker":"search_transfer_trains"}},{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5004"],"key":["SYNTHETIC-QUEUE"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"}]},
   "search_trains_with_transfer_fallback": {"return_type":"TrainSearchResult","exchanges":[{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5101"],"sid":["service_1"],"aid":["act_8"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"},{"method":"POST","path":"/classes/com.korail.mobile.seatMovie.ScheduleView","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"radJobId":["1"],"selGoTrain":["109"],"txtTrnGpCd":["109"],"txtGoStart":["출발시험역"],"txtGoEnd":["도착시험역"],"txtGoAbrdDt":["20990102"],"txtGoHour":["090000"],"txtPsgFlg_1":["1"],"txtPsgFlg_2":["0"],"txtPsgFlg_3":["0"],"txtPsgFlg_4":["0"],"txtPsgFlg_5":["0"],"txtSeatAttCd_2":["000"],"txtSeatAttCd_3":["000"],"txtSeatAttCd_4":["015"],"ebizCrossCheck":["N"],"srtCheckYn":["N"],"rtYn":["N"],"adjStnScdlOfrFlg":["N"],"mbCrdNo":["SYNTHETIC-MEMBER-CARD"],"qryDvCd":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","trn_infos":{"trn_info":[{"h_trn_no":"90001","h_dpt_rs_stn_cd":"9901","h_arv_rs_stn_cd":"9903","h_dpt_dt":"20990102","h_dpt_tm":"090000","h_arv_tm":"110000","h_run_dt":"20990102"}]},"f8_marker":"search_trains_with_transfer_fallback"}},{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5004"],"key":["SYNTHETIC-QUEUE"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"}]},
   "get_train_schedule": {"return_type":"TrainScheduleResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.actualTrainSchedule.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"runDt":["20990102"],"trnNo":["90001"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_transfer_stations": {"return_type":"TransferStationListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.qry.chtnStn.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_transfer_stations": {"return_type":"TransferStationListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.qry.chtnStn.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_train_calendar": {"return_type":"TrainCalendarResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.schedule.runDt","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["<DYNAMIC>"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_seat_cars": {"return_type":"SeatCarListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.TrainResearch","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"txtPsrmClCd":["1"],"txtRunDt":["20990102"],"txtDptDt":["20990102"],"txtDptTm":["090000"],"txtTrnClsfCd":["00"],"txtTrnNo":["90001"],"txtDptRsStnCd":["9901"],"txtArvRsStnCd":["9903"],"txtDptStnRunOrdr":["1"],"txtArvStnRunOrdr":["3"],"txtTrnGpCd":["100"],"txtTotPsgCnt":["1"],"txtSeatAttCd":["015"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_seat_cars": {"return_type":"SeatCarListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.TrainResearch","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"txtPsrmClCd":["1"],"txtRunDt":["20990102"],"txtDptDt":["20990102"],"txtDptTm":["090000"],"txtTrnClsfCd":["00"],"txtTrnNo":["90001"],"txtDptRsStnCd":["9901"],"txtArvRsStnCd":["9903"],"txtDptStnRunOrdr":["1"],"txtArvStnRunOrdr":["3"],"txtTrnGpCd":["100"],"txtTotPsgCnt":["1"],"txtSeatAttCd":["015"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_seat_inventory": {"return_type":"SeatInventoryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.TResidualSeatsResearch.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"trnClsfCd":["00"],"trnGpCd":["100"],"runDt":["20990102"],"trnNo":["90001"],"srcarNo":["1"],"psrmClCd":["1"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"],"seatAttCd":["015"],"dptStnRunOrdr":["1"],"arvStnRunOrdr":["3"],"totPsgCnt":["1"],"isArrow":["false"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","layout_type":"1","seat_ary_cd":"1","seatList":[],"f8_marker":"get_seat_inventory"}}]},
-  "get_free_seat_car_info": {"return_type":"FreeSeatCarResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.trn.fresScar.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"runDt":["20990102"],"trnNo":["90001"],"dptStnConsOrdr":["1"],"arvStnConsOrdr":["3"],"dptStnRunOrdr":["1"],"arvStnRunOrdr":["3"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "get_free_seat_cars": {"return_type":"FreeSeatCarResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.trn.fresScar.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"runDt":["20990102"],"trnNo":["90001"],"dptStnConsOrdr":["1"],"arvStnConsOrdr":["3"],"dptStnRunOrdr":["1"],"arvStnRunOrdr":["3"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_guide_seat_condition": {"return_type":"GuideSeatConditionResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.reservation.guideSeatCnd.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"rqSeatAttCd":["015"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_merge_seats_inquiry": {"return_type":"MergeSeatsInquiryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.mergeSeatsC.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"abrdDt":["20990102090000"],"runDt":["20990102090000"],"trnNo":["90001"],"dptRsStnNm":["출발시험역"],"arvRsStnNm":["도착시험역"],"psrmClCd":["1"],"seatAttCd":["015"],"totPsgNum":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_price_fare_quote": {"return_type":"PriceFareQuoteResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.trn.prcFare.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"chtnDvCd":["1"],"trnCnt":["1"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"],"runDt":["20990102"],"trnNo":["90001"],"gdNo":[""],"rqSeatAttCd":["015"],"trnGpCd":["100"],"stlbTrnClsfCd":["00"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_station_info": {"return_type":"StationInfoResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.common.stationinfo","host":"api.example.invalid","query":{},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","count":"1","map_version":"synthetic","f8_marker":"get_station_info"}}]},
-  "get_station_data": {"return_type":"StationDataResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.common.stationdata","host":"api.example.invalid","query":{},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","stns":{"stn":[{"stn_cd":"9901","stn_nm":"출발시험역"}]},"f8_marker":"get_station_data"}}]},
-  "get_common_code": {"return_type":"BaseKorailResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.common.code.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"code":["synthetic.code"],"deviceWidth":["1440"],"deviceHeight":["3120"],"OSVersion":["37"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "get_merge_seat_options": {"return_type":"MergeSeatsInquiryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.mergeSeatsC.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"abrdDt":["20990102090000"],"runDt":["20990102090000"],"trnNo":["90001"],"dptRsStnNm":["출발시험역"],"arvRsStnNm":["도착시험역"],"psrmClCd":["1"],"seatAttCd":["015"],"totPsgNum":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "get_fare_quote": {"return_type":"PriceFareQuoteResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.trn.prcFare.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"chtnDvCd":["1"],"trnCnt":["1"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"],"runDt":["20990102"],"trnNo":["90001"],"gdNo":[""],"rqSeatAttCd":["015"],"trnGpCd":["100"],"stlbTrnClsfCd":["00"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "get_station_list_version": {"return_type":"StationInfoResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.common.stationinfo","host":"api.example.invalid","query":{},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","count":"1","map_version":"synthetic","f8_marker":"get_station_list_version"}}]},
+  "list_stations": {"return_type":"StationDataResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.common.stationdata","host":"api.example.invalid","query":{},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","stns":{"stn":[{"stn_cd":"9901","stn_nm":"출발시험역"}]},"f8_marker":"list_stations"}}]},
+  "get_common_codes": {"return_type":"BaseKorailResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.common.code.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"code":["synthetic.code"],"deviceWidth":["1440"],"deviceHeight":["3120"],"OSVersion":["37"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_app_data": {"return_type":"AppDataResponse","exchanges":[{"method":"POST","path":"/file/CACHE/prdMobilePlusMain.cache","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["1"],"srtCheckYn":["Y"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_notice": {"return_type":"NoticeResponse","exchanges":[{"method":"POST","path":"/file/CACHE/prdMobilePlusMain.cache","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["1"],"srtCheckYn":["Y"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_uuid": {"return_type":"UuidResponse","exchanges":[{"method":"POST","path":"/ebizcross/getUUID.do","host":"api.example.invalid","query":{},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","mutMrkVrfCd":"SYNTHETIC-UUID","f8_marker":"get_uuid"}}]},
   "get_service_status": {"return_type":"ServiceStatusResponse","exchanges":[{"method":"POST","path":"/file/CACHE/MobileService.cache","host":"api.example.invalid","query":{},"form":{"timeStamp":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_maas_menu_list": {"return_type":"MaasMenuListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.copt.gdMenuLt.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["<DYNAMIC>"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_maas_station_data": {"return_type":"StationDataResponse","exchanges":[{"method":"POST","path":"/ebizmaas/EbizMaasStationList.do","host":"api.example.invalid","query":{},"form":{"addSrvDvCd":["SYNTHETIC-SERVICE"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","stns":{"stn":[{"stn_cd":"9901","stn_nm":"출발시험역"}]},"f8_marker":"get_maas_station_data"}}]},
-  "get_maas_service_details": {"return_type":"MaasServiceDetailListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.copt.gdReqQry.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"qryDtFrom":["20990102"],"qryDtTo":["20990102"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_cart_list": {"return_type":"CartListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.cart.showCartList","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"pnrNo":["SYNTHETIC-PNR"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_deposit_banks": {"return_type":"DepositBankListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.dlay.dptnBank.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_delay_discount_tickets": {"return_type":"DelayDiscountTicketListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.passCard.DelayDiscountView","host":"api.example.invalid","query":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"h_page_no":["20990102"]},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_discount_coupons": {"return_type":"DiscountCouponListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.passCard.CouponView","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtSelPage":["1"],"pnrNo":["SYNTHETIC-PNR"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_korail_point_summary": {"return_type":"KorailPointSummaryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.xPoint.MyXPointView","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"point_dv_cd":["0"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_maas_menus": {"return_type":"MaasMenuListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.copt.gdMenuLt.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["<DYNAMIC>"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_maas_stations": {"return_type":"StationDataResponse","exchanges":[{"method":"POST","path":"/ebizmaas/EbizMaasStationList.do","host":"api.example.invalid","query":{},"form":{"addSrvDvCd":["SYNTHETIC-SERVICE"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","stns":{"stn":[{"stn_cd":"9901","stn_nm":"출발시험역"}]},"f8_marker":"list_maas_stations"}}]},
+  "list_maas_services": {"return_type":"MaasServiceDetailListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.copt.gdReqQry.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"qryDtFrom":["20990102"],"qryDtTo":["20990102"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_cart_items": {"return_type":"CartListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.cart.showCartList","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"pnrNo":["SYNTHETIC-PNR"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_deposit_banks": {"return_type":"DepositBankListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.dlay.dptnBank.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_delay_discount_tickets": {"return_type":"DelayDiscountTicketListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.passCard.DelayDiscountView","host":"api.example.invalid","query":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"h_page_no":["20990102"]},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_discount_coupons": {"return_type":"DiscountCouponListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.passCard.CouponView","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtSelPage":["1"],"pnrNo":["SYNTHETIC-PNR"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "get_point_summary": {"return_type":"KorailPointSummaryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.xPoint.MyXPointView","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"point_dv_cd":["0"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_mileage_history": {"return_type":"MileageHistoryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.mlg.amtSpec.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"pontTpVal":["1"],"qryDvVal":["0"],"qryStDt":["20990102"],"qryClsDt":["20990102"],"pgPrCnt":["20"],"nowPgNo":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_discount_card_usage_history": {"return_type":"DiscountCardUsageListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.ticket.dcntCrdUseQry.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dcntCrdNo":["SYNTHETIC-CARD"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_discount_card_usages": {"return_type":"DiscountCardUsageListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.ticket.dcntCrdUseQry.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dcntCrdNo":["SYNTHETIC-CARD"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_discount_card_schedule": {"return_type":"DiscountCardScheduleResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.dcntCrdScheduleView.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dptDt":["20990102"],"dptRsStnNm":["출발시험역"],"arvRsStnNm":["도착시험역"],"dptTm":["000000"],"trnGpCd":["109"],"dirtChtnDvCd":["1"],"dcntCrdKndCd":["MMM"],"dcntCrdKndMgNo":["SYNTHETIC-KIND"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_pass_available_dates": {"return_type":"PassAvailabilityResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.pass.passInfoList","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtCmtrKndCd":["SYNTHETIC-KIND"],"txtCmtrUtlTrmCd":["1"],"txtCmtrUtlAgeCd":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "get_pass_availability": {"return_type":"PassAvailabilityResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.pass.passInfoList","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtCmtrKndCd":["SYNTHETIC-KIND"],"txtCmtrUtlTrmCd":["1"],"txtCmtrUtlAgeCd":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_pass_schedule": {"return_type":"PassScheduleResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.pass.passScheduleInfoList","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"selGoTrain":["100"],"selGoAbrdDt":["20990102"],"txtGoHour":["090000"],"radChgTrnDvCd":["1"],"txtCmtrKndCd":["SYNTHETIC-KIND"],"txtCmtrUtlTrmCd":["1"],"txtCmtrUtlAgeCd":["1"],"txtSelPage":["1"],"txtCntPerPage":["10"],"txtGoStart":["출발시험역"],"txtGoEnd":["도착시험역"],"txtWkndUseFlg":["N"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_trip_menu": {"return_type":"TripMenuResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.pass.trGdMenuLt.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["<DYNAMIC>"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_pass_menu": {"return_type":"PassMenuResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.pass.passMenu.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"menuNo":["SYNTHETIC-MENU"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_crew_request_list": {"return_type":"CrewRequestListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.push.crwCallRq.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_crew_request_reasons": {"return_type":"CrewRequestListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.push.crwCallRq.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_commuter_kind_menu": {"return_type":"CommuterKindMenuResponse","exchanges":[{"method":"GET","path":"/classes/com.korail.mobile.push.cmtrKnd.do","host":"api.example.invalid","query":{"Device":["AD"],"Version":["250601003"],"Key":["SYNTHETIC-APP-KEY"],"cmtrKndCd":["SYNTHETIC-KIND"]},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_commuter_info": {"return_type":"CommuterInfoResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.cmtrInfo.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"jobDvCd":["c"],"psgCnt":["0"],"ogtkSaleWctNo":["SYNTHETIC-WINDOW"],"ogtkSaleDd":["20990102"],"ogtkSaleSqno":["1"],"ogtkRetPwd":["SYNTHETIC-RETURN"],"inquiryType":["0"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_product_reservations": {"return_type":"ProductReservationListResponse","exchanges":[{"method":"GET","path":"/classes/com.korail.mobile.product.ReservationList","host":"api.example.invalid","query":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtSelPage":["1"],"txtCntPerPage":["10"]},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_product_reservations": {"return_type":"ProductReservationListResponse","exchanges":[{"method":"GET","path":"/classes/com.korail.mobile.product.ReservationList","host":"api.example.invalid","query":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtSelPage":["1"],"txtCntPerPage":["10"]},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_product_detail": {"return_type":"ProductDetailResponse","exchanges":[{"method":"GET","path":"/classes/com.korail.mobile.product.ReservationDetail","host":"api.example.invalid","query":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtVrRsNo":["SYNTHETIC-RESERVATION"],"txtVrRsvSqNo":["1"]},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_ticket_receipt": {"return_type":"TicketReceiptResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.receipt.ReceiptInfo","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"h_orgtk_sale_dt":["0102"],"h_orgtk_wct_no":["SYNTHETIC-WINDOW"],"h_orgtk_sale_sqno":["1"],"h_orgtk_tk_ret_pwd":["SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","receipt_infos":{"receipt_info":[]},"f8_marker":"get_ticket_receipt"}}]},
-  "get_reservation_history": {"return_type":"ReservationHistoryResponse","exchanges":[{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5101"],"sid":["service_1"],"aid":["act_21"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"},{"method":"POST","path":"/classes/com.korail.mobile.reservation.ReservationView","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["<DYNAMIC>"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}},{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5004"],"key":["SYNTHETIC-QUEUE"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"}]},
+  "list_reservations": {"return_type":"ReservationHistoryResponse","exchanges":[{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5101"],"sid":["service_1"],"aid":["act_21"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"},{"method":"POST","path":"/classes/com.korail.mobile.reservation.ReservationView","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["<DYNAMIC>"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}},{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5004"],"key":["SYNTHETIC-QUEUE"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"}]},
   "get_seat_assignment_schedule": {"return_type":"SeatAssignmentScheduleResponse","exchanges":[{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5101"],"sid":["service_1"],"aid":["act_8"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"},{"method":"POST","path":"/classes/com.korail.mobile.research.assignScheduleView.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"menuId":["11"],"dptDt":["20990102"],"dptTm":["090000"],"dptRsStnNm":["출발시험역"],"arvRsStnNm":["도착시험역"],"trnGpCd":["100"],"psrmClCd":["1"],"dirtChtnDvCd":["1"],"seatAttCd1":["015"],"psgNum1":["1"],"stlbDturDvNm1":["N"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}},{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5004"],"key":["SYNTHETIC-QUEUE"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"}]},
-  "get_multi_child_discount_targets": {"return_type":"MultiChildDiscountTargetResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.cust.mchdDcntTgt.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dptDt":["20990102"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_customer_trip_info": {"return_type":"CustomerTripInfoResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.custTripInfo.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"custMgNo":["SYNTHETIC-CUSTOMER"],"medDvCd":["03"],"regSqno":["0"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","mainList":[]}}]},
-  "get_trip_change_dates": {"return_type":"TripChangeDateResponse","exchanges":[{"method":"GET","path":"/classes/com.korail.mobile.reservation.tripChgDate.do","host":"api.example.invalid","query":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"tripChgDate":["20990102"]},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","tripChgDates":["20990102"],"f8_marker":"get_trip_change_dates"}}]},
+  "list_multi_child_discount_targets": {"return_type":"MultiChildDiscountTargetResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.cust.mchdDcntTgt.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dptDt":["20990102"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "get_trip_preferences": {"return_type":"CustomerTripInfoResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.custTripInfo.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"custMgNo":["SYNTHETIC-CUSTOMER"],"medDvCd":["03"],"regSqno":["0"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","mainList":[]}}]},
+  "list_trip_change_dates": {"return_type":"TripChangeDateResponse","exchanges":[{"method":"GET","path":"/classes/com.korail.mobile.reservation.tripChgDate.do","host":"api.example.invalid","query":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"tripChgDate":["20990102"]},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","tripChgDates":["20990102"],"f8_marker":"list_trip_change_dates"}}]},
   "get_delivery_recipient": {"return_type":"DeliveryRecipientResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.tk.dlvRcvCust.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"saleWctNo":["SYNTHETIC-WINDOW"],"saleDt":["20990102"],"saleSqno":["1"],"tkRetPwd":["SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","acepCustMgNo":"SYNTHETIC-CUSTOMER","acepCustNm":"SYNTHETIC-NAME","acepCustTeln":"00000000000","acepCustTeln2":"00000000000","mbCrdNo":"SYNTHETIC-MEMBER-CARD","f8_marker":"get_delivery_recipient"}}]},
   "check_ticket_duplication": {"return_type":"TicketDuplicationCheckResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.ticket.ticketDupCheck.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"pnrNo":["SYNTHETIC-PNR"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_pbp_acceptance_specifications": {"return_type":"PbpAcceptanceSpecificationResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.tk.pbpAcepSpec.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"tkCnt":["1"],"tkRetNo":["SYNTHETIC-WINDOW-20990102-1-SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","tkList":[],"f8_marker":"get_pbp_acceptance_specifications"}}]},
-  "get_original_ticket_inquiry": {"return_type":"OriginalTicketInquiryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.tripChgOgtk.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"tkCnt":["1"],"ogtkSaleWctNo_1":["SYNTHETIC-WINDOW"],"ogtkSaleDd_1":["20990102"],"ogtkSaleSqno_1":["1"],"ogtkRetPwd_1":["SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_self_seat_change_info": {"return_type":"SelfSeatChangeInfoResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.self.seatChgInfo.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"runDt":["20990102"],"trnNo":["90001"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_recent_delivery_history": {"return_type":"RecentDeliveryHistoryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.tk.rcntDlvHst.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"custMgNo":["SYNTHETIC-CUSTOMER"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","acepList":[]}}]},
+  "list_pbp_acceptances": {"return_type":"PbpAcceptanceSpecificationResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.tk.pbpAcepSpec.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"tkCnt":["1"],"tkRetNo":["SYNTHETIC-WINDOW-20990102-1-SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","tkList":[],"f8_marker":"list_pbp_acceptances"}}]},
+  "get_original_tickets": {"return_type":"OriginalTicketInquiryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.tripChgOgtk.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"tkCnt":["1"],"ogtkSaleWctNo_1":["SYNTHETIC-WINDOW"],"ogtkSaleDd_1":["20990102"],"ogtkSaleSqno_1":["1"],"ogtkRetPwd_1":["SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "get_self_seat_change_options": {"return_type":"SelfSeatChangeInfoResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.self.seatChgInfo.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"runDt":["20990102"],"trnNo":["90001"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_recent_delivery_recipients": {"return_type":"RecentDeliveryHistoryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.tk.rcntDlvHst.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"custMgNo":["SYNTHETIC-CUSTOMER"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","acepList":[]}}]},
   "get_ticket_reservation_detail": {"return_type":"TicketReservationDetailResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.certification.ReservationList","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"hidPnrNo":["SYNTHETIC-PNR"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_refund_commission": {"return_type":"RefundCommissionResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.refunds.CommissionView","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"h_orgtk_ret_sale_dt":["20990102"],"h_orgtk_wct_no":["SYNTHETIC-WINDOW"],"h_orgtk_sale_sqno":["1"],"h_orgtk_ret_pwd":["SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "get_refund_fee": {"return_type":"RefundCommissionResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.refunds.CommissionView","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"h_orgtk_ret_sale_dt":["20990102"],"h_orgtk_wct_no":["SYNTHETIC-WINDOW"],"h_orgtk_sale_sqno":["1"],"h_orgtk_ret_pwd":["SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_refund_ticket_detail": {"return_type":"RefundTicketDetailResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.refunds.SelTicketInfo","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"h_orgtk_ret_sale_dt":["20990102"],"h_orgtk_wct_no":["SYNTHETIC-WINDOW"],"h_orgtk_sale_sqno":["1"],"h_orgtk_ret_pwd":["SYNTHETIC-RETURN"],"h_purchase_history":["N"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_ticket_list": {"return_type":"TicketListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.myTicket.MyTicketNewList.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtIndex":["1"],"h_page_no":["1"],"hiduserYn":["Y"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "list_tickets": {"return_type":"TicketListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.myTicket.MyTicketNewList.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtIndex":["1"],"h_page_no":["1"],"hiduserYn":["Y"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "reserve": {"return_type":"ReservationHoldResponse","exchanges":[{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5101"],"sid":["service_1"],"aid":["act_14"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"},{"method":"POST","path":"/classes/com.korail.mobile.certification.TicketReservation","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"txtJobId":["1101"],"hidFreeFlg":["N"],"txtStndFlg":["N"],"txtTotPsgCnt":["1"],"txtCompaCnt1":["1"],"txtPsgTpCd1":["1"],"txtDiscKndCd1":["000"],"txtSeatAttCd1":["000"],"txtSeatAttCd2":["000"],"txtSeatAttCd3":["000"],"txtSeatAttCd4":["015"],"txtSeatAttCd5":["000"],"txtPsrmClCd1":["1"],"txtJrnyCnt":["1"],"txtJrnyTpCd1":["11"],"txtJrnySqno1":["001"],"txtTrnNo1":["90001"],"txtTrnClsfCd1":["00"],"txtTrnGpCd1":["100"],"txtRunDt1":["20990102"],"txtDptDt1":["20990102"],"txtDptTm1":["090000"],"txtDptRsStnCd1":["9901"],"txtDptStnConsOrdr1":["1"],"txtDptStnRunOrdr1":["1"],"txtArvRsStnCd1":["9903"],"txtArvStnConsOrdr1":["3"],"txtArvStnRunOrdr1":["3"],"txtChgFlg1":["N"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","h_pnr_no":"SYNTHETIC-PNR","h_jrny_cnt":"1","h_wct_no":"SYNTHETIC-WINDOW","h_tmp_job_sqno1":"1","h_tmp_job_sqno2":"2","h_tot_prc":"1000","h_rcvd_amt":"1000","f8_marker":"recalculate_price"}},{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5004"],"key":["SYNTHETIC-QUEUE"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"}]},
   "reserve_transfer": {"return_type":"ReservationHoldResponse","exchanges":[{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5101"],"sid":["service_1"],"aid":["act_14"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"},{"method":"POST","path":"/classes/com.korail.mobile.certification.TicketReservation","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"txtJobId":["1101"],"hidFreeFlg":["N"],"txtStndFlg":["N"],"txtTotPsgCnt":["1"],"txtCompaCnt1":["1"],"txtPsgTpCd1":["1"],"txtDiscKndCd1":["000"],"txtSeatAttCd1":["000"],"txtSeatAttCd2":["000"],"txtSeatAttCd3":["000"],"txtSeatAttCd4":["015"],"txtSeatAttCd5":["000"],"txtPsrmClCd1":["1"],"txtSeatAttCd4_1":["015"],"txtPsrmClCd2":["1"],"txtJrnyCnt":["2"],"txtJrnyTpCd1":["14"],"txtJrnySqno1":["001"],"txtTrnNo1":["90001"],"txtTrnClsfCd1":["00"],"txtTrnGpCd1":["100"],"txtRunDt1":["20990102"],"txtDptDt1":["20990102"],"txtDptTm1":["090000"],"txtDptRsStnCd1":["9901"],"txtDptStnConsOrdr1":["1"],"txtDptStnRunOrdr1":["1"],"txtArvRsStnCd1":["9902"],"txtArvStnConsOrdr1":["3"],"txtArvStnRunOrdr1":["2"],"txtChgFlg1":["N"],"txtJrnyTpCd2":["14"],"txtJrnySqno2":["002"],"txtTrnNo2":["90002"],"txtTrnClsfCd2":["00"],"txtTrnGpCd2":["100"],"txtRunDt2":["20990102"],"txtDptDt2":["20990102"],"txtDptTm2":["101000"],"txtDptRsStnCd2":["9902"],"txtDptStnConsOrdr2":["1"],"txtDptStnRunOrdr2":["2"],"txtArvRsStnCd2":["9903"],"txtArvStnConsOrdr2":["3"],"txtArvStnRunOrdr2":["3"],"txtChgFlg2":["N"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","h_pnr_no":"SYNTHETIC-PNR","h_jrny_cnt":"1","h_wct_no":"SYNTHETIC-WINDOW","h_tmp_job_sqno1":"1","h_tmp_job_sqno2":"2","h_tot_prc":"1000","h_rcvd_amt":"1000","f8_marker":"recalculate_price"}},{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5004"],"key":["SYNTHETIC-QUEUE"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"}]},
   "reserve_merge": {"return_type":"ReservationHoldResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.certification.TicketReservation","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"txtJobId":["1202"],"hidFreeFlg":["N"],"txtStndFlg":["Y"],"txtTotPsgCnt":["1"],"txtCompaCnt1":["1"],"txtPsgTpCd1":["1"],"txtDiscKndCd1":["000"],"txtSeatAttCd1":["000"],"txtSeatAttCd2":["000"],"txtSeatAttCd3":["000"],"txtSeatAttCd4":["015"],"txtSeatAttCd5":["000"],"txtPsrmClCd1":["1"],"txtJrnyCnt":["1"],"txtJrnyTpCd1":["11"],"txtJrnySqno1":["001"],"txtTrnNo1":["90001"],"txtTrnClsfCd1":["00"],"txtTrnGpCd1":["100"],"txtRunDt1":["20990102"],"txtDptDt1":["20990102"],"txtDptTm1":["090000"],"txtDptRsStnCd1":["9901"],"txtDptStnConsOrdr1":["1"],"txtDptStnRunOrdr1":["1"],"txtArvRsStnCd1":["9903"],"txtArvStnConsOrdr1":["3"],"txtArvStnRunOrdr1":["3"],"txtChgFlg1":["N"],"txtMidRsStnCd":["9902"],"txtMidStnConsOrdr":["2"],"txtMidStnRunOrdr":["2"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","h_pnr_no":"SYNTHETIC-PNR","h_jrny_cnt":"1","h_wct_no":"SYNTHETIC-WINDOW","h_tmp_job_sqno1":"1","h_tmp_job_sqno2":"2","h_tot_prc":"1000","h_rcvd_amt":"1000","f8_marker":"recalculate_price"}}]},
   "reserve_with_discount_card": {"return_type":"ReservationHoldResponse","exchanges":[{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5101"],"sid":["service_1"],"aid":["act_14"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"},{"method":"POST","path":"/classes/com.korail.mobile.certification.TicketReservation","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["A2"],"txtJobId":["1101"],"hidFreeFlg":["N"],"txtStndFlg":["N"],"txtTotPsgCnt":["1"],"txtCompaCnt1":["1"],"txtPsgTpCd1":["1"],"txtDiscKndCd1":["153"],"txtCardNo_1":["SYNTHETIC-CARD"],"txtSeatAttCd1":["000"],"txtSeatAttCd2":["000"],"txtSeatAttCd3":["000"],"txtSeatAttCd4":["015"],"txtSeatAttCd5":["000"],"txtPsrmClCd1":["1"],"txtJrnyCnt":["1"],"txtJrnyTpCd1":["11"],"txtJrnySqno1":["001"],"txtTrnNo1":["90001"],"txtTrnClsfCd1":["00"],"txtTrnGpCd1":["100"],"txtRunDt1":["20990102"],"txtDptDt1":["20990102"],"txtDptTm1":["090000"],"txtDptRsStnCd1":["9901"],"txtDptStnConsOrdr1":["1"],"txtDptStnRunOrdr1":["1"],"txtArvRsStnCd1":["9903"],"txtArvStnConsOrdr1":["3"],"txtArvStnRunOrdr1":["3"],"txtChgFlg1":["N"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","h_pnr_no":"SYNTHETIC-PNR","h_jrny_cnt":"1","h_wct_no":"SYNTHETIC-WINDOW","h_tmp_job_sqno1":"1","h_tmp_job_sqno2":"2","h_tot_prc":"1000","h_rcvd_amt":"1000","f8_marker":"recalculate_price"}},{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5004"],"key":["SYNTHETIC-QUEUE"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"}]},
-  "confirm_standby_hold": {"return_type":"BaseKorailResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.reservationWait.ReservationWait","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtPnrNo":["SYNTHETIC-PNR"],"txtPsrmClChgFlg":["N"],"txtSmsSndFlg":["N"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "set_standby_options": {"return_type":"BaseKorailResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.reservationWait.ReservationWait","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtPnrNo":["SYNTHETIC-PNR"],"txtPsrmClChgFlg":["N"],"txtSmsSndFlg":["N"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "cancel_unpaid_hold": {"return_type":"BaseKorailResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.reservationCancel.ReservationCancel","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtPnrNo":["SYNTHETIC-PNR"],"txtJrnySqno":["0001"],"txtJrnyCnt":["1"],"hidRsvChgNo":["000"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}},{"method":"POST","path":"/classes/com.korail.mobile.reservationCancel.ReservationCancelChk","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtPnrNo":["SYNTHETIC-PNR"],"txtJrnySqno":["0001"],"txtJrnyCnt":["1"],"hidRsvChgNo":["000"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "cancel_product_reservation": {"return_type":"ProductCancelResponse","exchanges":[{"method":"GET","path":"/classes/com.korail.mobile.product.ReservationCancel","host":"api.example.invalid","query":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtVrRsNo":["SYNTHETIC-RESERVATION"],"txtGdSqno":["1"]},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "pay_with_card": {"return_type":"ReservationPaymentResponse","exchanges":[{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5101"],"sid":["service_1"],"aid":["act_18"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"},{"method":"POST","path":"/classes/com.korail.mobile.payment.ReservationPayment","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"hidPnrNo":["SYNTHETIC-PNR"],"hidWctNo":["SYNTHETIC-WINDOW"],"hidTmpJobSqno1":["1"],"hidTmpJobSqno2":["2"],"hidRsvChgNo":["000"],"hidInrecmnsGridcnt":["1"],"hidStlMnsSqno1":["1"],"hidStlMnsCd1":["02"],"hidMnsStlAmt1":["1000"],"hidCrdInpWayCd1":["@"],"hidStlCrCrdNo1":["0000000000000000"],"hidVanPwd1":["00"],"hidCrdVlidTrm1":["9912"],"hidIsmtMnthNum1":["0"],"hidAthnDvCd1":["J"],"hidAthnVal1":["000101"],"hiduserYn":["Y"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","h_rsv_no":"SYNTHETIC-PNR","h_tot_rcvd_amt":"1000","h_stl_amt":"1000","tk_infos":{"tk_info":[{"h_sale_dt":"20990102","h_sale_sqno":"1","h_tk_ret_pwd":"SYNTHETIC-RETURN"}]},"f8_marker":"pay_with_card"}},{"method":"POST","path":"/ts.wseq","host":"queue.example.invalid","query":{"opcode":["5004"],"key":["SYNTHETIC-QUEUE"]},"form":{},"response":"200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1"}]},
   "refund": {"return_type":"RefundTicketResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.refunds.RefundsRequest","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtPnrNo":["SYNTHETIC-PNR"],"h_orgtk_sale_dt":["20990102"],"h_orgtk_sale_wct_no":["SYNTHETIC-WINDOW"],"h_orgtk_sale_sqno":["1"],"h_orgtk_ret_pwd":["SYNTHETIC-RETURN"],"h_mlg_stl":["N"],"trnNo":["90001"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","stlList":[{"stl_mns_cd":"02"}],"f8_marker":"refund"}}]},
-  "verify_station_ticket_refund": {"return_type":"StationRefundVerificationResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.refunds.verifyOnlineRefunds","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"strName":["SYNTHETIC-NAME"],"retNo1":["00000"],"retNo2":["00000000"],"retNo3":["0000000"],"retNo4":["00000"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","orgtkinfo_list":[{"pnr_no":"SYNTHETIC-PNR","ogtk_sale_dt":"0102","ogtk_sale_wct_no":"SYNTHETIC-WINDOW","ogtk_sale_sqno":"1","ogtk_ret_pwd":"SYNTHETIC-RETURN","tk_knd_cd":"1","ret_dv_cd":"1","ret_rsn_cd":"1"}],"rcvd_amt":"1000","ret_fee":"0","ret_amt":"1000","f8_marker":"verify_station_ticket_refund"}}]},
-  "execute_station_ticket_refund": {"return_type":"StationRefundExecutionResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.refunds.executeOnlineRefunds","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"pnrNo":["SYNTHETIC-PNR"],"ogtkSaleDt":["20990102"],"ogtkSaleWctNo":["SYNTHETIC-WINDOW"],"ogtkSaleSqno":["1"],"ogtkRetPwd":["SYNTHETIC-RETURN"],"retDvCd":["1"],"retRsnCd":["1"],"tkKndCd":["1"],"custTeln":["00000000000"],"retAmt":["1000"],"retFee":["0"],"acepCustNm":["SYNTHETIC-NAME"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
+  "check_station_ticket_refund": {"return_type":"StationRefundVerificationResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.refunds.verifyOnlineRefunds","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"strName":["SYNTHETIC-NAME"],"retNo1":["00000"],"retNo2":["00000000"],"retNo3":["0000000"],"retNo4":["00000"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","orgtkinfo_list":[{"pnr_no":"SYNTHETIC-PNR","ogtk_sale_dt":"0102","ogtk_sale_wct_no":"SYNTHETIC-WINDOW","ogtk_sale_sqno":"1","ogtk_ret_pwd":"SYNTHETIC-RETURN","tk_knd_cd":"1","ret_dv_cd":"1","ret_rsn_cd":"1"}],"rcvd_amt":"1000","ret_fee":"0","ret_amt":"1000","f8_marker":"check_station_ticket_refund"}}]},
+  "refund_station_ticket": {"return_type":"StationRefundExecutionResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.refunds.executeOnlineRefunds","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"pnrNo":["SYNTHETIC-PNR"],"ogtkSaleDt":["20990102"],"ogtkSaleWctNo":["SYNTHETIC-WINDOW"],"ogtkSaleSqno":["1"],"ogtkRetPwd":["SYNTHETIC-RETURN"],"retDvCd":["1"],"retRsnCd":["1"],"tkKndCd":["1"],"custTeln":["00000000000"],"retAmt":["1000"],"retFee":["0"],"acepCustNm":["SYNTHETIC-NAME"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "add_to_cart": {"return_type":"CartAddResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.cart.addCartList","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"hidPnrNo":["SYNTHETIC-PNR"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "register_discount_card": {"return_type":"DiscountCardPurchaseResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.dcntCrdInfo.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dcntCrdKndMgNo":["SYNTHETIC-KIND"],"custMgNo":["SYNTHETIC-CUSTOMER"],"vlidTrmStDt":["20990102"],"usePsbTno":["1"],"jrnyCnt":["1"],"jrnyTpCd_1":["11"],"runDt_1":["20990102"],"trnNo_1":["90001"],"dptRsStnCd_1":["9901"],"arvRsStnCd_1":["9903"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "extend_discount_card": {"return_type":"BaseKorailResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.reservation.dcntCrdExtn.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"saleWctNo":["SYNTHETIC-WINDOW"],"saleDd":["20990102"],"saleSqno":["1"],"tkRetPwd":["SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "recalculate_price": {"return_type":"ReservationHoldResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.certification.PriceReCalculation","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"hidPnrNo":["SYNTHETIC-PNR"],"txtJobId":["1101"],"txtPsgGridcnt":["1"],"psg_tp_dv_cd":["1"],"hidDcntKndCd":[""],"dcnt_knd_cd1":["000"],"hidDscpNo":[""],"psrm_cl_cd":["1"],"hidFmlyNo":[""]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","h_pnr_no":"SYNTHETIC-PNR","h_jrny_cnt":"1","h_wct_no":"SYNTHETIC-WINDOW","h_tmp_job_sqno1":"1","h_tmp_job_sqno2":"2","h_tot_prc":"1000","h_rcvd_amt":"1000","f8_marker":"recalculate_price"}}]},
-  "get_limousine_schedules": {"return_type":"LimousineScheduleResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.lmu.scdlQry.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dptDt":["20990102"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"],"trnGpCd":["800"],"psrmClCd":["1"],"dptTm":["090000"],"trnNo":["90001"],"seatAttCd":["015"],"rsvSaleDvCd":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","trainList":[{"trnNo":"90001","dptDt":"20990102","runDt":"20990102","dptRsStnCd":"9901","arvRsStnCd":"9903"}],"f8_marker":"get_limousine_schedules"}}]},
-  "get_limousine_seat_inventory": {"return_type":"LimousineSeatInventoryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.lms.TResidualSeatsResearch.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"trnClsfCd":["80"],"trnGpCd":["800"],"runDt":["20990102"],"trnNo":["90001"],"srcarNo":["0001"],"psrmClCd":["1"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"],"seatAttCd":["015"],"dptStnRunOrdr":["1"],"arvStnRunOrdr":["3"],"totPsgCnt":["1"],"isArrow":["false"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","seatList":[{"seat_no":"1A","sale_psb_flg":"Y"}],"f8_marker":"get_limousine_seat_inventory"}}]},
-  "reserve_limousine": {"return_type":"ReservationHoldResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.certification.TicketReservation","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"txtJobId":["1101"],"hidFreeFlg":["N"],"txtStndFlg":["N"],"txtTotPsgCnt":["1"],"txtCompaCnt1":["1"],"txtPsgTpCd1":["1"],"txtDiscKndCd1":["000"],"txtSeatAttCd1":["000"],"txtSeatAttCd2":["000"],"txtSeatAttCd3":["000"],"txtSeatAttCd4":["015"],"txtSeatAttCd5":["000"],"txtPsrmClCd1":["1"],"txtJrnyCnt":["1"],"txtJrnyTpCd1":["11"],"txtJrnySqno1":["001"],"txtTrnNo1":["90001"],"txtTrnClsfCd1":["80"],"txtTrnGpCd1":["800"],"txtRunDt1":["20990102"],"txtDptDt1":["20990102"],"txtDptTm1":["090000"],"txtDptRsStnCd1":["9901"],"txtDptStnRunOrdr1":["1"],"txtArvRsStnCd1":["9903"],"txtArvStnRunOrdr1":["3"],"txtSrcarCnt":["1"],"txtSrcarNo1":["0001"],"txtSeatNo1":["1A"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","h_pnr_no":"SYNTHETIC-PNR","h_jrny_cnt":"1","h_wct_no":"SYNTHETIC-WINDOW","h_tmp_job_sqno1":"1","h_tmp_job_sqno2":"2","h_tot_prc":"1000","h_rcvd_amt":"1000","f8_marker":"recalculate_price"}}]},
+  "list_airport_bus_schedules": {"return_type":"AirportBusScheduleResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.lmu.scdlQry.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dptDt":["20990102"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"],"trnGpCd":["800"],"psrmClCd":["1"],"dptTm":["090000"],"trnNo":["90001"],"seatAttCd":["015"],"rsvSaleDvCd":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","trainList":[{"trnNo":"90001","dptDt":"20990102","runDt":"20990102","dptRsStnCd":"9901","arvRsStnCd":"9903"}],"f8_marker":"list_airport_bus_schedules"}}]},
+  "get_airport_bus_seat_inventory": {"return_type":"AirportBusSeatInventoryResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.lms.TResidualSeatsResearch.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"trnClsfCd":["80"],"trnGpCd":["800"],"runDt":["20990102"],"trnNo":["90001"],"srcarNo":["0001"],"psrmClCd":["1"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"],"seatAttCd":["015"],"dptStnRunOrdr":["1"],"arvStnRunOrdr":["3"],"totPsgCnt":["1"],"isArrow":["false"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","seatList":[{"seat_no":"1A","sale_psb_flg":"Y"}],"f8_marker":"get_airport_bus_seat_inventory"}}]},
+  "reserve_airport_bus": {"return_type":"ReservationHoldResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.certification.TicketReservation","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"txtMenuId":["11"],"txtJobId":["1101"],"hidFreeFlg":["N"],"txtStndFlg":["N"],"txtTotPsgCnt":["1"],"txtCompaCnt1":["1"],"txtPsgTpCd1":["1"],"txtDiscKndCd1":["000"],"txtSeatAttCd1":["000"],"txtSeatAttCd2":["000"],"txtSeatAttCd3":["000"],"txtSeatAttCd4":["015"],"txtSeatAttCd5":["000"],"txtPsrmClCd1":["1"],"txtJrnyCnt":["1"],"txtJrnyTpCd1":["11"],"txtJrnySqno1":["001"],"txtTrnNo1":["90001"],"txtTrnClsfCd1":["80"],"txtTrnGpCd1":["800"],"txtRunDt1":["20990102"],"txtDptDt1":["20990102"],"txtDptTm1":["090000"],"txtDptRsStnCd1":["9901"],"txtDptStnRunOrdr1":["1"],"txtArvRsStnCd1":["9903"],"txtArvStnRunOrdr1":["3"],"txtSrcarCnt":["1"],"txtSrcarNo1":["0001"],"txtSeatNo1":["1A"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","h_pnr_no":"SYNTHETIC-PNR","h_jrny_cnt":"1","h_wct_no":"SYNTHETIC-WINDOW","h_tmp_job_sqno1":"1","h_tmp_job_sqno2":"2","h_tot_prc":"1000","h_rcvd_amt":"1000","f8_marker":"recalculate_price"}}]},
   "get_delay_certificate": {"return_type":"DelayCertificateResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.dlay.athnIsu.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"ogtkSaleWctNo":["SYNTHETIC-WINDOW"],"ogtkSaleDd":["20990102"],"ogtkSaleSqno":["1"],"ogtkRetPwd":["SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","dlayList":[{"runDt":"20990102","runDay":"토","trnNo":"90001","dptRsStnCd":"9901","arvRsStnCd":"9903","arvRsStnNm":"도착시험역","dlayArvFlg":"Y","trnDlayTm":"20"}],"f8_marker":"get_delay_certificate"}}]},
   "get_delay_return_receipt": {"return_type":"DelayReturnReceiptResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.dlay.pymtRcet.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"saleWctNo":["SYNTHETIC-WINDOW"],"saleDd":["20990102"],"saleSqno":["1"],"tkRetPwd":["SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","retDt":"20990102","dlayFarePymtMtdNm":"synthetic","dlayFareRetAmt":"1000","f8_marker":"get_delay_return_receipt"}}]},
-  "retrieve_delivered_ticket": {"return_type":"DeliveredTicketRetrievalResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.tk.pbpWdrw.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"pbpCnt":["1"],"pbpRsvNo":["SYNTHETIC-PBP"],"pnrNo":["SYNTHETIC-PNR"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","prsList":[{"prsFlg":"Y"}],"f8_marker":"retrieve_delivered_ticket"}}]},
-  "get_self_checkin_info": {"return_type":"SelfCheckInInfoResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.checkin.info.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"saleWctNo":["SYNTHETIC-WINDOW"],"saleDt":["20990102"],"saleSqno":["1"],"tkRetPwd":["SYNTHETIC-RETURN"],"jrnySqno":["001"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","pnrNo":"synthetic","trnNo":"synthetic","dptRsStnNm":"synthetic","dptTmQb":"synthetic","arvRsStnNm":"synthetic","arvTmQb":"synthetic","scarNo":"synthetic","seatNo":"synthetic","stlbTrnClsfNm":"synthetic","chcknDvCd":"synthetic","f8_marker":"get_self_checkin_info"}}]},
+  "recall_delivered_ticket": {"return_type":"DeliveredTicketRetrievalResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.tk.pbpWdrw.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"pbpCnt":["1"],"pbpRsvNo":["SYNTHETIC-PBP"],"pnrNo":["SYNTHETIC-PNR"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","prsList":[{"prsFlg":"Y"}],"f8_marker":"recall_delivered_ticket"}}]},
+  "get_self_checkin": {"return_type":"SelfCheckInInfoResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.checkin.info.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"saleWctNo":["SYNTHETIC-WINDOW"],"saleDt":["20990102"],"saleSqno":["1"],"tkRetPwd":["SYNTHETIC-RETURN"],"jrnySqno":["001"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","pnrNo":"synthetic","trnNo":"synthetic","dptRsStnNm":"synthetic","dptTmQb":"synthetic","arvRsStnNm":"synthetic","arvTmQb":"synthetic","scarNo":"synthetic","seatNo":"synthetic","stlbTrnClsfNm":"synthetic","chcknDvCd":"synthetic","f8_marker":"get_self_checkin"}}]},
   "check_self_checkin_seat": {"return_type":"SelfCheckInSeatCheckResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.checkin.psbFlg.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"qrcode":["SYNTHETIC-QR"],"saleWctNo":["SYNTHETIC-WINDOW"],"saleDd":["0102"],"saleSqno":["1"],"tkRetPwd":["SYNTHETIC-RETURN"],"jrnySqno":["001"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","consList":[{"pnrNo":"synthetic","jrnySqno":"synthetic","asgnSqno":"synthetic","runDt":"synthetic","trnNo":"synthetic","dptStnConsOrdr":"synthetic","dptRsStnCd":"synthetic","arvStnConsOrdr":"synthetic","arvRsStnCd":"synthetic","tkKndCd":"synthetic","trnGpCd":"synthetic","scarNo":"synthetic","seatNo":"synthetic","dptDttm":"synthetic","arvDttm":"synthetic","cpsNo":"synthetic"}],"f8_marker":"check_self_checkin_seat"}}]},
   "register_self_checkin": {"return_type":"SelfCheckInRegisterResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.checkin.reg.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"cpsNo":["SYNTHETIC-CPS"],"scarNo":["0017"],"seatNo":["5A"],"saleWctNo":["SYNTHETIC-WINDOW"],"saleDd":["0102"],"saleSqno":["1"],"tkRetPwd":["SYNTHETIC-RETURN"],"jrnySqno":["001"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","msgId":"synthetic","f8_marker":"register_self_checkin"}}]},
   "cancel_self_checkin": {"return_type":"SelfCheckInCancelResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.checkin.cnc.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"saleWctNo":["SYNTHETIC-WINDOW"],"saleDt":["20990102"],"saleSqno":["1"],"tkRetPwd":["SYNTHETIC-RETURN"],"jrnySqno":["001"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","f8_marker":"cancel_self_checkin"}}]}
@@ -458,15 +545,6 @@ F8_CASE_DATA["get_reservation_hold"] = {
 }
 
 
-def _f8_match_fields(actual: dict[str, list[str]], expected: dict[str, list[str]]) -> None:
-    assert actual.keys() == expected.keys()
-    for key, values in expected.items():
-        if values == ["<DYNAMIC>"]:
-            assert len(actual[key]) == 1 and actual[key][0].isdigit()
-        else:
-            assert actual[key] == values, key
-
-
 def _f8_handler(
     exchanges: list[dict[str, Any]],
 ) -> tuple[Callable[[httpx.Request], httpx.Response], list[str]]:
@@ -480,8 +558,7 @@ def _f8_handler(
         assert request.url.scheme == "https"
         assert request.url.host == expected["host"]
         assert request.url.path == expected["path"]
-        _f8_match_fields(parse_qs(request.url.query.decode(), keep_blank_values=True), expected["query"])
-        _f8_match_fields(parse_qs(request.content.decode(), keep_blank_values=True), expected["form"])
+        # test_wire_equivalence.py pins these calls' query and form bytes in order.
         opcode = request.url.params.get("opcode")
         seen.append(opcode or request.url.path)
         payload = expected["response"]
@@ -502,8 +579,8 @@ def _f8_handler(
 def test_f8_all_public_methods(method_name: str, f8_client_factory: Callable[..., api.KorailClient]) -> None:
     """NetworkApi.java:87-811; PushService.java:16-17; Netfunnel.java:610-664,848-880.
 
-    Each call asserts the entire query/form key set and values, HTTP method/path,
-    typed result, and all 5101/API/5004 events, not just mocked method invocations.
+    Each call asserts the HTTP method/path, typed result, and all 5101/API/5004 events, not just mocked
+    method invocations; test_wire_equivalence.py pins the same calls' query/form bytes.
     Fixtures freeze the baseline; they do not prove protected fields or live acceptance.
     """
     case = F8_CASE_DATA[method_name]
@@ -537,7 +614,7 @@ def test_f8_public_method_inventory() -> None:
         for name, method in inspect.getmembers(api.KorailClient, inspect.isfunction)
         if not name.startswith("_")
     }
-    assert len(actual) == 85
+    assert len(actual) == 83
     assert actual == F8_CASE_DATA.keys() == _f8_arguments().keys()
     assert len(api.__all__) == len(set(api.__all__))
     for name in api.__all__:

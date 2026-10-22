@@ -1,272 +1,37 @@
 # 실서버 확인 현황
 
-메서드마다 실제 KORAIL 서버에 요청해 응답을 확인했는지 정리했습니다. 현재 공개 메서드는 85개입니다.
-맨 위에 현재 상태를 두고, 그 아래에는 날짜별 기록을 원래 범위대로 보존합니다.
-10월 23일 2.6.2 읽기 전용 확인과 `2!` 기본 진단 관측, 2.6.1 간편 조회(오프라인), 10월 19일 7.0.10 정적 검토와 제한적 실서버 확인,
-10월 7일 출시 전 검증·사용자 제공 승객별 측정, 9월 29일 2.3.0 추가 기능, 9월 28일 7.0.8 재검증 순이며, 아래 전체 목록에는 9월 24~26일의 7.0.6 시기 기록을 보존합니다. 개인정보와 식별자는 적지 않았습니다.
+메서드 제공, 오프라인 테스트 통과, 실서버 성공은 서로 다른 확인 범위입니다. 현재 공개 메서드는 83개입니다.
+3.0.0은 배포 전이며 3.0 코드로는 실서버에 요청하지 않았습니다. 아래 실서버 결과는 모두 2.x 시기 코드의 기록입니다.
+날짜별 원래 기록은 [날짜별 실서버 기록](records.md)과 각 검증 문서에 당시 이름·버전·집계 그대로 있습니다.
 
 ## 현재 상태 (2026-10-23) {#current}
 
 - 2026-10-21부터 익명 열차 조회를 포함한 모든 요청이 `-8204`("원활한 예매 및 결제 서비스를 위해 최신 버전으로 업데이트해 주세요")로 실패한다는 사용자 보고가 있습니다([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)).
   `2!` 기본 헤더 도입 전 `main`(1b89779)에서 기본 `AppVersion` 7.0.8과 `app_version="7.0.10"`만 바꾼 설정(API `Version` 250601003) 모두 실패했습니다.
 - 2026-10-23 08:16 KST, 소유자 허락을 받아 PyPI의 2.6.2로 로그인 없는 직통 열차 조회를 한 번씩 했습니다.
-  기본 조합(`2!`·`AppVersion=7.0.8`·API `Version=250601003`)과 `AppVersion=7.0.10`·API `Version=250722001` 모두 `SUCC`/`IRG000000`이었습니다([기록](#live-check-262)).
+  기본 조합(`2!`·`AppVersion=7.0.8`·API `Version=250601003`)과 `AppVersion=7.0.10`·API `Version=250722001` 모두 `SUCC`/`IRG000000`이었습니다([기록](records.md#live-check-262)).
   보고된 실패가 `2!` 헤더 도입 전 코드였으므로 버전보다 `2!` 헤더가 차이를 만든 것으로 보이지만, 확인한 범위는 익명 조회 한 노선뿐입니다.
-- 2.6.2는 기본 버전을 바꾸지 않습니다. 그 전의 기록은 2026-10-23 병합 전 작업 트리의 7.0.10·250722001·`2!` 관측 1회입니다([조건과 한계](verification-7010.md#diagnostic-20261023)).
+- 2.6.2와 3.0은 기본 버전을 바꾸지 않습니다. 그 전의 기록은 2026-10-23 병합 전 작업 트리의 7.0.10·250722001·`2!` 관측 1회입니다([조건과 한계](verification-7010.md#diagnostic-20261023)).
 - 2.6.2부터 `-8204`는 로그인을 포함한 모든 경로에서 `KorailAppUpdateRequiredError`(`KorailAppError`의 하위 예외)로 분류하고 서버 메시지를 보존합니다.
-  `-8204`는 앱 리터럴이 아니라 #32에서 관측된 서버 코드입니다.
-- 2.6.2의 분류·입력 검사·결제 안전 변경은 합성 응답과 소켓 차단 환경에서 검사했습니다. 실서버로는 아래 익명 조회만 확인했습니다.
-  아래 날짜별 기록의 집계는 바꾸지 않습니다.
+  `-8204`는 앱 리터럴이 아니라 #32에서 관측된 서버 코드입니다. 2.6.2와 3.0의 변경은 합성 응답과 소켓 차단 환경에서만 검사했습니다.
 
-## 2026-10-23 2.6.2 읽기 전용 확인 {#live-check-262}
+## 영역별 최근 기록 {#by-area}
 
-#32 확인을 위해 소유자가 허락한 범위(로그인 없는 열차 조회, 홀드 없음)에서만 요청했습니다.
+메서드별 결과를 모두 공개한 마지막 기록은 [2026-09-28 7.0.8 재검증](verification-708.md)입니다. 그 뒤 실행은 범위만 공개했습니다.
 
-| 항목 | 내용 |
-|---|---|
-| 시각 | 2026-10-23 08:16:11, 08:16:23 KST |
-| 코드 | PyPI `korail-mobile-api==2.6.2`를 새 가상환경에 설치(macOS, Python 3.14.7, httpx 0.28.1), 프록시 없음·TLS 검증·대기열 사용 |
-| 호출 | `KorailClient.search_trains(TrainSearchQuery("서울", "부산", <다음 날>, "090000"))`, 로그인 없음 |
-| 설정 | ① `KorailConfig()` 기본값: `AppVersion=7.0.8`·`Version=250601003` ② `KorailConfig(app_version="7.0.10", version="250722001")`. 둘 다 기본 `2!` 헤더 |
-| 요청 | 각각 대기열 5101 → `seatMovie.ScheduleView`(`2!` 헤더 포함) → 대기열 5004, 모두 HTTP 200 |
-| 결과 | ①② 모두 `SUCC`/`IRG000000`, 열차 10개 |
-
-로그인·예약·결제·환불, 다른 노선·시각과 서버의 이후 정책은 확인하지 않았습니다. 응답 원문과 식별자는 기록하지 않습니다.
-
-## 2026-10-23 SDK 2.0.1 기본 진단
-
-2.6.2의 기본 `KorailClient`·`Korail`은 `2!` 진단 헤더를 사용합니다. 같은 헤더 형식으로 로그인·주요 조회와
-직통/환승/좌석 지정 미결제 홀드 3건의 생성·상세·취소를 확인했으며 시험 홀드는 모두 정리했습니다.
-실행 당시 요청 버전은 `AppVersion=7.0.10`·API `Version=250722001`이며 병합된 코드나 2.6.2로 다시 실행한 기록은 아닙니다.
-[날짜·소스·입력·결과와 한계](verification-7010.md#diagnostic-20261023)를 구분합니다. 아래 과거 기록은 원래 범위로 보존합니다.
-
-## 2.6.1 간편 조회 (오프라인만 확인)
-
-`PriceFareLeg.from_train()`, `trains.iter_search()`, `membership`·`airport_bus` 간편 조회는 2.6.1부터 제공합니다.
-합성 응답과 소켓 차단 환경에서 요청값·중단 조건·원문 보존·설치된 wheel을 검사했으며 새 실서버 요청은 하지 않았습니다.
-아래 기존 85개 `KorailClient` 메서드의 관측 날짜·집계·검증 범위는 바꾸지 않습니다. 사용법과 제한은 [간편 API 가이드](guide/convenience.md)를 참고하세요.
-
-## 7.0.10 정적 검토 (2026-10-19)
-
-아래 검토의 사전·요청 순서·환불 대상 연결 변경은 2.6.0에 포함합니다. 검증 당시의 버전과 관측 집계는 그대로 보존합니다.
-
-[7.0.10 검토 요약](verification-7010.md)은 공개 메서드 85개 행을 앱과 정적으로 대조한 별도 기록입니다.
-앱 실행·실서버 요청·실제 예약·결제·환불은 하지 않았으며 아래 실서버 집계에 합산하지 않습니다.
-오류 사전 갱신과 요청 순서·환불 대상 연결 정정이 새 서버 성공을 뜻하지 않습니다.
-검토 당시에는 요청 기본 `AppVersion=7.0.8`, API `Version`, 패키지 버전 `2.5.0`과 과거 관측 기록을 유지했습니다.
-
-같은 날 정적 검토 이후에는 작업 브랜치 소스를 `AppVersion=7.0.10`으로 명시해 별도 실서버 검증했습니다.
-공개 메서드 64개(로컬 2개 포함)를 실행했고 HTTP 120건은 모두 200이었습니다. 56개는 FAIL 없이 반환했으며,
-나머지 8개는 FAIL·업무상 거절·자료 없음으로 정상 기능 성공과 구별합니다. 직통·환승 임시 홀드 2건을 모두 취소했고 예약은 전후 0건입니다.
-결제·실제 환불은 하지 않았고 21개 메서드는 범위·전제 조건으로 미실행입니다.
-수수료 조회는 과거 표의 `WRT200022` 거절까지만 확인했습니다. 범위와 한계는 [별도 실서버 확인](verification-7010.md#live-validation-7010)을 참고하세요.
-
-## 2.5.0 출시 전 검증 (2026-10-07) {#release-validation-250}
-
-출시 전 `main` 커밋 `e62fd87`을 앱 `7.0.8` 설정으로 검증했습니다. 당시 패키지 버전 문자열은 `2.4.0`이며,
-배포된 2.5.0 패키지를 검증한 결과는 아닙니다. 상세 범위와 한계는 [출시 전 검증 보고서](verification-250.md),
-요청·결과의 요약은 [검증 근거 JSON](evidence/live-250/live_250_release_validation.json)에 있습니다.
-
-| 범위 | 관측 결과 |
-|---|---|
-| 대표 조회·정리·로컬 팩토리 | 59개 시나리오 반환·검사 성공, 실패 0건. 정상 `close()`와 실응답 기반 로컬 팩토리도 포함하며 공개 메서드 수가 아닙니다. |
-| 요청 | HTTP 105건 모두 200, 호스트·경로 조합 29종. `Device`가 기록된 56건 모두 `AppVersion=7.0.8` 포함. |
-| 열차 필터·요약 | 필터 전후 `10→0`·`10→3`·`10→10`, 자정을 넘는 소요 시간과 필터 전 목록·원문 참조 보존 확인. |
-| 후속 조회 | 마지막 출발 시각 방식으로 실제 조회 성공. 서버의 다음 페이지 표시가 `Y`여도 필수 커서 값이 없어 `next_page()`는 `None`이었음. |
-| 승인된 임시 홀드 | 어른 1명 `GENERAL_FIRST`로 일반실 48,000원, 어린이 1명 `SPECIAL_FIRST`로 특실 46,000원 성공. 각각 `find()`의 예약번호·금액 보존과 상세 조회 후 취소 완료. |
-| 상태 보존 | 임시 홀드 2개 생성·2개 취소, 시작·최종 예약 0건. 인증 배치 로그아웃과 API·대기열 연결 종료 확인. 카드 결제·환불 요청 없음. |
-
-두 홀드 금액은 승객 유형·객실이 다른 관측값이며 어린이 할인율을 확정한 근거가 아닙니다.
-사용할 수 있는 서버 커서·예약대기 전용 행·객실 대체 선택·`ONLY` 옵션·예외 유도·정기권·자율 좌석 변경·실제 결제는 확인하지 않았습니다.
-이번 대표 흐름 검증을 과거 84개 메서드의 전수 집계에 합산하지 않습니다.
-
-## 승객 유형별 추가 보고 (2026-10-07) {#passenger-report-20261007}
-
-아래는 사용자가 제공한 2.3.0 실서버 측정 결과입니다. 이번 수정 중에는 실서버 요청을 다시 실행하지 않았습니다.
-과거 어른 승객 중심의 확인 범위에 어린이 성공과 청소년 거절 사례를 추가하며, 과거 전수 확인표의 집계는 바꾸지 않습니다.
-
-| 승객 구성 | 열차·조건 | 보고된 실서버 결과 |
+| 영역 | 최근 실서버 기록 | 확인한 것과 한계 |
 |---|---|---|
-| 청소년 1명(`teenager=1`) | KTX 318, 2026-10-14 10:01, 동대구→수서, 일반실·직통 | `ERR299943`("예약할인이 지원되지 않습니다")로 거절 |
-| 청소년 1명(`teenager=1`) | KTX 007, 2026-10-14 06:03, 서울→부산, 일반실·직통 | `ERR299943`로 거절 |
-| 어린이 1명(`child=1`) | KTX-산천 310, 일반실·직통 | 18,600원 홀드 성공(사용자 보고상 어린이 50% 할인), 즉시 취소 |
+| [세션·공통](api/session.md) | [2026-10-23](verification-7010.md#diagnostic-20261023) | 로그인 성공. 7.0.10·250722001·`2!`, 병합 전 작업 트리 |
+| [열차 조회·좌석](api/trains.md) | [2026-10-23](records.md#live-check-262) | 2.6.2 익명 직통 조회 성공(기본값·7.0.10 모두). 인증·좌석·운임 조회는 [2026-10-23 진단](verification-7010.md#diagnostic-20261023) |
+| [예약](api/reservations.md) | [2026-10-23](verification-7010.md#diagnostic-20261023) | 직통·환승·좌석 지정 홀드 생성·상세·취소. 예약대기·병합 홀드는 [2026-09-28](records.md#708-요청-변경-실서버-재검증-2026-09-28) |
+| [결제·환불](api/payments.md) | [2026-10-19](verification-7010.md#live-validation-7010) | 수수료 조회 `WRT200022` 거절, 결제·환불은 실행하지 않음. 카드 결제·환불 성공은 [2026-09-24~26](records.md#결제환불)뿐 |
+| [승차권·계정](api/account.md) | [2026-10-19](verification-7010.md#live-validation-7010) | 일부 조회 실행(다자녀 조건 미충족·좌석 변경 대상 부재 등 업무상 거절 포함) |
+| [대리수령·셀프 체크인](api/delivery-checkin.md) | [2026-09-28](records.md#708-요청-변경-실서버-재검증-2026-09-28) | 대리수령 명세 파싱. 셀프 체크인 좌석 확인·등록·취소와 전달 승차권 회수는 실서버 미검증 |
+| [정기권·패스·N카드·여행상품](api/passes.md) | [2026-09-28](records.md#708-요청-변경-실서버-재검증-2026-09-28) | 여행상품 상세 파싱, N카드 일정 조회는 `EAZ000028` 거절. N카드 정상 흐름은 실서버 미검증 |
+| [공항버스·부가서비스](api/airport-bus.md) | [2026-09-28](records.md#708-요청-변경-실서버-재검증-2026-09-28) | 공항버스 홀드 생성·취소. 부가서비스 구매·결제·환불은 지원하지 않음 |
 
-어린이 사례의 원운임·할인액을 포함한 응답 원문은 제공되지 않아 50% 할인율을 별도로 대조하지 않았습니다.
-다른 승객 유형이나 다른 열차·상품의 성공을 이 세 사례로 확정하지 않습니다.
-현재 코드는 `teenager > 0`인 열차 예약을 대기열·예약 요청 전에 `KorailProtocolError`로 거절하며,
-검색의 어른 인원 합산은 유지합니다. 어린이 단독 예약의 요청 폼과 직통·환승·병합·간편 API의
-청소년 사전 거절은 오프라인 회귀 테스트로 확인했습니다.
+## 옮긴 기록 {#moved}
 
-## 2.3.0 추가 기능 (2026-09-29)
-
-| 메서드 | 검증 범위 | 실서버 결과 |
-|---|---|---|
-| [`get_reservation_hold`](api/reservations.md#get_reservation_hold) | 실제 기존 예약 한 건의 상세를 조회하고, PNR·창구번호·양수 정산액·여정을 검증했습니다. 반환값으로 로컬 결제 폼을 만들어 PNR·창구번호·정산액 보존도 확인했습니다. | HTTP 200, `SUCC`/`IRZ000001`. 상세에서 `h_payment_flg`가 생략되는 것을 확인해 누락을 허용하고 `None`으로 보존하도록 수정했습니다. 카드 결제 요청은 보내지 않았습니다. |
-
-새 메서드는 아래 84개 메서드의 과거 실서버 집계에 포함하지 않습니다.
-첫 검사에서는 승인받은 일반실 어른 1명 임시 예약을 만들었으나, 결제 플래그를 필수로 요구하던 검증에서 거절됐습니다.
-임시 예약은 `SUCC`/`IRG000000`으로 취소했고, 실행 직전에 있던 별도 예약 한 건만 그대로 남았음을 확인했습니다.
-수정 후에는 그 기존 예약을 조회만 하여 새 메서드의 성공을 확인했으며, 각 검사 세션은 로그아웃했습니다.
-
-환승·복수 좌석과 잘못된 금액·필수값의 거절은 합성 테스트로 확인했습니다.
-이번 흐름의 실제 카드 결제와 N카드 예약 복원은 별도 검증하지 않았습니다.
-근거는 [2.3.0 실서버 검사 기록](evidence/live-230/live_230_existing_hold.json)에 있으며,
-계정·비밀번호·쿠키·예약번호·응답 본문을 포함하지 않습니다.
-
-## 7.0.8 요청 변경 실서버 재검증 (2026-09-28)
-
-조회, 인증, 임시 예약·취소 요청을 실서버에 보냈습니다. 공통 필드를 싣는 폼과 직접 은행 조회 폼에서 `AppVersion=7.0.8`을 확인했습니다. URL 쿼리를 쓰거나 본문이 없는 요청은 폼 기록만으로 버전을 판정하지 않았습니다. 공개 메서드 84개의 재검증 범위와 근거는 [7.0.8 전수 확인표](verification-708.md)에 있습니다.
-
-| 메서드 | 7.0.8 요청 | 실서버 결과 |
-|---|---|---|
-| `get_common_code("app.display.image")` | 공통 필드와 코드·기기 정보를 전송 | HTTP 200, `SUCC`/`API.I00000` |
-| `get_train_calendar()` | 공통 필드와 `timeStamp` 전송 | HTTP 200, `SUCC`/`API.I00000`, 운행일 32개 |
-| `get_maas_menu_list()` | 공통 필드와 `timeStamp` 전송 | HTTP 200, `SUCC`/`API.I00000`, 메뉴 11개 |
-| `get_app_data(timestamp_ms=1)` | 공통 필드·`timeStamp`·`srtCheckYn=Y` 전송 | HTTP 200, JSON 파싱 성공, `version`·`notice` 객체 존재. 이 캐시 응답에는 `strResult`가 없습니다. |
-| `login()` | 로그인 요청에 `AppVersion=7.0.8` 전송 | HTTP 200, 세션 쿠키를 받았으며 SDK 로그인이 성공함. |
-| `get_deposit_banks()` | 직접 `@Field` 네 개(`Device`, `Version`, `AppVersion`, `Key`) 전송 | 인증 세션에서 HTTP 200, `SUCC`/`API.I00000`, 은행 56개. 세션 없이 같은 필드로 보낸 요청은 `P058`을 받음. |
-| `search_trains()` | 7.0.8 공통 필드로 직통 열차 조회 | `SUCC`/`IRG000000`, 예약 가능 행 10개. |
-| `reserve()` → `get_ticket_reservation_detail()` | 미결제 홀드 하나를 만든 뒤 그 PNR의 상세를 조회 | 예약 `SUCC`/`IRR000018`, 상세 HTTP 200·`SUCC`/`IRZ000001`. 한 여정에 `h_run_dt`가 실제로 있었고 모델의 `run_date`와 원문 값이 일치함. |
-| `cancel_unpaid_hold()` | 위 미결제 홀드를 즉시 취소 | HTTP 200, `SUCC`/`IRG000000`. 이후 예약 이력은 `P100`·0여정. |
-| 예약대기·병합·좌석 지정·환승·공항버스 예약 | 각 유형의 실제 미결제 홀드 생성 | 예약대기 옵션 저장까지 성공했고, 병합·좌석 지정·환승·공항버스 홀드도 성공했습니다. 모두 취소 후 예약 이력 0건을 확인했습니다. |
-| `recalculate_price()` | 실제 홀드의 할인 재계산 요청 | 요청은 서버에 도달했지만 `WZZ000001`과 변경 내용 없음 `ERR930202`를 받았습니다. 7.0.8 성공 응답은 미확인입니다. |
-| `get_ticket_list(mode="2")` → 발권 후 조회 | 3개월 이내 승차일 범위로 과거 이력 조회 | 7개 예약·8장 승차권을 받았고, 이 중 한 장의 영수증·원표·환불 상세·지연확인증·대리수령 명세 응답을 파싱했습니다. |
-| `get_product_detail()`·`get_pbp_acceptance_specifications()` | 계정의 실제 과거 여행상품·승차권 식별자로 조회 | 고객 취소된 여행상품 1건의 상세와 대리수령 대상 과거 승차권 2건의 명세를 파싱했습니다. 두 명세의 회수 가능 플래그는 모두 `N`이었습니다. |
-| `get_discount_card_schedule()` | 알려진 N카드 상품 코드로 읽기 전용 조회 | 서버의 `EAZ000028` 스케줄 조회 오류를 받았습니다. 보유 N카드가 없으므로 성공 경로는 미확인입니다. |
-
-이는 각 경로의 현재 서버 응답과 파싱을 확인한 결과입니다. 재검증 전 예약 이력은 `P100`으로 비었고 현재 승차권은 `WRT300005`였습니다. 첫 과거 승차권 조회의 `WRT100101`은 자료 부재가 아니라 3개월 초과 날짜 범위 오류였고, 범위를 바로잡아 성공했습니다. 여러 미결제 홀드를 순차적으로 만들고 모두 취소했으며 최종 예약 이력은 0건이었습니다. 결제·환불 요청은 보내지 않았고 검증용 로그인 세션은 종료했습니다. 84개 중 실서버 응답 파싱 59개, 서버 거절 확인 10개, 자료 부족으로 미실행 13개, 로컬 메서드 2개입니다.
-
-## 7.0.6 시기 기존 전체 목록 (2026-09-24~26)
-
-| 상태 | 수 | 뜻 |
-|---|---:|---|
-| 확인됨 | 66 | 실서버에서 정상 응답을 받았습니다. |
-| 서버 응답만 확인 | 4 | 요청은 서버까지 갔지만 계정에 해당 자료나 자격이 없어 실패 결과 코드만 확인했습니다. |
-| 미확인 | 12 | 필요한 카드·승차권·상태가 없어 정상 응답을 확인하지 못했습니다. 일부는 요청을 보내 실패 결과 코드만 받았습니다. |
-| 해당 없음 | 2 | 네트워크를 쓰지 않는 메서드입니다. |
-
-실서버 확인은 그 시점의 결과입니다. KORAIL이 서버나 앱을 바꾸면 결과가 달라질 수 있습니다.
-
-## 세션·공통
-
-| 메서드 | 상태 | 결과 |
-|---|:-:|---|
-| [`login`](api/session.md#login) | 확인됨 | 로그인에 성공했습니다. 하이픈이 든 ID는 요청 전에 거절합니다. |
-| [`logout`](api/session.md#logout) | 확인됨 | 로그아웃한 뒤의 요청은 `FAIL`/`P058`을 받으며, 세션 만료로 처리합니다. |
-| [`clear_session`](api/session.md#clear_session) | 해당 없음 | - |
-| [`close`](api/session.md#close) | 해당 없음 | 닫은 뒤에 호출하면 요청을 보내지 않고 `KorailProtocolError`가 발생합니다. |
-| [`get_service_status`](api/session.md#get_service_status) | 확인됨 | `SUCC`/`S100`을 받았습니다. |
-| [`get_app_data`](api/session.md#get_app_data) | 확인됨 | - |
-| [`get_notice`](api/session.md#get_notice) | 확인됨 | - |
-| [`get_common_code`](api/session.md#get_common_code) | 확인됨 | `SUCC`/`API.I00000`을 받았습니다. |
-| [`get_uuid`](api/session.md#get_uuid) | 확인됨 | - |
-| [`get_station_info`](api/session.md#get_station_info) | 확인됨 | - |
-| [`get_station_data`](api/session.md#get_station_data) | 확인됨 | 역 281개를 받았습니다. |
-| [`get_train_calendar`](api/session.md#get_train_calendar) | 확인됨 | 32일치 날짜를 받았습니다. |
-| [`get_crew_request_list`](api/session.md#get_crew_request_list) | 확인됨 | 요청 사유 3건을 받았습니다. |
-
-## 열차 조회·좌석
-
-| 메서드 | 상태 | 결과 |
-|---|:-:|---|
-| [`search_trains`](api/trains.md#search_trains) | 확인됨 | 서울→부산 열차 10편을 받았습니다. 청소년·유아·안내견 인원은 앱과 같이 어른·어린이 인원에 합쳐 보냅니다. `peak_season=True`일 때의 `peak_season_inquiry` 관문과 `use_special_schedule=True`일 때의 `product_inquiry` 관문은 실서버에서 확인하지 못했습니다. |
-| [`search_transfer_trains`](api/trains.md#search_transfer_trains) | 확인됨 | 강릉→목포 환승 여정 2개를 받았습니다. |
-| [`search_trains_with_transfer_fallback`](api/trains.md#search_trains_with_transfer_fallback) | 확인됨 | 강릉→목포 조회가 환승 조회로 전환돼 여정 2개를 받았습니다. |
-| [`get_transfer_stations`](api/trains.md#get_transfer_stations) | 확인됨 | 환승역 2개를 받았습니다. |
-| [`get_train_schedule`](api/trains.md#get_train_schedule) | 확인됨 | 정차역 9개를 받았습니다. |
-| [`get_seat_cars`](api/trains.md#get_seat_cars) | 확인됨 | 호차 13~14개를 받았습니다. 응답에 없는 호차 필드 가운데 네 개는 앱 기본값(문자열은 `""`, 숫자는 `None`)으로 읽습니다. |
-| [`get_seat_inventory`](api/trains.md#get_seat_inventory) | 확인됨 | 좌석 56석과 창문 6개를 받았습니다. 세 자리 숫자가 아닌 좌석 속성 코드는 요청 전에 거절합니다. |
-| [`get_free_seat_car_info`](api/trains.md#get_free_seat_car_info) | 확인됨 | 열차 203편을 조회했습니다. 자유석 칸이 있는 183편은 호차 안내 문구(KTX 18호차, KTX-산천 8·18호차, ITX-새마을 6호차 등)를 받았습니다. 자유석 칸이 없는 20편은 `IRZ000005`를 받았습니다. 모두 열차 조회 결과의 자유석 칸 수와 일치했습니다. |
-| [`get_seat_assignment_schedule`](api/trains.md#get_seat_assignment_schedule) | 확인됨 | 열차 10편을 받았습니다. 추석 기간 날짜로 조회하면 `WRD000057`을 받았습니다. `peak_season=True`일 때의 `peak_season_inquiry` 관문은 실서버에서 확인하지 못했습니다. |
-| [`get_merge_seats_inquiry`](api/trains.md#get_merge_seats_inquiry) | 확인됨 | 열차 2편을 받았습니다. |
-| [`get_guide_seat_condition`](api/trains.md#get_guide_seat_condition) | 서버 응답만 확인 | `seat_attribute_code`와 관계없이 `FAIL`/`MRR800011`을 받았습니다. `seat_attribute_code`가 `"999"`일 때도 같았습니다. 로그인 전에는 `P058`을 받았습니다. |
-| [`get_price_fare_quote`](api/trains.md#get_price_fare_quote) | 확인됨 | `SUCC`/`API.I00000`을 받았습니다. 받은 운임은 홀드의 `total_price`와 같았습니다. 실제 결제액인 홀드의 `received_amount`는 좌석 할인만큼 더 낮을 수 있습니다. 환승 2구간 조회는 운임 4행을 받았습니다. |
-
-## 예약
-
-| 메서드 | 상태 | 결과 |
-|---|:-:|---|
-| [`reserve`](api/reservations.md#reserve) | 확인됨 | `SUCC`/`IRR000018`로 홀드를 만든 뒤 바로 취소했습니다. 일반 예약과 좌석 지정 예약 모두 홀드를 만들었습니다. 예약대기 홀드는 결제할 수 없는 상태로 표시됩니다. 선택한 객실에 빈 좌석이 확인되지 않는 행(입석만 남은 행 포함)은 요청 전에 거절합니다. 어린이 성공·청소년 거절의 사용자 제공 측정 결과는 [2026-10-07 추가 보고](#passenger-report-20261007)에 있습니다. |
-| [`reserve_transfer`](api/reservations.md#reserve_transfer) | 확인됨 | 2구간 환승 홀드를 만든 뒤 취소했습니다. 두 구간이 같은 열차이거나 탑승 순서가 아니면 요청 전에 거절합니다. |
-| [`reserve_merge`](api/reservations.md#reserve_merge) | 확인됨 | 병합 예약 홀드를 만든 뒤 취소했습니다. 첫 홀드도 결제할 수 있는 상태였습니다. 병합할 행의 운행일이 첫 홀드와 다르면 요청 전에 거절합니다. |
-| [`confirm_standby_hold`](api/reservations.md#confirm_standby_hold) | 확인됨 | ITX-새마을 예약대기 홀드(`IRR000014`, 결제할 수 없는 상태)로 확인했습니다. 옵션 저장은 `SUCC`/`IRZ000003`을 받았습니다. 홀드 취소는 `IRG000000`을 받았고, 이후 예약 내역 조회는 `P100`을 받았습니다. |
-| [`cancel_unpaid_hold`](api/reservations.md#cancel_unpaid_hold) | 확인됨 | `SUCC`/`IRG000000`을 받았습니다. |
-| [`get_reservation_history`](api/reservations.md#get_reservation_history) | 확인됨 | 홀드가 없는 상태에서 `P100`을 받았습니다. |
-| [`get_ticket_reservation_detail`](api/reservations.md#get_ticket_reservation_detail) | 확인됨 | `SUCC`/`IRZ000001`을 받았습니다. |
-| [`check_ticket_duplication`](api/reservations.md#check_ticket_duplication) | 확인됨 | 홀드의 PNR로 `SUCC`를 받았습니다. |
-| [`get_cart_list`](api/reservations.md#get_cart_list) | 확인됨 | 장바구니에 담은 열차 홀드와 공항버스 홀드가 행으로 나왔습니다. |
-| [`add_to_cart`](api/reservations.md#add_to_cart) | 확인됨 | `SUCC`/`IRZ000002`를 받았습니다. 홀드를 취소하면 장바구니에서도 빠졌습니다. |
-
-## 결제·환불
-
-| 메서드 | 상태 | 결과 |
-|---|:-:|---|
-| [`pay_with_card`](api/payments.md#pay_with_card) | 확인됨 | 7,500원 홀드를 결제해 `IRT000000`을 받았고, 수수료 0원으로 환불했습니다. 예약대기 홀드, 0원 홀드, 형식이 잘못된 카드 입력은 요청 전에 거절합니다. |
-| [`recalculate_price`](api/payments.md#recalculate_price) | 확인됨 | 평일 열차의 할인을 바꾸자 `SUCC`/`IRZ000008`과 함께 금액이 21,500원에서 15,000원으로 바뀌었습니다. 토요일 열차는 같은 결과 코드를 받았지만 금액이 그대로였습니다. 할인이 바뀌지 않으면 `ERR930202`를 받았습니다. 결제에는 재계산 결과로 받은 홀드를 사용합니다. `add_to_cart=True`와 `PriceRecalculationRequest.for_hold()`로 만든 요청도 실서버에서 확인했습니다. |
-| [`get_refund_ticket_detail`](api/payments.md#get_refund_ticket_detail) | 확인됨 | - |
-| [`get_refund_commission`](api/payments.md#get_refund_commission) | 확인됨 | 결제한 승차권의 수수료로 0원을 받았습니다. 이미 환불한 승차권은 `WRT200399`, 승차일이 지난 승차권은 `WRT200022`를 받았습니다. |
-| [`refund`](api/payments.md#refund) | 확인됨 | 수수료 0원 승차권 환불을 두 번 실행해 모두 `SUCC`/`IRT200277`을 받았습니다. `commission`이 [`get_refund_commission`](api/payments.md#get_refund_commission)의 응답이 아니면(`None` 포함) 요청 전에 `KorailProtocolError`가 발생합니다. `settle_mileage=True`는 사용할 수 있는 마일리지가 수수료 이상일 때만 받습니다. |
-| [`verify_station_ticket_refund`](api/payments.md#verify_station_ticket_refund) | 미확인 | 역에서 발권한 승차권이 없어 확인하지 못했습니다. |
-| [`execute_station_ticket_refund`](api/payments.md#execute_station_ticket_refund) | 미확인 | 역에서 발권한 승차권이 없어 확인하지 못했습니다. |
-
-## 승차권·계정
-
-| 메서드 | 상태 | 결과 |
-|---|:-:|---|
-| [`get_ticket_list`](api/account.md#get_ticket_list) | 확인됨 | 현재 승차권 0장과 지난 이력 131건을 받았습니다. |
-| [`get_ticket_receipt`](api/account.md#get_ticket_receipt) | 확인됨 | 영수증 1건을 받았습니다. |
-| [`get_korail_point_summary`](api/account.md#get_korail_point_summary) | 확인됨 | - |
-| [`get_mileage_history`](api/account.md#get_mileage_history) | 확인됨 | - |
-| [`get_discount_coupons`](api/account.md#get_discount_coupons) | 확인됨 | 할인쿠폰 0장을 받았습니다. |
-| [`get_delay_discount_tickets`](api/account.md#get_delay_discount_tickets) | 확인됨 | 지연할인권 0장을 받았습니다. |
-| [`get_deposit_banks`](api/account.md#get_deposit_banks) | 확인됨 | 은행 56개를 받았습니다. |
-| [`get_customer_trip_info`](api/account.md#get_customer_trip_info) | 확인됨 | `SUCC`/`IRS100002`를 받았습니다. |
-| [`get_multi_child_discount_targets`](api/account.md#get_multi_child_discount_targets) | 서버 응답만 확인 | 다자녀 할인 대상이 아닌 계정에서 `WRC800029`를 받았습니다. |
-| [`get_trip_change_dates`](api/account.md#get_trip_change_dates) | 확인됨 | 변경할 수 있는 날짜 15일을 받았습니다. |
-| [`get_original_ticket_inquiry`](api/account.md#get_original_ticket_inquiry) | 확인됨 | 인쇄를 마친 승차권 2장으로 `SUCC`/`IRT000001`을 받았습니다. 환불한 승차권은 `WRT200399`를 받았습니다. |
-| [`get_self_seat_change_info`](api/account.md#get_self_seat_change_info) | 확인됨 | 운행 중인 KTX 열차로 `SUCC`를 받았습니다. 운행 시간 밖의 열차는 `WRT800176`을 받았습니다. |
-| [`get_delay_certificate`](api/account.md#get_delay_certificate) | 확인됨 | 지연된 승차권 2장으로 `SUCC`/`IAZ000006`과 지연 행 1개를 받았습니다. 받은 행에는 운행일이 없어 `run_date`가 `None`이었습니다. 지연되지 않은 승차권은 `WRT400456`을 받았습니다. |
-| [`get_delay_return_receipt`](api/account.md#get_delay_return_receipt) | 서버 응답만 확인 | 지연료를 돌려받은 승차권이 없어 `IRZ000005`를 받았습니다. |
-
-## 대리수령·셀프 체크인
-
-| 메서드 | 상태 | 결과 |
-|---|:-:|---|
-| [`get_recent_delivery_history`](api/delivery-checkin.md#get_recent_delivery_history) | 확인됨 | 수령자 1명을 받았습니다. 응답에 해당 값이 없어 `changed_acceptance_reservation_no`는 `None`이었습니다. |
-| [`get_delivery_recipient`](api/delivery-checkin.md#get_delivery_recipient) | 미확인 | N카드 2인 승차권이 없어 수령자 응답을 확인하지 못했습니다. 서버는 `IRZ000005`를 반환했습니다. |
-| [`get_pbp_acceptance_specifications`](api/delivery-checkin.md#get_pbp_acceptance_specifications) | 확인됨 | 대리수령 대상 승차권 6장으로 6장의 명세를 받았습니다. 대상이 아닌 승차권은 0건이었습니다. |
-| [`retrieve_delivered_ticket`](api/delivery-checkin.md#retrieve_delivered_ticket) | 미확인 | 회수 가능한 전달 승차권이 없어 확인하지 못했습니다. 7.0.8에서 조회한 과거 명세 2건도 회수 가능 플래그가 모두 `N`입니다. |
-| [`get_self_checkin_info`](api/delivery-checkin.md#get_self_checkin_info) | 서버 응답만 확인 | 체크인한 승차권이 없어 `WRZ000001`을 받았습니다. |
-| [`check_self_checkin_seat`](api/delivery-checkin.md#check_self_checkin_seat) | 미확인 | 열차 좌석의 QR 코드가 필요해 요청을 보내지 않았습니다. |
-| [`register_self_checkin`](api/delivery-checkin.md#register_self_checkin) | 미확인 | 열차 좌석의 QR 코드가 필요해 요청을 보내지 않았습니다. 앱 안내에 따르면 부정 사용 시 부가금이 있어 임의 값도 보내지 않았습니다. |
-| [`cancel_self_checkin`](api/delivery-checkin.md#cancel_self_checkin) | 미확인 | 체크인한 승차권이 없어 확인하지 못했습니다. |
-
-## 정기권·패스·N카드·여행상품
-
-| 메서드 | 상태 | 결과 |
-|---|:-:|---|
-| [`get_pass_menu`](api/passes.md#get_pass_menu) | 확인됨 | 메뉴 22항목을 받았습니다. |
-| [`get_pass_available_dates`](api/passes.md#get_pass_available_dates) | 확인됨 | - |
-| [`get_pass_schedule`](api/passes.md#get_pass_schedule) | 확인됨 | 일반정기권(`0001`)과 기간자유형(`0028`) 조합 다섯 가지 모두 `SUCC`를 받았습니다(서울→부산 7편, 서울→대전 4편). 내일로 상품 코드(`0046`)로는 실패했습니다. |
-| [`get_commuter_kind_menu`](api/passes.md#get_commuter_kind_menu) | 확인됨 | `SUCC`/`IRZ000001`을 받았습니다. |
-| [`get_commuter_info`](api/passes.md#get_commuter_info) | 확인됨 | 초기 단계와 인원 단계는 `IRZ000008`을 받았습니다. 원표 단계는 정기권이 아닌 승차권으로 요청해 `ERR000100`을 받았습니다. |
-| [`get_trip_menu`](api/passes.md#get_trip_menu) | 확인됨 | 메뉴 5개를 받았습니다. |
-| [`get_discount_card_usage_history`](api/passes.md#get_discount_card_usage_history) | 미확인 | N카드가 없어 확인하지 못했습니다. 서버는 `ERR000100`을 반환했습니다. |
-| [`get_discount_card_schedule`](api/passes.md#get_discount_card_schedule) | 미확인 | N카드가 없어 확인하지 못했습니다. 서버는 `WRR000100`을 반환했습니다. |
-| [`register_discount_card`](api/passes.md#register_discount_card) | 미확인 | 호출하면 결제 전 N카드 구매가 실제로 만들어지므로 요청을 보내지 않았습니다. |
-| [`extend_discount_card`](api/passes.md#extend_discount_card) | 미확인 | N카드가 없어 확인하지 못했습니다. |
-| [`reserve_with_discount_card`](api/passes.md#reserve_with_discount_card) | 미확인 | N카드가 없어 확인하지 못했습니다. |
-| [`get_product_reservations`](api/passes.md#get_product_reservations) | 확인됨 | 웹에서 만든 결제 전 예약이 예약확정(`03`)으로 나왔고, 취소한 뒤에는 `05`로 나왔습니다. |
-| [`get_product_detail`](api/passes.md#get_product_detail) | 확인됨 | 상품 금액 15,400원, 취소 수수료 0원, 포함 열차 2개를 받았습니다. |
-| [`cancel_product_reservation`](api/passes.md#cancel_product_reservation) | 확인됨 | 결제 전 예약을 취소해 `SUCC`를 받았습니다. 상품을 결제할 수 없어 결제한 예약의 취소는 확인하지 못했습니다. |
-
-## 공항버스·부가서비스
-
-| 메서드 | 상태 | 결과 |
-|---|:-:|---|
-| [`get_limousine_schedules`](api/airport-bus.md#get_limousine_schedules) | 확인됨 | 광명→인천공항 30편을 받았습니다. |
-| [`get_limousine_seat_inventory`](api/airport-bus.md#get_limousine_seat_inventory) | 확인됨 | 좌석 28석을 받았습니다. |
-| [`reserve_limousine`](api/airport-bus.md#reserve_limousine) | 확인됨 | 16,000원 홀드와 24,000원 홀드를 만든 뒤 취소했습니다. 16,000원 홀드는 결제한 뒤 수수료 0원으로 환불했습니다. |
-| [`get_maas_menu_list`](api/airport-bus.md#get_maas_menu_list) | 확인됨 | 메뉴 11개를 받았습니다. |
-| [`get_maas_station_data`](api/airport-bus.md#get_maas_station_data) | 확인됨 | 역 101개를 받았습니다. |
-| [`get_maas_service_details`](api/airport-bus.md#get_maas_service_details) | 확인됨 | 빈 목록을 받았습니다. |
+- [2.5.0 출시 전 검증 (2026-10-07)](records.md#release-validation-250){#release-validation-250}
+- [승객 유형별 추가 보고 (2026-10-07)](records.md#passenger-report-20261007){#passenger-report-20261007}
+- 그 밖의 날짜별 절과 7.0.6 시기 메서드별 표는 [날짜별 실서버 기록](records.md)에 있습니다.

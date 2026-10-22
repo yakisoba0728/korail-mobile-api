@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from urllib.parse import parse_qs
 
 import httpx
 import pytest
+from conftest import synthetic_config, wire_form
 
 from korail_mobile_api import (
     DynapathConfig,
@@ -14,7 +14,10 @@ from korail_mobile_api import (
     Korail,
     KorailConfig,
     KorailDeviceProfile,
+    KorailInvalidInputError,
     KorailPassengerCounts,
+    KorailProtocolError,
+    OriginalTicketReference,
     ReservationHoldResponse,
     TrainSearchContinuation,
     TrainSummary,
@@ -23,17 +26,11 @@ from korail_mobile_api import (
 
 
 def _config() -> KorailConfig:
-    return KorailConfig(
-        base_url="https://api.example.invalid",
-        netfunnel_enabled=False,
-        key="SYNTHETIC-KEY",
-        dynapath=DynapathConfig(enabled=True, token_provider=lambda *args: "SYNTHETIC-TOKEN"),
-    )
+    token = DynapathConfig(enabled=True, token_provider=lambda *args: "SYNTHETIC-TOKEN")
+    return synthetic_config(netfunnel_enabled=False, key="SYNTHETIC-KEY", dynapath=token)
 
 
-def test_search_uses_kst_station_cache_and_nearby_flag() -> None:
-    calls: list[httpx.Request] = []
-
+def _station_and_search_handler(calls: list[httpx.Request]):
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
         if request.url.path.endswith("common.stationdata"):
@@ -41,20 +38,20 @@ def test_search_uses_kst_station_cache_and_nearby_flag() -> None:
                 200,
                 json={
                     "stns": {
-                        "stn": [
-                            {"stn_cd": "0001", "stn_nm": "서울"},
-                            {"stn_cd": "0020", "stn_nm": "부산"},
-                        ]
+                        "stn": [{"stn_cd": "0001", "stn_nm": "서울"}, {"stn_cd": "0020", "stn_nm": "부산"}]
                     }
                 },
             )
-        assert request.url.path.endswith("seatMovie.ScheduleView")
         return httpx.Response(
-            200,
-            json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "trn_infos": {"trn_info": []}},
+            200, json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "trn_infos": {"trn_info": []}}
         )
 
-    with Korail(_config(), transport=httpx.MockTransport(handler)) as korail:
+    return handler
+
+
+def test_search_uses_kst_station_cache_and_nearby_flag() -> None:
+    calls: list[httpx.Request] = []
+    with Korail(_config(), transport=httpx.MockTransport(_station_and_search_handler(calls))) as korail:
         moment = datetime(2099, 1, 2, 0, 30, tzinfo=timezone.utc)
         counts = KorailPassengerCounts(adult=2, child=1)
         result = korail.trains.search(
@@ -69,32 +66,28 @@ def test_search_uses_kst_station_cache_and_nearby_flag() -> None:
         names.clear()
         assert korail.stations.names() == {"서울", "부산"}
 
-    assert sum(request.url.path.endswith("common.stationdata") for request in calls) == 1
-    first_search = parse_qs(calls[1].content.decode())
+    paths = [request.url.path.rsplit(".", 1)[-1] for request in calls]
+    assert paths == ["stationdata", "ScheduleView", "ScheduleView"]
+    first_search = wire_form(calls[1])
     assert first_search["txtGoAbrdDt"] == ["20990102"]
     assert first_search["txtGoHour"] == ["093000"]
     assert first_search["txtPsgFlg_1"] == ["2"]
     assert first_search["txtPsgFlg_2"] == ["1"]
     assert first_search["adjStnScdlOfrFlg"] == ["Y"]
-    second_search = parse_qs(calls[2].content.decode())
-    assert second_search["adjStnScdlOfrFlg"] == ["N"]
-    assert korail.client.http._client.is_closed
+    assert wire_form(calls[2])["adjStnScdlOfrFlg"] == ["N"]
+    with pytest.raises(KorailProtocolError, match="closed"):  # leaving the block closed the client
+        korail.client.get_service_status()
+    assert len(calls) == 3
 
 
 def test_past_date_and_unknown_station_do_not_send_search() -> None:
     calls: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(request)
-        assert request.url.path.endswith("common.stationdata")
-        return httpx.Response(200, json={"stns": {"stn": [{"stn_cd": "0001", "stn_nm": "서울"}]}})
-
-    with Korail(_config(), transport=httpx.MockTransport(handler)) as korail:
-        with pytest.raises(ValueError, match="지난 출발"):
+    with Korail(_config(), transport=httpx.MockTransport(_station_and_search_handler(calls))) as korail:
+        with pytest.raises(KorailInvalidInputError, match="지난 출발"):
             korail.trains.search("서울", "부산", depart_after=datetime(2000, 1, 1))
-        with pytest.raises(ValueError, match="역을 찾을 수 없습니다"):
-            korail.trains.search("서울", "부산", depart_after=datetime(2099, 1, 1))
-    assert len(calls) == 1
+        with pytest.raises(KorailInvalidInputError, match="역을 찾을 수 없습니다"):
+            korail.trains.search("서울", "대전", depart_after=datetime(2099, 1, 1))
+    assert len(calls) == 1 and calls[0].url.path.endswith("common.stationdata")
 
 
 @pytest.mark.parametrize(
@@ -106,7 +99,7 @@ def test_past_date_and_unknown_station_do_not_send_search() -> None:
             id="teenager-counted-as-adult",
         ),
         pytest.param(
-            {"continuation": TrainSearchContinuation("0001", "0123")},
+            {"continuation": TrainSearchContinuation(query_station_no="0001", query_train_no="0123")},
             {"qryStNo": ["0001"], "qryStTrnNo": ["0123"]},
             id="continuation-without-station-lookup",
         ),
@@ -116,13 +109,7 @@ def test_search_without_station_validation_keeps_request_options(
     kwargs: dict[str, object], expected: dict[str, list[str]]
 ) -> None:
     calls: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(request)
-        return httpx.Response(
-            200, json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "trn_infos": {"trn_info": []}}
-        )
-
+    handler = _station_and_search_handler(calls)
     with Korail(_config(), transport=httpx.MockTransport(handler), validate_stations=False) as korail:
         korail.trains.search(
             "서울",
@@ -131,7 +118,7 @@ def test_search_without_station_validation_keeps_request_options(
             **kwargs,
         )
     assert len(calls) == 1
-    form = parse_qs(calls[0].content.decode())
+    form = wire_form(calls[0])
     for key, value in expected.items():
         assert form[key] == value
     assert "P11" not in calls[0].content.decode()
@@ -159,6 +146,41 @@ def test_reservation_detail_is_an_explicit_follow_up(monkeypatch: pytest.MonkeyP
         assert calls == ["reserve", "detail"]
 
 
+def test_ticket_and_login_facades_forward_the_client_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    """3.0: tickets.all takes the list mode and dates, tickets.detail wraps the refund-detail read, and Korail.login
+    takes KorailClient.login's keyword options. Each forwards its arguments unchanged in one client call."""
+    calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    def record(name: str):
+        def call(*args: object, **kwargs: object) -> str:
+            calls.append((name, args, kwargs))
+            return name
+
+        return call
+
+    reference = OriginalTicketReference(
+        sale_window_no="SYNTHETIC-WINDOW",
+        sale_date="0102",
+        sale_sequence="1",
+        return_password="SYNTHETIC-RETURN",
+    )
+    with Korail(_config()) as korail:
+        for name in ("list_tickets", "get_refund_ticket_detail", "login"):
+            monkeypatch.setattr(korail.client, name, record(name))
+        korail.tickets.all(2, mode="2", boarding_date_from="20990101", boarding_date_to="20990131")
+        korail.tickets.detail(reference, from_purchase_history=True)
+        korail.login("0000000000", "SYNTHETIC-PASSWORD", input_flag="4", check_valid_pw="N", cust_id=None)
+    assert calls == [
+        ("list_tickets", (2,), {"mode": "2", "boarding_date_from": "20990101", "boarding_date_to": "20990131"}),
+        ("get_refund_ticket_detail", (reference,), {"from_purchase_history": True}),
+        (
+            "login",
+            ("0000000000", "SYNTHETIC-PASSWORD"),
+            {"input_flag": "4", "check_valid_pw": "N", "cust_id": None, "etr_path": ""},
+        ),
+    ]
+
+
 def test_profile_keeps_token_queue_and_device_fields_consistent() -> None:
     profile = KorailDeviceProfile(
         device_id="SYNTHETIC-DEVICE-ID",
@@ -172,7 +194,8 @@ def test_profile_keeps_token_queue_and_device_fields_consistent() -> None:
     config = build_config_from_profile(profile)
     assert config.dynapath.token_settings is None
     assert config.dynapath.token_provider is not None
-    context = DynapathRequestContext(*("synthetic",) * 9)
+    names = "method path url device version key user_agent device_name os_version".split()
+    context = DynapathRequestContext(**dict.fromkeys(names, "synthetic"))
     token = config.dynapath.token_provider(context)
     assert token == (
         "2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus"
@@ -185,30 +208,13 @@ def test_profile_keeps_token_queue_and_device_fields_consistent() -> None:
 
 
 def test_profile_rejects_conflicting_token_provider() -> None:
-    profile = KorailDeviceProfile("SYNTHETIC-ID", "MODEL", "16", "BUILD")
+    profile = KorailDeviceProfile(
+        device_id="SYNTHETIC-ID", model="MODEL", android_release="16", build_id="BUILD"
+    )
     with pytest.raises(ValueError, match="configurable DynaPath"):
         build_config_from_profile(profile, base=_config())
     with pytest.raises(ValueError, match="single-line"):
-        KorailDeviceProfile("ID\nWRONG", "MODEL", "16", "BUILD")
-
-
-def _station_and_search_handler(calls: list[httpx.Request]):
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(request)
-        if request.url.path.endswith("common.stationdata"):
-            return httpx.Response(
-                200,
-                json={
-                    "stns": {
-                        "stn": [{"stn_cd": "0001", "stn_nm": "서울"}, {"stn_cd": "0020", "stn_nm": "부산"}]
-                    }
-                },
-            )
-        return httpx.Response(
-            200, json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "trn_infos": {"trn_info": []}}
-        )
-
-    return handler
+        KorailDeviceProfile(device_id="ID\nWRONG", model="MODEL", android_release="16", build_id="BUILD")
 
 
 def test_numeric_codes_fetch_the_station_list_once() -> None:
@@ -219,7 +225,7 @@ def test_numeric_codes_fetch_the_station_list_once() -> None:
         korail.stations.all(refresh=True)
     paths = [request.url.path.rsplit(".", 1)[-1] for request in calls]
     assert paths == ["stationdata", "ScheduleView", "stationdata"]
-    assert parse_qs(calls[1].content.decode())["txtGoStart"] == ["서울"]
+    assert wire_form(calls[1])["txtGoStart"] == ["서울"]
 
 
 def test_bad_passengers_are_refused_before_the_station_list() -> None:
@@ -233,12 +239,12 @@ def test_bad_passengers_are_refused_before_the_station_list() -> None:
 def test_continuation_keeps_the_first_page_moment() -> None:
     """2.6.2: the next page re-read the clock and refused a first-page time over a minute old."""
     calls: list[httpx.Request] = []
-    cursor = TrainSearchContinuation("0001", "0123")
+    cursor = TrainSearchContinuation(query_station_no="0001", query_train_no="0123")
     with Korail(_config(), transport=httpx.MockTransport(_station_and_search_handler(calls))) as korail:
-        with pytest.raises(ValueError, match="depart_after"):
+        with pytest.raises(KorailInvalidInputError, match="depart_after"):
             korail.trains.search("서울", "부산", continuation=cursor)
         first_page_moment = datetime(2000, 1, 2, 9, 0, tzinfo=timezone.utc)
         korail.trains.search("서울", "부산", depart_after=first_page_moment, continuation=cursor)
-    sent = parse_qs(calls[-1].content.decode())
+    sent = wire_form(calls[-1])
     assert sent["txtGoAbrdDt"] == ["20000102"] and sent["txtGoHour"] == ["180000"]
     assert sent["qryStTrnNo"] == ["0123"]

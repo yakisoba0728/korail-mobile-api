@@ -11,59 +11,54 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from difflib import get_close_matches
 from types import TracebackType
+from typing import Literal
 
 import httpx
 
-from ._cleanup import _close_connections
-from ._read_payload_validation import _optional_text, _passenger_count, _required_text
-from .client import KorailClient
-from .config import KorailConfig
-from .constants import KorailReservationJobType, KorailReserveOption, KorailSeatClass
-from .errors import KorailNoResultsError, KorailProtocolError
-from .limousine_models import (
-    LimousineSchedule,
-    LimousineScheduleQuery,
-    LimousineScheduleResponse,
-    LimousineSeatInventoryQuery,
-    LimousineSeatInventoryResponse,
-    LimousineStop,
+from ._core.cleanup import _close_connections
+from ._core.validation import _optional_text, _passenger_count, _required_text
+from ._domains.airport_bus.forms import AirportBusScheduleQuery, AirportBusSeatInventoryQuery
+from ._domains.airport_bus.models import (
+    AIRPORT_BUS_ROOM_CLASS_CODE,
+    AIRPORT_BUS_SEAT_ATTRIBUTE_CODE,
+    AirportBusSchedule,
+    AirportBusScheduleResponse,
+    AirportBusSeatInventoryResponse,
+    AirportBusStop,
 )
-from .limousine_parsers import parse_limousine_stops
-from .models import (
-    BaseKorailResponse,
-    KorailSession,
-    KorailStation,
+from ._domains.airport_bus.parsers import parse_limousine_stops
+from ._domains.common.models import BaseKorailResponse, KorailSession, KorailStation
+from ._domains.payments.forms import CardPayment, PaidTicket, RefundCompanion
+from ._domains.payments.models import (
+    RefundCommissionResponse,
+    RefundTicketDetailResponse,
+    RefundTicketResponse,
+    ReservationPaymentResponse,
+)
+from ._domains.reservations.forms import KorailPassengerCounts, TicketReservationDetailRequest
+from ._domains.reservations.models import (
+    ReservationHistoryResponse,
+    ReservationHoldResponse,
+    TicketReservationDetailResponse,
+)
+from ._domains.tickets.forms import (
+    KorailMileageLedger,
+    KorailMileageMovement,
+    MileageHistoryRequest,
+    OriginalTicketReference,
+)
+from ._domains.tickets.models import DiscountCouponListResponse, MileageHistoryResponse, TicketListResponse
+from ._domains.trains.models import (
     TrainSearchContinuation,
     TrainSearchQuery,
     TrainSearchResult,
     TrainSummary,
     _train_datetime,
 )
-from .mutation_models import (
-    CardPayment,
-    KorailPassengerCounts,
-    PaidTicket,
-    RefundTicketResponse,
-    ReservationHoldResponse,
-    ReservationPaymentResponse,
-)
-from .mutation_payloads import LIMOUSINE_CAR_NO
-from .read_models import (
-    DiscountCouponListResponse,
-    MileageHistoryResponse,
-    RefundCommissionResponse,
-    ReservationHistoryResponse,
-    TicketListResponse,
-    TicketReservationDetailResponse,
-)
-from .read_payloads import (
-    KorailMileageLedger,
-    KorailMileageMovement,
-    MileageHistoryRequest,
-    OriginalTicketReference,
-    RefundCompanion,
-    TicketReservationDetailRequest,
-)
+from .client import KorailClient
+from .config import KorailConfig
+from .constants import KorailLoginInputFlag, KorailReservationJobType, KorailReserveOption, KorailSeatClass
+from .errors import KorailInvalidInputError, KorailNoResultsError
 
 KST = timezone(timedelta(hours=9))
 _PAST_TOLERANCE = timedelta(minutes=1)
@@ -75,7 +70,7 @@ def _departure_moment(depart_after: datetime | None, *, allow_past: bool = False
         raise TypeError("depart_after must be a datetime")
     moment = moment.replace(tzinfo=KST) if moment.tzinfo is None else moment.astimezone(KST)
     if not allow_past and moment < datetime.now(KST) - _PAST_TOLERANCE:
-        raise ValueError("이미 지난 출발 시각입니다")
+        raise KorailInvalidInputError("이미 지난 출발 시각입니다")
     return moment
 
 
@@ -86,9 +81,11 @@ class StationResource:
         self._client = client
 
     def all(self, *, refresh: bool = False) -> tuple[KorailStation, ...]:
+        """역 목록을 반환합니다. 처음 한 번 또는 ``refresh=True`` 일 때만 서버에서 읽습니다."""
         return self._client._cached_station_data(refresh=refresh).stations
 
     def find(self, reference: str) -> KorailStation | None:
+        """이름이나 코드가 같은 역을 반환하고, 없으면 ``None`` 입니다."""
         value = reference.strip()
         if not value:
             return None
@@ -99,6 +96,7 @@ class StationResource:
         return {station.name for station in self.all()}
 
     def ensure_exists(self, *references: str) -> None:
+        """모든 참조가 캐시된 역 이름이나 코드인지 확인하고, 아니면 ``KorailInvalidInputError`` 를 발생시킵니다."""
         stations = self.all()
         names = {station.name for station in stations}
         codes = {station.code for station in stations}
@@ -108,7 +106,7 @@ class StationResource:
                 continue
             suggestions = get_close_matches(value, sorted(names), n=3)
             hint = f"; 가까운 역: {', '.join(suggestions)}" if suggestions else ""
-            raise ValueError(f"역을 찾을 수 없습니다: {reference!r}{hint}")
+            raise KorailInvalidInputError(f"역을 찾을 수 없습니다: {reference!r}{hint}")
 
 
 class TrainResource:
@@ -134,27 +132,26 @@ class TrainResource:
         include_no_seats: bool = True,
         include_waiting_list: bool = False,
     ) -> TrainSearchResult:
-        """직통 열차 한 페이지를 조회합니다. 결과의 ``next_page()``로 계속 조회하세요.
-
-        시간대가 없는 시각은 KST로 읽고, 시간대가 있으면 KST로 변환합니다.
-        과거 시각은 요청 전에 거절합니다. ``passengers``는 기존 예약 입력 모델을
-        사용하며 생략하면 성인 한 명입니다.
-
-        기본값은 매진을 포함한 전체 결과입니다. ``include_no_seats=False``이면
-        가용 좌석만 남기며 ``include_waiting_list=True``로 예약대기 가능 열차도
-        포함합니다. 필터 전 목록·원문·후속 조회 정보는 보존합니다.
-        """
+        """KST 출발 시각 이후의 직통 열차 한 페이지를 조회합니다. 결과의 ``next_page()``로 이어서 조회하세요."""
         if type(include_no_seats) is not bool or type(include_waiting_list) is not bool:
             raise TypeError("include_no_seats and include_waiting_list must be bool")
         # 다음 페이지는 첫 페이지와 같은 조건이어야 하므로 시각을 다시 읽지 않고 지난 시각도 허용합니다.
         if continuation is not None and depart_after is None:
-            raise ValueError("continuation needs the depart_after of the first page")
+            raise KorailInvalidInputError("continuation needs the depart_after of the first page")
         moment = _departure_moment(depart_after, allow_past=continuation is not None)
         query = self._query(
-            departure, arrival, moment, passengers, train_group_code, include_srt, include_nearby_stations
+            departure,
+            arrival,
+            moment,
+            passengers,
+            train_group_code,
+            include_srt=include_srt,
+            include_nearby_stations=include_nearby_stations,
         )
         result = self._client.search_trains(query, peak_season=peak_season, continuation=continuation)
-        return self._filter(result, include_no_seats, include_waiting_list)
+        return self._filter(
+            result, include_no_seats=include_no_seats, include_waiting_list=include_waiting_list
+        )
 
     def _query(
         self,
@@ -163,6 +160,7 @@ class TrainResource:
         moment: datetime,
         passengers: KorailPassengerCounts | None,
         train_group_code: str,
+        *,
         include_srt: bool,
         include_nearby_stations: bool,
     ) -> TrainSearchQuery:
@@ -172,8 +170,8 @@ class TrainResource:
         if self._validate_stations:
             self._stations.ensure_exists(departure, arrival)
         return TrainSearchQuery(
-            departure_station_code=departure,
-            arrival_station_code=arrival,
+            departure_station=departure,
+            arrival_station=arrival,
             departure_date=moment.strftime("%Y%m%d"),
             departure_time=moment.strftime("%H%M%S"),
             passengers=counts.adult,
@@ -191,7 +189,7 @@ class TrainResource:
 
     @staticmethod
     def _filter(
-        result: TrainSearchResult, include_no_seats: bool, include_waiting_list: bool
+        result: TrainSearchResult, *, include_no_seats: bool, include_waiting_list: bool
     ) -> TrainSearchResult:
         if include_no_seats:
             return result
@@ -220,19 +218,20 @@ class TrainResource:
         include_no_seats: bool = True,
         include_waiting_list: bool = False,
     ) -> Iterator[TrainSummary]:
-        """직통 검색을 최대 1~20페이지 이어 읽으며 중복 열차를 제외합니다.
-
-        순회할 때 요청합니다. 커서가 없으면 필터 전 마지막 출발 시각을 사용하며,
-        빈 페이지·중복 페이지·반복 커서·출발 시각의 진전 없음에서 멈춥니다.
-        후속 조회 실패도 자동 재시도하지 않고 그대로 전달합니다.
-        """
+        """직통 검색을 순회할 때 최대 ``max_pages``(1~20) 페이지까지 이어 읽으며 중복 열차를 제외합니다."""
         if type(max_pages) is not int or not 1 <= max_pages <= 20:
-            raise ValueError("max_pages must be an integer from 1 through 20")
+            raise KorailInvalidInputError("max_pages must be an integer from 1 through 20")
         if type(include_no_seats) is not bool or type(include_waiting_list) is not bool:
             raise TypeError("include_no_seats and include_waiting_list must be bool")
         moment = _departure_moment(depart_after)
         query = self._query(
-            departure, arrival, moment, passengers, train_group_code, include_srt, include_nearby_stations
+            departure,
+            arrival,
+            moment,
+            passengers,
+            train_group_code,
+            include_srt=include_srt,
+            include_nearby_stations=include_nearby_stations,
         )
         seen: set[tuple[str | None, ...]] = set()
         cursors: set[TrainSearchContinuation] = set()
@@ -241,8 +240,8 @@ class TrainResource:
             try:
                 result = self._filter(
                     self._client.search_trains(query, peak_season=peak_season, continuation=continuation),
-                    include_no_seats,
-                    include_waiting_list,
+                    include_no_seats=include_no_seats,
+                    include_waiting_list=include_waiting_list,
                 )
             except KorailNoResultsError:
                 if page == 0:
@@ -312,12 +311,16 @@ class MembershipResource:
             try:
                 start = end - timedelta(days=30)
             except OverflowError as error:
-                raise ValueError("end_date must allow a 30-day default range") from error
+                raise KorailInvalidInputError("end_date must allow a 30-day default range") from error
         else:
             start = self._date(start_date, end)
         return self._client.get_mileage_history(
             MileageHistoryRequest(
-                start.isoformat().replace("-", ""), end.isoformat().replace("-", ""), ledger, movement, page_no
+                start_date=start.isoformat().replace("-", ""),
+                end_date=end.isoformat().replace("-", ""),
+                ledger=ledger,
+                movement=movement,
+                page_no=page_no,
             )
         )
 
@@ -333,7 +336,7 @@ class MembershipResource:
 
     def coupons(self, *, page_no: int = 1, pnr_no: str = "") -> DiscountCouponListResponse:
         """쿠폰 한 페이지를 조회합니다. 목록·페이지 정보·원문을 그대로 반환합니다."""
-        return self._client.get_discount_coupons(page_no=page_no, pnr_no=pnr_no)
+        return self._client.list_discount_coupons(page_no=page_no, pnr_no=pnr_no)
 
 
 class AirportBusResource:
@@ -341,13 +344,13 @@ class AirportBusResource:
 
     def __init__(self, client: KorailClient) -> None:
         self._client = client
-        self._stops: tuple[LimousineStop, ...] | None = None
+        self._stops: tuple[AirportBusStop, ...] | None = None
 
-    def stops(self, *, refresh: bool = False) -> tuple[LimousineStop, ...]:
+    def stops(self, *, refresh: bool = False) -> tuple[AirportBusStop, ...]:
         """정류장 이름·코드 목록을 한 번 조회해 캐시합니다. 잘못된 응답은 캐시하지 않습니다."""
         if self._stops is None or refresh:
-            response = self._client.get_common_code(["app.limousine.stationNm", "app.limousine.stationCd"])
-            self._stops = parse_limousine_stops(response)
+            response = self._client.get_common_codes(["app.limousine.stationNm", "app.limousine.stationCd"])
+            self._stops = parse_limousine_stops(response.raw)
         return self._stops
 
     def search(
@@ -358,7 +361,7 @@ class AirportBusResource:
         service_code: str,
         depart_after: datetime | None = None,
         reservation_sale_division_code: str = "",
-    ) -> LimousineScheduleResponse:
+    ) -> AirportBusScheduleResponse:
         """이름 또는 코드로 운행 편 한 페이지를 조회합니다. 운행 그룹은 명시적으로 받습니다."""
         moment = _departure_moment(depart_after)
         _required_text(service_code, "service_code")
@@ -367,51 +370,38 @@ class AirportBusResource:
             _required_text(departure, "departure").strip(),
             _required_text(arrival, "arrival").strip(),
         )
-        codes = []
+        codes: list[str] = []
         stops = self.stops()
         for reference in references:
             matches = [stop for stop in stops if reference in (stop.name, stop.code)]
             if not matches:
-                raise ValueError(f"공항버스 정류장을 찾을 수 없습니다: {reference!r}")
+                raise KorailInvalidInputError(f"공항버스 정류장을 찾을 수 없습니다: {reference!r}")
             if len(matches) != 1:
-                raise ValueError(f"공항버스 정류장 이름·코드를 구분할 수 없습니다: {reference!r}")
+                raise KorailInvalidInputError(f"공항버스 정류장 이름·코드를 구분할 수 없습니다: {reference!r}")
             codes.append(matches[0].code)
-        return self._client.get_limousine_schedules(
-            LimousineScheduleQuery(
-                moment.strftime("%Y%m%d"),
-                codes[0],
-                codes[1],
-                service_code,
-                "1",
-                moment.strftime("%H%M%S"),
-                "",
-                "015",
-                reservation_sale_division_code,
+        return self._client.list_airport_bus_schedules(
+            AirportBusScheduleQuery(
+                departure_date=moment.strftime("%Y%m%d"),
+                departure_station_code=codes[0],
+                arrival_station_code=codes[1],
+                service_code=service_code,
+                room_class_code=AIRPORT_BUS_ROOM_CLASS_CODE,
+                departure_time=moment.strftime("%H%M%S"),
+                train_no="",
+                seat_attribute_code=AIRPORT_BUS_SEAT_ATTRIBUTE_CODE,
+                reservation_sale_division_code=reservation_sale_division_code,
             )
         )
 
-    def seats(self, schedule: LimousineSchedule, *, passenger_count: int = 1) -> LimousineSeatInventoryResponse:
+    def seats(
+        self, schedule: AirportBusSchedule, *, passenger_count: int = 1
+    ) -> AirportBusSeatInventoryResponse:
         """조회한 편의 식별값으로 좌석 배치를 읽습니다. 필수값이 없으면 요청 전에 거절합니다."""
-        if not isinstance(schedule, LimousineSchedule):
-            raise TypeError("schedule must be a LimousineSchedule")
+        if not isinstance(schedule, AirportBusSchedule):
+            raise TypeError("schedule must be an AirportBusSchedule")
         _passenger_count(passenger_count, "passenger_count")
-        return self._client.get_limousine_seat_inventory(
-            LimousineSeatInventoryQuery(
-                train_class_code=_required_text(schedule.train_class_code, "train_class_code"),
-                service_code=_required_text(schedule.service_code, "service_code"),
-                run_date=_required_text(schedule.run_date, "run_date"),
-                train_no=_required_text(schedule.train_no, "train_no"),
-                car_no=LIMOUSINE_CAR_NO,
-                room_class_code="1",
-                departure_station_code=_required_text(
-                    schedule.departure_station_code, "departure_station_code"
-                ),
-                arrival_station_code=_required_text(schedule.arrival_station_code, "arrival_station_code"),
-                seat_attribute_code="015",
-                departure_run_order=_required_text(schedule.departure_run_order, "departure_run_order"),
-                arrival_run_order=_required_text(schedule.arrival_run_order, "arrival_run_order"),
-                passenger_count=passenger_count,
-            )
+        return self._client.get_airport_bus_seat_inventory(
+            AirportBusSeatInventoryQuery.from_schedule(schedule, passenger_count=passenger_count)
         )
 
 
@@ -430,16 +420,14 @@ class ReservationResource:
         job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
         option: KorailReserveOption | None = None,
     ) -> ReservationHoldResponse:
-        """실제 미결제 홀드를 만듭니다. 결제 또는 취소는 호출자 책임입니다.
+        """실제 미결제 홀드를 만듭니다(기본 일반실, ``option``은 조회 결과로 객실 선택).
 
-        기본 객실은 일반실입니다. ``option``은 즉시 예약에서 조회 결과를 기준으로
-        객실을 선택하며 ``seat_class``와 함께 지정할 수 없습니다. 자동 예약대기나
-        실패 후 다른 객실 재시도는 하지 않습니다."""
+        결제·취소는 호출자 몫이며, 실패해도 다른 객실이나 예약대기로 다시 보내지 않습니다."""
         if option is not None:
             if not isinstance(option, KorailReserveOption):
                 raise TypeError("option must be KorailReserveOption")
             if seat_class is not None or job_type is not KorailReservationJobType.IMMEDIATE:
-                raise ValueError("option requires immediate reservation without seat_class")
+                raise KorailInvalidInputError("option requires immediate reservation without seat_class")
             if not isinstance(train, TrainSummary):
                 raise TypeError("train must be TrainSummary")
             candidates = {
@@ -461,11 +449,11 @@ class ReservationResource:
                 None,
             )
             if seat_class is None:
-                raise KorailProtocolError("KORAIL reservation option requires an evidenced available seat")
+                raise KorailInvalidInputError("KORAIL reservation option requires an evidenced available seat")
         selected = KorailSeatClass.GENERAL if seat_class is None else seat_class
         return self._client.reserve(train, passengers=passengers, seat_class=selected, job_type=job_type)
 
-    def find(self, pnr_no: str) -> ReservationHoldResponse:
+    def get(self, pnr_no: str) -> ReservationHoldResponse:
         """PNR로 기존 예약을 한 번 조회해 결제용 홀드를 반환합니다."""
         return self._client.get_reservation_hold(pnr_no)
 
@@ -473,12 +461,12 @@ class ReservationResource:
         """이미 생성된 예약을 별도 조회합니다. 생성 직후 자동 재조회하지 않습니다."""
         pnr_no = hold.pnr_no if isinstance(hold, ReservationHoldResponse) else hold
         if not pnr_no:
-            raise ValueError("a successful hold with a PNR is required")
-        return self._client.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no))
+            raise KorailInvalidInputError("a successful hold with a PNR is required")
+        return self._client.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no=pnr_no))
 
     def all(self) -> ReservationHistoryResponse:
         """기존 예약 이력 응답을 보존합니다."""
-        return self._client.get_reservation_history()
+        return self._client.list_reservations()
 
     def cancel(self, hold: ReservationHoldResponse) -> BaseKorailResponse:
         """미결제 홀드의 가능 여부를 확인한 뒤 취소합니다."""
@@ -495,17 +483,33 @@ class TicketResource:
     def __init__(self, client: KorailClient) -> None:
         self._client = client
 
-    def all(self, *, page_no: int = 1) -> TicketListResponse:
-        return self._client.get_ticket_list(page_no)
+    def all(
+        self,
+        page_no: int = 1,
+        *,
+        mode: Literal["1", "2"] = "1",
+        boarding_date_from: str = "",
+        boarding_date_to: str = "",
+    ) -> TicketListResponse:
+        """승차권 목록 한 페이지를 읽습니다(mode 1 은 현재표, 2 는 승차일 범위의 이력)."""
+        return self._client.list_tickets(
+            page_no, mode=mode, boarding_date_from=boarding_date_from, boarding_date_to=boarding_date_to
+        )
 
-    def refund_fee(
+    def detail(
+        self, ticket: OriginalTicketReference, *, from_purchase_history: bool = False
+    ) -> RefundTicketDetailResponse:
+        """원표 식별자로 승차권 한 장의 여정·좌석·운임 상세를 조회합니다."""
+        return self._client.get_refund_ticket_detail(ticket, from_purchase_history=from_purchase_history)
+
+    def refund_quote(
         self,
         ticket: OriginalTicketReference,
         *,
         companion: RefundCompanion = RefundCompanion(),
     ) -> RefundCommissionResponse:
         """실제 환불 없이 원표·동반자의 수수료를 조회하고 결과에 로컬 연결합니다."""
-        return self._client.get_refund_commission(ticket, companion)
+        return self._client.get_refund_fee(ticket, companion)
 
     def refund(
         self,
@@ -569,11 +573,30 @@ class Korail:
     ) -> None:
         _close_connections(self.close, primary=exc)
 
-    def login(self, member_no: str, password: str) -> KorailSession:
-        return self.client.login(member_no, password)
+    def login(
+        self,
+        member_no: str,
+        password: str,
+        *,
+        input_flag: KorailLoginInputFlag | None = None,
+        check_valid_pw: Literal["Y", "N"] = "Y",
+        cust_id: str | None = "",
+        etr_path: str | None = "",
+    ) -> KorailSession:
+        """``KorailClient.login``과 같은 옵션으로 로그인합니다."""
+        return self.client.login(
+            member_no,
+            password,
+            input_flag=input_flag,
+            check_valid_pw=check_valid_pw,
+            cust_id=cust_id,
+            etr_path=etr_path,
+        )
 
     def logout(self) -> None:
+        """``KorailClient.logout`` 을 호출합니다."""
         self.client.logout()
 
     def close(self) -> None:
+        """``KorailClient.close`` 를 호출합니다."""
         self.client.close()
