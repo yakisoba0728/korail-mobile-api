@@ -11,7 +11,7 @@ from dataclasses import dataclass, field, fields
 from typing import Literal
 
 from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
-from .errors import KorailProtocolError
+from .errors import KorailApiError, KorailProtocolError
 from .models import BaseKorailResponse, PhysicalSeat, ReservationPassengerInfo, SeatInventoryResponse
 from .read_models import RefundTicketDetailResponse
 
@@ -348,6 +348,10 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: ``recalculate_price(..., add_to_cart=True)``로 받은 결과에만 장바구니 추가 결과가 들어갑니다. 장바구니 추가가
     #: 실패해도 예외 없이 이 필드에 담기므로 ``str_result``를 확인하세요. 그 밖에는 ``None``입니다.
     cart_addition: CartAddResponse | None = None
+    # 재계산은 이미 서버에 반영됐으므로 장바구니 단계의 예외로 결과를 잃지 않습니다(앱도 실패를 알리기만 합니다).
+    #: ``add_to_cart=True``에서 장바구니 요청이 라이브러리 예외로 끝났다면 그 예외입니다. 이때 ``cart_addition``은
+    #: ``None``이며 장바구니에 추가됐는지는 알 수 없습니다. 그 밖에는 ``None``입니다.
+    cart_addition_error: KorailApiError | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -731,6 +735,11 @@ class PriceRecalculationRequest:
         pnr_no = hold.pnr_no
         if hold.str_result != "SUCC" or not isinstance(pnr_no, str) or not pnr_no.strip():
             raise KorailProtocolError("KORAIL price recalculation needs a successful hold with a PNR")
+        # 재계산 결과는 결제 가능한 새 홀드로 돌아오므로 예약대기 홀드를 여기서 막습니다.
+        if hold.payable is False:
+            raise KorailProtocolError(
+                "KORAIL price recalculation refuses a standby hold, which is never card-paid"
+            )
         if isinstance(requested_discount_codes, str) or not isinstance(requested_discount_codes, Sequence):
             raise KorailProtocolError("requested_discount_codes must be a sequence with one code per seat")
         container = hold.journeys[0].raw.get("seat_infos") if hold.journeys else None

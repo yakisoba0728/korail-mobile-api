@@ -2,7 +2,8 @@
 
 이 가이드는 [`KorailConfig`][korail_mobile_api.config.KorailConfig]로 클라이언트의 동작을 바꾸는 방법을 설명합니다.
 설정 필드 전체, DynaPath 토큰, 대기열(NetFunnel), 언어 필드, 프록시, 환경변수로 설정을 만드는 방법을 차례로 다룹니다.
-설정을 넘기지 않으면 코레일+ 앱 7.0.8에서 확인한 기본 요청값을 쓰며, 대부분은 바꿀 필요가 없습니다.
+설정을 넘기지 않으면 코레일+ 앱 7.0.8에서 확인한 기본 요청값(`AppVersion=7.0.8`, API `Version=250601003`)을 씁니다.
+2026-10-23 현재 기본값 요청이 서버에서 `-8204`로 거절된다는 보고가 있으니 먼저 [요청 버전](#request-version)을 확인하세요.
 
 ## 설정 적용
 
@@ -40,7 +41,7 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 | `version` | `str` | `"250601003"` | 공통 필드 `Version`의 값입니다. |
 | `app_version` | `str` \| `None` | `"7.0.8"` | 별도 공통 필드 `AppVersion`의 값입니다. `None`이면 이 필드만 생략합니다. |
 | `key` | `str` | `"korail1234567890"` | 공통 필드 `Key`의 값입니다. |
-| `timeout` | `float` | `60.0` | API 요청의 제한 시간(초)입니다. |
+| `timeout` | `float` | `60.0` | API 요청의 제한 시간(초)입니다. 0보다 큰 유한한 수여야 하며, `None`이면 httpx 제한 시간 없이 보냅니다. |
 | `user_agent` | `str` | `"korailtalk"` | API 요청의 `User-Agent` 헤더입니다. |
 | `dynapath` | [`DynapathConfig`][korail_mobile_api.dynapath.DynapathConfig] | SDK 2.0.1 `2!` 진단 | DynaPath 토큰 설정입니다. [DynaPath](#dynapath)를 참고하세요. |
 | `device_width` | `int` | `1440` | 공통 코드 조회(로그인 포함)의 `deviceWidth` 값입니다. |
@@ -48,28 +49,54 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 | `android_sdk_int` | `int` | `37` | 공통 코드 조회(로그인 포함)의 `OSVersion` 값입니다. |
 | `advertising_id` | `str` | `""` | 승차권 목록 조회([`get_ticket_list`](../api/account.md#get_ticket_list))의 `txtDeviceId` 값입니다. 빈 문자열이면 보내지 않습니다. |
 | `netfunnel_url` | `str` | `"https://nf.letskorail.com"` | 대기열 서버 주소입니다. 검사하지 않고 그대로 씁니다. |
-| `netfunnel_timeout` | `float` | `3.0` | 대기열 요청 하나의 제한 시간(초)입니다. |
+| `netfunnel_timeout` | `float` | `3.0` | 대기열 요청 하나의 제한 시간(초)입니다. 0보다 큰 유한한 수여야 합니다. |
 | `netfunnel_user_agent` | `str` | `"Dalvik/2.1.0 (Linux; U; Android 17; SM-S948N Build/CP2A.260605.016)"` | 대기열 요청의 `User-Agent` 헤더입니다. |
 | `netfunnel_enabled` | `bool` | `True` | 대기열을 거칠지 여부입니다. |
 | `lang` | `str` \| `None` | `None` | 공통 필드 `lang`의 값입니다. `None`이면 보내지 않습니다. |
-| `netfunnel_wait_limit` | `float` \| `None` | `None` | 대기열에서 기다릴 누적 시간의 상한(초)입니다. `None`이면 제한하지 않습니다. |
+| `netfunnel_wait_limit` | `float` \| `None` | `None` | 대기열에서 기다릴 누적 시간의 상한(초)입니다. `None`이면 제한하지 않으며, 값을 넣으면 0 이상의 유한한 수여야 합니다. |
 | `netfunnel_actions` | `Mapping[str, str]` \| `None` | `None` | 관문별 대기열 식별값을 바꿉니다. |
 | `disable_dynapath` | `bool` | `False` | `True`이면 DynaPath 토큰을 붙이지 않습니다. |
 | `proxy` | `str` \| `None` | `None` | API 요청과 대기열 요청을 함께 보낼 프록시 URL입니다. [프록시](#proxy)를 참고하세요. |
 
+2.6.2부터 `timeout`, `netfunnel_timeout`, `netfunnel_wait_limit`가 위 범위를 벗어나면(음수, 무한대, `NaN`, 두 제한 시간의 0 등) 설정을 만들 때 `ValueError`로 거절합니다.
+
 `device`, `version`, `app_version`, `key`, `user_agent`를 바꾸면 앱과 다른 요청이 됩니다. 기존 `Version`과 새 `AppVersion`은 서로 다른 필드입니다.
 API 요청의 `User-Agent`와 대기열 요청의 `User-Agent`는 서로 다른 설정입니다.
 
-오류 사전의 7.0.10 갱신과 요청 버전은 별개입니다. 요청 기본값은 `app_version="7.0.8"`을 유지합니다.
-명시하려면 `KorailConfig(app_version="7.0.10")`을 사용하세요. 이 override 지원은 실서버 호환 보장이 아니며,
-API `Version` 값을 앱 버전으로 바꾸지 않습니다. [정적 검토 범위와 미확정 항목](../verification-7010.md)을 참고하세요.
+### 요청 버전 {#request-version}
+
+오류 사전의 7.0.10 갱신과 요청 버전은 별개입니다. 2.6.2도 요청 기본값 `app_version="7.0.8"`·`version="250601003"`을 바꾸지 않습니다.
+
+!!! warning "2026-10-23 현재 상태"
+    2026-10-21부터 익명 열차 조회를 포함한 모든 요청이 `-8204`("원활한 예매 및 결제 서비스를 위해 최신 버전으로 업데이트해 주세요")로 실패한다는 보고가 있습니다([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)).
+    `2!` 기본 헤더 도입 전 `main`에서 기본값과 `app_version="7.0.10"`만 바꾼 설정(API `Version`은 기본값) 모두 실패했습니다.
+    기록된 실서버 성공은 2026-10-23 `AppVersion=7.0.10`·API `Version=250722001`·기본 `2!` 헤더 조합의 병합 전 작업 트리 관측 1회뿐입니다([기록](../verification-7010.md#diagnostic-20261023)).
+    2.6.2의 기본 조합(`2!`·7.0.8·250601003)은 실서버에서 시도하지 않았습니다.
+
+두 값을 함께 바꿔 시도할 수 있지만 동작을 보장하지 않습니다. `app_version`은 API `Version`을 바꾸지 않으므로 각각 지정합니다.
+
+```python
+from korail_mobile_api import KorailClient, KorailConfig
+
+client = KorailClient(KorailConfig(app_version="7.0.10", version="250722001"))
+try:
+    status = client.get_service_status()
+finally:
+    client.close()
+```
+
+[`build_config_from_env`](#from-env)를 쓴다면 `KORAIL_APP_VERSION`·`KORAIL_API_VERSION` 환경변수로 같은 값을 넣을 수 있습니다(2.6.2부터).
+서버가 `-8204`로 응답하면 2.6.2부터 [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError]가 발생하며 서버 메시지는 그대로 남습니다.
+[정적 검토 범위와 미확정 항목](../verification-7010.md)도 참고하세요.
+
+### 기기값 프로파일
 
 실제 기기값을 코드에서 관리한다면 [`KorailDeviceProfile`][korail_mobile_api.device.KorailDeviceProfile]과 [`build_config_from_profile`][korail_mobile_api.device.build_config_from_profile]을 사용할 수 있습니다. 이 함수는 DynaPath 식별자·모델·OS, 대기열의 Dalvik `User-Agent`, SDK·화면 크기를 같은 프로파일에서 설정합니다. API `User-Agent`는 관측된 `korailtalk`로 둡니다. 기존 설정의 나머지 값은 `base=`로 유지할 수 있지만, 사용자 정의 DynaPath 토큰 공급자나 DynaPath 비활성화 설정은 덮어쓰지 않고 거절합니다. [간편 API 예제](convenience.md#한-기기의-값-사용하기)를 참고하세요.
 
 ## DynaPath {#dynapath}
 
 DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-token`)입니다. 기본으로 켜져 있습니다.
-Unreleased의 기본 `KorailClient()`·`Korail()`은 다음 SDK 2.0.1 native-unavailable 진단을 사용합니다.
+2.6.2부터 기본 `KorailClient()`·`Korail()`은 다음 SDK 2.0.1 native-unavailable 진단을 사용합니다.
 
 ```text
 2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus
@@ -79,6 +106,7 @@ Unreleased의 기본 `KorailClient()`·`Korail()`은 다음 SDK 2.0.1 native-una
 
 토큰을 붙이는 경로는 [`DynapathConfig`][korail_mobile_api.dynapath.DynapathConfig]의 `allowlist_paths`이며, 기본값은 다음 여섯 경로입니다.
 앱이 토큰을 붙이는 경로 목록과 같은지는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
+2.6.2부터 응답의 DynaPath 차단 판정도 내장 목록이 아니라 설정의 `allowlist_paths`(직접 지정한 목록 포함)를 따릅니다.
 
 - `/classes/com.korail.mobile.login.Login`
 - `/classes/com.korail.mobile.seatMovie.ScheduleView`
@@ -123,6 +151,7 @@ Unreleased의 기본 `KorailClient()`·`Korail()`은 다음 SDK 2.0.1 native-una
 
 `token_provider`는 토큰을 붙이는 경로의 요청마다 [`DynapathRequestContext`][korail_mobile_api.dynapath.DynapathRequestContext](`method`, `path`, `url`, `device`, `version`, `key`, `user_agent`, `device_name`, `os_version`)를 받아 토큰 문자열을 돌려주는 함수입니다.
 `None`을 돌려주면 헤더를 붙이지 않습니다. 함수가 예외를 발생시키면 요청을 보내지 않고 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
+2.6.2부터 문자열이 아니거나 ASCII가 아닌 값을 돌려줘도 요청을 보내지 않고 `KorailProtocolError`를 발생시킵니다.
 
 ### 끄기
 
@@ -273,7 +302,10 @@ v1 전용 `KORAIL_DYNAPATH_AS_VALUE`는 더 이상 읽지 않습니다. 계정 I
 | `KORAIL_DEVICE_HEIGHT` | 아니요 | `3120` | `device_height` |
 | `KORAIL_ANDROID_SDK_INT` | 아니요 | `37` | `android_sdk_int` |
 | `KORAIL_PROXY` | 아니요 | 없음(비어 있어도 지정하지 않음) | `proxy` |
+| `KORAIL_APP_VERSION` | 아니요 | `KorailConfig` 기본값(`"7.0.8"`) | `app_version`(공통 필드 `AppVersion`). 2.6.2부터 읽습니다. |
+| `KORAIL_API_VERSION` | 아니요 | `KorailConfig` 기본값(`"250601003"`) | `version`(공통 필드 `Version`). 2.6.2부터 읽습니다. |
 
+두 버전 환경변수는 `build_config_from_env()`만 읽으며 `KorailConfig()`나 `KorailClient()`는 읽지 않습니다. 이 함수는 위 필수 기기 환경변수도 요구하므로, 버전만 바꾸려면 [`KorailConfig(app_version=..., version=...)`](#request-version)를 쓰세요.
 필수 환경변수가 없거나 비어 있으면 `RuntimeError`가 발생합니다. 정수 필드에 숫자가 아닌 값이나 올바르지 않은 프록시 URL을 넣으면 `ValueError`가 발생합니다.
 대기열 설정과 `lang`처럼 표에 없는 필드는 기본값을 씁니다. 바꾸려면 `dataclasses.replace`를 씁니다.
 

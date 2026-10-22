@@ -21,6 +21,7 @@ from korail_mobile_api.crypto import transform_login_password
 from korail_mobile_api.dynapath import DynapathConfig, DynapathTokenGenerator, DynapathTokenSettings
 from korail_mobile_api.http import KorailHttpClient, parse_base_response
 from korail_mobile_api.models import LoginCryptoInfo
+from korail_mobile_api.netfunnel import KorailNetFunnelClient
 from korail_mobile_api.session import infer_login_input_flag
 
 LOGIN = "/classes/com.korail.mobile.login.Login"
@@ -224,6 +225,7 @@ def test_success_without_cookie_is_auth_error(factory, code):
         ("BT023", E.KorailRateLimitError),
         ("WRC000390", E.KorailAccountLockedError),
         ("SUPDATE", E.KorailAppUpdateRequiredError),
+        ("-8204", E.KorailAppUpdateRequiredError),
         ("P058", E.KorailSessionExpiredError),
     ],
 )
@@ -254,6 +256,18 @@ def test_invalid_crypto_key_never_sends_credentials(factory, key):
     with pytest.raises(E.KorailProtocolError):
         client.login(ID, PASSWORD)
     assert [r.url.path for r in requests] == [SERVICE, COMMON]
+
+
+@pytest.mark.parametrize(
+    "member_no, password",
+    [(ID, None), (ID, 1234), (ID, "\ud800"), (None, PASSWORD), (1234, PASSWORD)],
+)
+def test_unusable_login_input_is_refused_before_any_request(factory, member_no, password):
+    """2.6.2: a bad password used to be found only after the service and key requests."""
+    client, requests = factory()
+    with pytest.raises(E.KorailProtocolError):
+        client.login(member_no, password)
+    assert not requests and client.session.current is None
 
 
 @pytest.mark.parametrize("value", ["Y", "N", "", "unexpected", None])
@@ -472,6 +486,23 @@ def test_dynapath_detection_limited_to_fixed_paths(factory):
     assert client.http.post_form(SERVICE).raw == raw
 
 
+def test_dynapath_detection_follows_a_custom_allowlist(factory):
+    """2.6.2: detection used the built-in path set even when the token went to configured paths."""
+    raw = {"synthetic_detection_field": -8203, "strResult": "SUCC"}
+    config = KorailConfig(
+        base_url="https://offline.invalid",
+        netfunnel_enabled=False,
+        dynapath=DynapathConfig(
+            enabled=True, token_provider=lambda context: "synthetic-token", allowlist_paths=frozenset({SERVICE})
+        ),
+    )
+    client, requests = factory([raw, raw], config=config)
+    with pytest.raises(E.KorailDynaPathError):
+        client.http.post_form(SERVICE)
+    assert client.http.post_form(LOGIN, require_envelope=False).raw == raw
+    assert len(requests) == 2
+
+
 @pytest.mark.parametrize("status", [200, 403])
 @pytest.mark.parametrize("code", [-2000, "-2000"])
 def test_explicit_access_restriction_preserves_raw_and_is_not_retried(factory, status, code):
@@ -506,6 +537,39 @@ def test_transport_errors_are_wrapped_without_retry(factory, failure):
         client.http.post_form(SERVICE)
     assert caught.value.__cause__ is failure
     assert len(requests) == 1
+
+
+def test_transport_failure_keeps_no_credentials_on_the_cause(factory):
+    """2.6.2: the attached httpx request carried the login id, transformed password, cookie and token."""
+    failure = httpx.ConnectError("synthetic")
+    client, requests = factory([*bootstrap(), failure])
+    client.http.cookies.set("JSESSIONID", "SYNTHETIC-COOKIE")
+    with pytest.raises(E.KorailTransportError) as caught:
+        client.login(ID, PASSWORD)
+    cause = caught.value.__cause__
+    assert cause is failure and len(requests) == 3
+    assert requests[-1].content and "x-dynapath-m-token" in requests[-1].headers
+    assert cause.request.method == "POST" and cause.request.url.path == LOGIN
+    assert cause.request.content == b"" and not cause.request.url.query
+    assert "cookie" not in cause.request.headers and "x-dynapath-m-token" not in cause.request.headers
+
+
+def test_queue_transport_failure_keeps_no_queue_key_on_the_cause():
+    failure = httpx.ConnectError("synthetic")
+
+    def handler(request):
+        raise failure
+
+    client = KorailNetFunnelClient(
+        KorailConfig(netfunnel_timeout=3.0), transport=httpx.MockTransport(handler), sleeper=lambda _: None
+    )
+    try:
+        with pytest.raises(E.KorailTransportError) as caught:
+            client._post("https://queue.example.invalid/ts.wseq?opcode=5101&key=SYNTHETIC-KEY")
+    finally:
+        client.close()
+    assert caught.value.__cause__ is failure
+    assert not failure.request.url.query and failure.request.content == b""
 
 
 def test_common_fields_headers_override_and_empty_omission(factory):
@@ -589,6 +653,19 @@ def test_provider_failure_never_sends_request(factory):
     with pytest.raises(E.KorailProtocolError) as caught:
         client.http.post_form(LOGIN)
     assert isinstance(caught.value.__cause__, ValueError) and not requests
+
+
+@pytest.mark.parametrize("token", [123, b"bytes", "토큰"])
+def test_unsendable_provider_token_never_sends_request(factory, token):
+    config = KorailConfig(
+        base_url="https://offline.invalid",
+        netfunnel_enabled=False,
+        dynapath=DynapathConfig(enabled=True, token_provider=lambda context: token),
+    )
+    client, requests = factory(config=config)
+    with pytest.raises(E.KorailProtocolError, match="ASCII str or None"):
+        client.http.post_form(LOGIN)
+    assert not requests
 
 
 def test_explicit_disable_and_raw_header_bypass_policy(factory):
@@ -782,12 +859,23 @@ def test_closed_client_raises_library_error_without_sending(factory):
     assert not requests
 
 
-def test_ordered_and_mapping_forms_encode_none_and_bool_alike(factory):
+def test_ordered_and_mapping_forms_encode_bool_alike_and_refuse_none(factory):
     client, requests = factory([envelope(), envelope()])
-    values = {"a": None, "b": True, "c": False, "d": 3}
+    values = {"a": "", "b": True, "c": False, "d": 3}
     client.http.post_form(SERVICE, values, include_common=False, omit_empty_fields=False)
     client.http.post_form(SERVICE, list(values.items()), include_common=False, omit_empty_fields=False)
     assert requests[0].content == requests[1].content == b"a=&b=true&c=false&d=3"
+    # 2.6.2: None used to go out as an empty field; it is now refused before sending on every path.
+    for send in (
+        lambda: client.http.post_form(SERVICE, {"a": None}),
+        lambda: client.http.post_form(SERVICE, [("a", None)]),
+        lambda: client.http.post_query(SERVICE, {"a": None}),
+        lambda: client.http.post_mutation_form(SERVICE, {"a": None}),
+        lambda: client.http.get_json(SERVICE, {"a": None}),
+    ):
+        with pytest.raises(E.KorailProtocolError, match="field a is None"):
+            send()
+    assert len(requests) == 2
 
 
 def test_clear_session_is_local(factory):
@@ -821,7 +909,8 @@ EXPECTED_GROUPS = {
     "KorailRateLimitError": "BT019 BT023",
     "KorailProcessingError": "WRT900900",
     "KorailAlreadyProcessedError": "EZZ000014 EVZ000102",
-    "KorailAppUpdateRequiredError": "SUPDATE",
+    # -8204: live observation from GitHub #32 (2026-10-21), not an app literal.
+    "KorailAppUpdateRequiredError": "SUPDATE -8204",
 }
 EXPECTED = {code: getattr(E, name) for name, codes in EXPECTED_GROUPS.items() for code in codes.split()}
 
@@ -839,7 +928,7 @@ def test_error_table_each_code_type_message_and_raw(code, expected):
 
 
 def test_error_table_has_no_hidden_extra_or_overlapping_codes():
-    assert len(EXPECTED) == 183
+    assert len(EXPECTED) == 184
     assert len(EXPECTED) == sum(len(codes.split()) for codes in EXPECTED_GROUPS.values())
     assert E._APP_ERROR_BY_CODE == EXPECTED
 

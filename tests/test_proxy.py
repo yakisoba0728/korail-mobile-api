@@ -200,6 +200,9 @@ def test_httpx_rejection_is_reraised_without_the_url(
 
 
 def test_missing_socksio_points_to_the_socks_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    # httpcore installs a permanent SOCKS fallback if first imported while socksio is blocked.
+    import httpcore  # noqa: F401
+
     monkeypatch.setitem(sys.modules, "socksio", None)
     config = KorailConfig(proxy=f"socks5://{USER}:{SECRET}@127.0.0.1:1080")
     with pytest.raises(ImportError, match=r"korail-mobile-api\[socks\]") as excinfo:
@@ -229,6 +232,18 @@ def device_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     monkeypatch.setenv("KORAIL_DYNAPATH_DEVICE_MODEL", "SM-S948N")
     monkeypatch.setenv("KORAIL_ANDROID_BUILD_ID", "CP2A.260605.016")
     return monkeypatch
+
+
+def test_build_config_from_env_reads_request_versions(device_env: pytest.MonkeyPatch) -> None:
+    default = build_config_from_env()
+    assert (default.app_version, default.version) == (KorailConfig().app_version, KorailConfig().version)
+    device_env.setenv("KORAIL_APP_VERSION", "")
+    device_env.setenv("KORAIL_API_VERSION", "")
+    assert build_config_from_env().version == KorailConfig().version
+    device_env.setenv("KORAIL_APP_VERSION", "9.9.9")
+    device_env.setenv("KORAIL_API_VERSION", "999999999")
+    config = build_config_from_env()
+    assert (config.app_version, config.version) == ("9.9.9", "999999999")
 
 
 def test_build_config_from_env_reads_korail_proxy(device_env: pytest.MonkeyPatch) -> None:
@@ -282,3 +297,30 @@ def test_environment_device_dimensions_keep_defaults_and_integer_policy(
     device_env.setenv(name, "synthetic-invalid-integer")
     with pytest.raises(ValueError, match="invalid literal"):
         build_config_from_env()
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("timeout", 0),
+        ("timeout", -1.0),
+        ("timeout", float("nan")),
+        ("timeout", float("inf")),
+        ("timeout", True),
+        ("netfunnel_timeout", 0),
+        ("netfunnel_timeout", None),
+        ("netfunnel_timeout", float("nan")),
+        ("netfunnel_wait_limit", -1),
+        ("netfunnel_wait_limit", float("nan")),
+    ],
+)
+def test_config_rejects_unusable_durations(field: str, value: object) -> None:
+    """2.6.2: nan disabled the wait limit silently and None failed only when the queue did."""
+    with pytest.raises(ValueError, match=field):
+        KorailConfig(**{field: value})
+
+
+def test_config_keeps_documented_duration_escapes() -> None:
+    assert KorailConfig(timeout=None).timeout is None  # type: ignore[arg-type]
+    assert KorailConfig(netfunnel_wait_limit=0).netfunnel_wait_limit == 0
+    assert KorailConfig(netfunnel_wait_limit=None).netfunnel_wait_limit is None

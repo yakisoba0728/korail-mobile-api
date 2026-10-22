@@ -68,6 +68,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra --strict-config --strict-markers"
 markers = ["packaging: build and inspect release archives without network access"]
+filterwarnings = ["error"]
 
 [tool.ruff]
 target-version = "py311"

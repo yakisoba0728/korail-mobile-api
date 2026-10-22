@@ -11,6 +11,8 @@ import os
 from .config import KorailConfig
 from .constants import (
     KORAIL_API_USER_AGENT,
+    KORAIL_API_VERSION,
+    KORAIL_APP_VERSION,
     KORAIL_DEFAULT_ANDROID_SDK_INT,
     KORAIL_DEFAULT_DEVICE_HEIGHT,
     KORAIL_DEFAULT_DEVICE_WIDTH,
@@ -33,7 +35,8 @@ def build_config_from_env() -> KorailConfig:
     ``KORAIL_NETFUNNEL_USER_AGENT``를 지정하지 않으면 ``KORAIL_ANDROID_BUILD_ID``도 필요합니다. 기기 모델과 OS 버전은
     DynaPath 토큰과 대기열 ``User-Agent``에 함께 씁니다. 나머지 값은 ``KORAIL_BASE_URL``, ``KORAIL_USER_AGENT``,
     ``KORAIL_DEVICE_WIDTH``, ``KORAIL_DEVICE_HEIGHT``, ``KORAIL_ANDROID_SDK_INT``,
-    ``KORAIL_ADVERTISING_ID``로 바꿀 수 있습니다. ``KORAIL_PROXY``는 ``proxy``가 되며 비어 있으면 지정하지 않습니다.
+    ``KORAIL_ADVERTISING_ID``로 바꿀 수 있습니다. ``KORAIL_APP_VERSION``과 ``KORAIL_API_VERSION``은 요청의
+    ``AppVersion``과 ``Version``이 되며 비어 있으면 기본값을 씁니다. ``KORAIL_PROXY``는 ``proxy``가 되며 비어 있으면 지정하지 않습니다.
     로그인 정보나 카드 정보는 환경변수에서 읽지 않습니다.
 
     필요한 환경변수가 없거나 빈 값이면 ``RuntimeError``가 발생합니다. ``KORAIL_DEVICE_WIDTH``, ``KORAIL_DEVICE_HEIGHT``,
@@ -60,6 +63,8 @@ def build_config_from_env() -> KorailConfig:
             "KORAIL_BASE_URL",
             "https://smart.letskorail.com:443",
         ),
+        version=os.environ.get("KORAIL_API_VERSION") or KORAIL_API_VERSION,
+        app_version=os.environ.get("KORAIL_APP_VERSION") or KORAIL_APP_VERSION,
         user_agent=os.environ.get("KORAIL_USER_AGENT", KORAIL_API_USER_AGENT),
         netfunnel_user_agent=os.environ.get("KORAIL_NETFUNNEL_USER_AGENT")
         or build_dalvik_user_agent(

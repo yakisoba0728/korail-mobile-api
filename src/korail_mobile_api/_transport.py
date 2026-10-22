@@ -36,3 +36,15 @@ def build_transport(config: KorailConfig, transport: httpx.BaseTransport | None)
         return httpx.HTTPTransport(proxy=proxy)
     except ImportError as exc:
         raise ImportError("SOCKS proxies need the socks extra: pip install 'korail-mobile-api[socks]'") from exc
+
+
+def redact_failed_request(exc: Exception) -> None:
+    """전송 실패 예외에 붙은 요청을 메서드와 쿼리 없는 URL만 남긴 사본으로 바꿉니다. 예외 객체와 타입은 그대로입니다."""
+    # 원래 요청에는 로그인 아이디·변환된 비밀번호·카드 필드(본문), 세션 쿠키·DynaPath 토큰(헤더), 식별자(쿼리)가 있습니다.
+    if not isinstance(exc, httpx.HTTPError):
+        return
+    try:
+        request = exc.request
+    except RuntimeError:
+        return
+    exc.request = httpx.Request(request.method, request.url.copy_with(query=None))

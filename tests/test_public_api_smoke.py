@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 import runpy
 import sys
 from collections.abc import Callable
@@ -550,10 +551,15 @@ def test_f8_existing_checks(script: str, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(sys, "path", list(sys.path))
     monkeypatch.setattr(sys, "argv", [script])
     path = Path(__file__).resolve().parents[1] / "checks" / script
+    logger = logging.getLogger("korail_mobile_api")
+    level = logger.level
     try:
         runpy.run_path(str(path), run_name="__main__")
     except SystemExit as error:
         assert error.code in (0, None)
+    finally:
+        # netfunnel_offline.py silences the SDK logger for the rest of the process.
+        logger.setLevel(level)
 
 
 def test_f8_queue_is_completed_after_api_error(f8_client_factory: Callable[..., api.KorailClient]) -> None:

@@ -4,6 +4,7 @@
 
 """기본 DynaPath 진단 설정. base_url·netfunnel_url의 신뢰 여부는 호출자가 판단합니다."""
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
@@ -26,6 +27,18 @@ from .constants import (
 from .dynapath import DynapathConfig, _DiagnosticTokenProvider
 
 _PROXY_SCHEMES = frozenset({"http", "https", "socks5", "socks5h"})
+
+
+def _validate_seconds(name: str, value: object, *, allow_zero: bool) -> None:
+    # nan 은 대기 한도 비교를 항상 거짓으로 만들고 0·음수 timeout 은 의미가 없습니다.
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int | float)
+        or not math.isfinite(value)
+        or value < 0
+        or (value == 0 and not allow_zero)
+    ):
+        raise ValueError(f"{name} must be a finite number {'>= 0' if allow_zero else '> 0'}")
 
 
 def _validate_proxy(proxy: object) -> None:
@@ -117,6 +130,11 @@ class KorailConfig:
             not isinstance(self.app_version, str) or not self.app_version.strip()
         ):
             raise ValueError("app_version must be a nonempty string or None")
+        if self.timeout is not None:
+            _validate_seconds("timeout", self.timeout, allow_zero=False)
+        _validate_seconds("netfunnel_timeout", self.netfunnel_timeout, allow_zero=False)
+        if self.netfunnel_wait_limit is not None:
+            _validate_seconds("netfunnel_wait_limit", self.netfunnel_wait_limit, allow_zero=True)
         _validate_proxy(self.proxy)
         default = DynapathConfig()
         if self.disable_dynapath:

@@ -104,13 +104,14 @@ KorailClient.recalculate_price(
 PNR과 승객별 할인 행을 보내고, 서버가 다시 계산한 홀드를 반환합니다. 결제는 이 반환값으로 합니다.
 요청은 보통 [`PriceRecalculationRequest`][korail_mobile_api.mutation_models.PriceRecalculationRequest]의 `for_hold()`로 만듭니다.
 `for_hold()`는 홀드의 첫 여정 좌석마다 한 행을 만들고, 좌석의 승객 유형·객실·현재 할인 코드·증빙 번호를 복사합니다.
-요청할 할인 코드는 좌석 수와 같은 개수로 넘겨야 합니다.
+요청할 할인 코드는 좌석 수와 같은 개수로 넘겨야 합니다. 2.6.2부터 `for_hold()`는 `payable=False`인 예약대기 홀드를 `KorailProtocolError`로 거절합니다.
 7.0.8에서는 실제 미결제 홀드로 요청했지만 할인 코드 `000`은 `WZZ000001`, 변경 없는 요청은 `ERR930202`로 거절됐습니다. 이 버전의 정상 재계산은 아직 확인하지 못했습니다.
 
 `add_to_cart=True`이면 재계산이 성공한 뒤에만 같은 PNR을 장바구니에 추가합니다([`add_to_cart`](reservations.md#add_to_cart)와 같은 요청입니다).
 장바구니 추가가 실패 응답이어도 예외를 발생시키지 않고, 그 결과를 반환값의 `cart_addition`에 담습니다.
 재계산이 실패하면 예외가 발생하며 장바구니 요청은 보내지 않습니다.
-장바구니 요청에서 전송 오류나 세션 만료로 예외가 나면, 재계산은 이미 서버에서 처리된 상태입니다.
+장바구니 요청에서 전송 오류, 응답 파싱 실패, 세션 만료 같은 라이브러리 예외가 나도 재계산은 이미 서버에서 처리된 상태입니다.
+2.6.2부터는 이때 예외를 전파하지 않고 재계산된 홀드를 반환하며, `cart_addition`은 `None`, 그 예외는 `cart_addition_error`에 담습니다. 이전에는 예외가 전파돼 재계산된 홀드를 잃었습니다.
 
 **매개변수**
 
@@ -123,6 +124,7 @@ PNR과 승객별 할인 행을 보내고, 서버가 다시 계산한 홀드를 �
 
 [`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse] — 재계산된 홀드입니다. 바뀐 결제 금액은 `received_amount`에 들어 있습니다.
 `add_to_cart=True`이면 `cart_addition`에 장바구니 추가 결과([`CartAddResponse`][korail_mobile_api.mutation_models.CartAddResponse])가 들어 있고, 아니면 `None`입니다.
+2.6.2부터 장바구니 단계가 라이브러리 예외로 끝나면 `cart_addition`은 `None`이고 `cart_addition_error`에 그 예외가 들어 있습니다. 그 밖에는 `cart_addition_error`가 `None`입니다.
 
 **예외**
 

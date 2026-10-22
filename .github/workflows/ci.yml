@@ -27,10 +27,10 @@ jobs:
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -141,7 +141,7 @@ jobs:
               subprocess.check_call([str(python), str(clean / 'checks' / check)], cwd=clean, env=env)
           tests = clean / 'tests'
           tests.mkdir()
-          for name in ('conftest.py', 'test_public_api_smoke.py', 'test_7010_contract.py', 'test_dynapath_diagnostic.py', 'test_auth_transport.py', 'test_facade.py', 'test_proxy.py', 'test_refund_binding.py', 'test_convenience_reads.py'):
+          for name in ('conftest.py', 'test_public_api_smoke.py', 'test_7010_contract.py', 'test_dynapath_diagnostic.py', 'test_auth_transport.py', 'test_facade.py', 'test_proxy.py', 'test_refund_binding.py', 'test_convenience_reads.py', 'test_wire_equivalence.py', '_wire_pin.py'):
               shutil.copy2(root / 'tests' / name, tests / name)
           subprocess.check_call([str(python), '-m', 'pytest', '-q', str(tests)], cwd=clean, env=env)
           PY
@@ -181,10 +181,10 @@ jobs:
     env:
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'
           cache: pip

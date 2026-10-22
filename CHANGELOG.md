@@ -2,7 +2,15 @@
 
 ## [Unreleased]
 
+## [2.6.2] - 2026-10-23
+
+- GitHub #32: 2026-10-21부터 기본 요청 버전(AppVersion 7.0.8·Version 250601003)에 `-8204`("최신 버전으로 업데이트") 응답이 보고됐습니다. `-8204`를 로그인 포함 모든 경로에서 `KorailAppUpdateRequiredError`로 분류하고 서버 문구를 보존합니다. 앱 리터럴이 아니라 실서버 관측 코드입니다. `build_config_from_env()`는 `KORAIL_APP_VERSION`·`KORAIL_API_VERSION`을 읽습니다. 기본 요청 버전은 바꾸지 않았습니다. 기록된 성공은 AppVersion 7.0.10·Version 250722001·`2!` 헤더 조합의 병합 전 작업트리 관측 1건뿐이며, 현재 기본 조합은 실서버에서 확인하지 않았습니다.
+- 결제 안전: `reserve_merge`는 `job_type=MERGE_STANDING`만 받습니다. 다른 값은 입석 플래그를 덮어써 예약대기 홀드가 결제 가능한 결과로 돌아올 수 있었습니다. `PriceRecalculationRequest.for_hold()`는 예약대기 홀드(`payable=False`)를 거절합니다. `recalculate_price(..., add_to_cart=True)`의 장바구니 단계가 라이브러리 예외로 끝나면 이미 반영된 재계산 홀드를 돌려주고 예외를 새 필드 `ReservationHoldResponse.cart_addition_error`에 담습니다.
+- 개인정보: 네트워크 단계에서 실패한 요청의 `KorailTransportError.__cause__.request`는 메서드와 쿼리 없는 URL만 남깁니다. 본문(로그인 아이디·변환된 비밀번호·카드 필드), 쿠키, DynaPath 토큰, 쿼리가 오류 수집 도구에 남던 문제를 막습니다. 예외 타입과 identity는 그대로입니다. 모델·`raw`·`asdict`·pickle은 여전히 가리지 않습니다.
+- 요청 전 검사: 값이 `None`인 요청 필드는 빈 값(`key=`)으로 보내지 않고 `KorailProtocolError`로 거절합니다. 빈 문자열 생략은 그대로입니다. 비ASCII 숫자, 문자열이 아니거나 ASCII가 아닌 DynaPath 토큰, httpx가 읽지 못하는 대기열 URL, 0·음수·nan인 시간 설정도 요청 전에 거절합니다. 로그인 입력과 열차 검색 승객 수는 서비스 확인·암호 키·역 목록 요청보다 먼저 검사합니다.
+- DynaPath 차단 판별은 설정의 `allowlist_paths`를 따릅니다. 간편 API와 클라이언트가 역 목록을 한 번만 받아 함께 씁니다. `korail.trains.search(..., continuation=...)`는 첫 페이지의 `depart_after`를 요구하고 지난 시각으로 거절하지 않습니다. 검증한 날짜는 다시 포맷하지 않고 그대로 보냅니다.
 - 기본 DynaPath를 SDK 2.0.1 `2!` native-unavailable 진단으로 전환합니다. 기본 헤더에 기기값을 합성하지 않고 profile/env로 제공한 값만 `os`·`dm`·`iid`에 넣습니다. 명시적 v1 설정·외부 공급자·기존 allowlist·대기열·무재시도 정책은 유지하며 env builder는 v1 전용 `KORAIL_DYNAPATH_AS_VALUE`를 더 이상 읽지 않습니다. 같은 헤더 형식의 실서버 관측은 [실행 당시 조건](https://github.com/yakisoba0728/korail-mobile-api/blob/main/docs/verification-7010.md#diagnostic-20261023)으로 별도 기록합니다.
+- 테스트: 85개 공개 메서드와 설정 변형이 보내는 요청을 순서까지 v2.6.1 기준으로 고정하고(SDK 캡처, 앱 근거 아님), 순서 의존 테스트·로거 레벨 누수·조용한 skip을 고칩니다. 경고는 실패로 처리하고 CI 액션을 SHA로 고정합니다.
 
 ## [2.6.1] - 2026-10-19
 

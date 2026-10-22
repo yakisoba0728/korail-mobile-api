@@ -1,6 +1,6 @@
 # 동작 계약과 확인 한계
 
-Unreleased의 기본 DynaPath는 SDK 2.0.1 `2!` native-unavailable 진단입니다. 기기값은 기본 토큰에 합성하지 않으며
+2.6.2부터 기본 DynaPath는 SDK 2.0.1 `2!` native-unavailable 진단입니다. 기기값은 기본 토큰에 합성하지 않으며
 profile/env로 제공한 값만 padding 없는 Base64url로 추가합니다. 명시적 v1/외부 공급자·기존 경로 gate·필수 토큰·대기열·무재시도 계약은 유지합니다.
 [실서버 관측의 버전·입력·한계](../docs/verification-7010.md#diagnostic-20261023)는 별도로 기록합니다.
 
@@ -13,11 +13,17 @@ DTO 필드는 선언 순서로 평탄화하고 배열은 1기반 인덱스를 �
 두 순서 정정은 앱 근거와의 정합성 수정으로, 보호된 최종 map과 서버 순서 민감성·실서버 영향은 미확인입니다.
 빈 문자열을 생략하는 기본 규칙과 빈 값을 명시적으로 보내야 하는 운임 조회 등 예외를 구분합니다.
 `lang=None`이면 언어값을 추측하지 않고 생략합니다.
+2.6.2부터 폼에 들어갈 값이 `None`인 요청 필드는 `key=`로 보내지 않고 요청 전에 `KorailProtocolError`로 거절합니다.
+`""`은 이전처럼 생략합니다. `lang=None`처럼 폼을 만들기 전에 생략을 정한 선택값은 이 규칙과 별개입니다.
+숫자 입력은 ASCII 숫자만 받습니다. `²`·`١`·전각 `１` 같은 유니코드 숫자는 요청 전에 `KorailProtocolError`로 거절합니다
+(이전에는 일부가 일반 `ValueError`로 끝나거나 그대로 전송됐습니다).
 
 좌석배정 조회의 `seatAttCdN/psgNumN/stlbDturDvNmN` 중 `*2` 이상은 기존 SDK 확장입니다.
 7.0.10 앱 DTO에서 확인한 한 묶음과 동등하다고 주장하지 않으며, 1~9명 지원을 제거하거나 무음 축소하지 않습니다.
-패키지 버전은 `2.6.1`이며 요청 기본 `AppVersion=7.0.8`과 API `Version`은 유지합니다.
-`KorailConfig(app_version="7.0.10")` override는 지원하지만 새 버전의 실서버 호환을 뜻하지 않습니다.
+패키지 버전은 `2.6.2`이며 요청 기본 `AppVersion=7.0.8`과 API `Version=250601003`은 유지합니다.
+`KorailConfig(app_version=..., version=...)` override와 `build_config_from_env()`의 `KORAIL_APP_VERSION`(`app_version`)·
+`KORAIL_API_VERSION`(`version`)은 지원하지만 새 버전의 실서버 호환을 뜻하지 않습니다.
+2026-10-21부터 보고된 `-8204` 거절과 기록된 관측 범위는 [실서버 확인 현황](../docs/status.md#current)에 둡니다.
 
 API User-Agent는 운영 관측값 `korailtalk`, 대기열 User-Agent는 기기 기반 Dalvik 형식입니다.
 둘 다 `Connection: Keep-Alive`, `Accept-Encoding: gzip`을 사용하며 `Accept`는 보내지 않습니다.
@@ -26,6 +32,15 @@ API User-Agent는 운영 관측값 `korailtalk`, 대기열 User-Agent는 기기 
 `KorailConfig.proxy`를 지정하면 API와 대기열 요청이 같은 프록시를 쓰고 httpx 환경변수 프록시는 무시합니다.
 지정하지 않으면 httpx 기본 동작(환경변수 프록시 포함)을 그대로 따릅니다. 사용자 `transport`와 함께 쓰면 조용히 한쪽을
 버리지 않고 클라이언트 생성 시 `ValueError`로 거절합니다. 프록시 URL은 오류 메시지와 `repr`에 싣지 않습니다.
+
+`timeout`은 0보다 큰 유한한 수 또는 `None`(httpx 제한 시간 없음, 기존과 같음), `netfunnel_timeout`은 0보다 큰 유한한 수,
+`netfunnel_wait_limit`은 `None` 또는 0 이상의 유한한 수여야 하며, 아니면 설정 생성 시 `ValueError`입니다.
+httpx가 해석하지 못하는 대기열 URL은 `httpx.InvalidURL`을 그대로 전파하지 않고 `KorailTransportError`로 처리합니다.
+DynaPath `token_provider`가 문자열이 아니거나 ASCII가 아닌 값을 돌려주면 아무것도 보내지 않고 `KorailProtocolError`입니다.
+DynaPath 차단 판정 경로는 내장 목록이 아니라 `config.dynapath.allowlist_paths`이며 사용자 지정 목록도 그대로 따릅니다.
+
+네트워크 단계 실패의 `KorailTransportError.__cause__`(httpx 예외)는 예외 종류·객체를 유지하되, 붙은 요청에는
+메서드와 쿼리를 뺀 URL만 남기고 본문·쿠키·DynaPath 토큰을 제거합니다. 응답 모델·`raw`·`dataclasses.asdict`·pickle은 마스킹하지 않습니다.
 
 응답 모델은 자동 마스킹하지 않습니다. `frozen=True`는 중첩 사전·목록의 불변성을 뜻하지 않습니다.
 공개 `raw` 타입은 읽기 인터페이스인 `Mapping[str, object]`입니다. 조회 응답은 대체로 원문 객체를 그대로 참조하지만,
@@ -44,6 +59,8 @@ Python의 정수 문자열 변환 한도를 넘는 봉투 값도 `KorailProtocol
 `BaseKorailResponse.from_raw`는 객체·봉투 타입을 검사하되 성공·실패를 판정하지 않습니다.
 `http.parse_base_response`는 `FAIL` 또는 필수 `strResult`의 누락을 실패로 봅니다.
 `null`·빈 문자열·미지의 결과 코드를 임의로 `FAIL`로 바꾸지는 않습니다.
+서버 코드 `-8204`(#32 관측값, 앱 리터럴 아님)는 로그인을 포함한 모든 경로에서 `KorailAppUpdateRequiredError`이며
+서버 메시지를 보존합니다. `SUPDATE`와 같은 하위 예외이고 자동 재시도나 버전 자동 변경으로 이어지지 않습니다.
 CommonOut 경로의 `FAIL/P058` 또는 결과 누락/P058은 `raise_on_fail=False`여도 세션 만료이며,
 성공 봉투의 P058만으로 만료되지 않습니다(`CommonOut.java:361,426–438,455–463`).
 공항버스처럼 정확한 SUCC를 요구하는 파서는 별도 규칙을 유지합니다.
@@ -79,7 +96,7 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 
 ## 로그인과 변경 흐름
 
-로그인은 기존 세션 폐기→서비스 상태→암호화 파라미터→로그인 순서입니다.
+로그인은 기존 세션 폐기→서비스 상태→암호화 파라미터→로그인 순서입니다. 비밀번호 타입은 첫 요청 전에 검사합니다.
 관측된 성공 코드와 JSESSIONID를 요구합니다. 휴면 해제·비밀번호 변경은
 `KorailAuthContinuationRequired`와 `session.pending`에 남기며 웹 조치를 자동으로 이어 가지 않습니다.
 일반 실패는 세션·쿠키를 비우지만 이 웹 단계에서는 응답 쿠키를 보존합니다.
@@ -95,7 +112,12 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 `ERR299943`은 지원하지 않는 예약 할인으로 `KorailReservationRefusedError`에 속하며,
 회원 자격 코드 `WRC000419`·`WRC800030`은 `KorailNotEntitledError`로 유지합니다.
 병합은 첫 홀드→병합 조회→첫 홀드 취소→후속 홀드 순서이며 첫 홀드는 호출자가 취소해야 합니다.
+`reserve_merge`는 `job_type=MERGE_STANDING`(기본값)만 받고 다른 값은 요청 전에 `KorailProtocolError`로 거절합니다.
+이전에는 `STANDBY`·`IMMEDIATE`도 그대로 보내 결제 가능한 홀드가 반환될 수 있었습니다.
 `cancel_unpaid_hold`는 기본적으로 가능 여부 확인 후 실제 취소합니다.
+예약 응답의 파싱 실패 때 PNR은 예외 `raw`에 남지만 `get_reservation_hold`도 같은 파서로 실패할 수 있습니다.
+알려진 한계로, 취소는 `ReservationHoldResponse(str_result="SUCC", pnr_no=..., journey_count=...)`를 직접 만들어 넘기는 방법뿐이며
+전용 API는 3.0에서 제공할 예정입니다.
 
 카드 결제액은 홀드 `received_amount`이며 기준 운임이나 `total_price`로 대체하지 않습니다.
 카드 거절은 FAIL 모델입니다. 환불은 성공한 수수료 응답을 명시적으로 받아 승차권 한 장씩 수행합니다.
@@ -130,8 +152,13 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 간편 API는 `TicketResource.refund_fee(ticket, *, companion=RefundCompanion())`로 같은 동반자 정보를 받습니다.
 
 재계산의 승객별 여섯 목록은 동일 인덱스를 유지하도록 빈 문자열도 보존합니다.
-`for_hold`는 첫 여정의 좌석 정보를 복사하며 요청 할인 수가 좌석 수와 같아야 합니다.
-`add_to_cart=True`는 재계산 성공 후 장바구니에 추가하고 추가 실패를 `cart_addition`에 남깁니다.
+`for_hold`는 첫 여정의 좌석 정보를 복사하며 요청 할인 수가 좌석 수와 같아야 합니다. `payable=False`(예약대기) 홀드는 `KorailProtocolError`로 거절합니다.
+`add_to_cart=True`는 재계산 성공 후 장바구니에 추가하고 FAIL 응답을 `cart_addition`에 남깁니다.
+장바구니 단계의 라이브러리 예외(전송·파싱·세션 만료)는 전파하지 않고, 이미 적용된 재계산 홀드를 `cart_addition=None`과
+`cart_addition_error=<예외>`로 반환합니다. 장바구니 요청은 자동으로 다시 보내지 않습니다.
+
+간편 검색의 `continuation`에는 첫 페이지의 `depart_after`가 필요하며(없으면 `ValueError`) 이어보기를 지난 시각으로 거절하지 않습니다.
+간편 검색은 역 목록을 받기 전에 승객 구성을 검사하고, 역 목록은 한 번만 받아 간편 API와 클라이언트가 공유합니다.
 
 ## 대기열과 미확인 항목
 
@@ -157,6 +184,8 @@ DynaPath 차단 판정은 보호된 키 대신 최상위 정수를 검사하므�
 
 7.0.10의 DynaPath 조건부 문자열·nullable code, 통합결제의 일반 회원 분기,
 서비스 상태 요청의 기본값 실제 전송 여부, N카드·보호 기본값은 확정하지 않았으며 임의 변경하지 않습니다.
+N카드 예약 메뉴 ID `A2`는 좌석배정 값을 재사용한 미확인 값이고, `DiscountCardScheduleRequest.for_card()`의 `B2N`·`MMM` 구분은
+7.0.6 정적 근거(`B2N1906…` 네 상품)와 다릅니다. N카드 일정 조회의 `usable_trip_count` 생략은 7.0.6 시기 실서버에서 `WRR000100(usePsbTno)`로 거절됐습니다.
 Android push ACK·비회원 UI·진단 화면은 이식하지 않습니다.
 공개 메서드 85개 행의 정적 검토는 완전한 wire 계약·모든 분기·실서버 검증이 아닙니다.
 범위와 한계는 [7.0.10 정적 검토](../docs/verification-7010.md)에 정리합니다.

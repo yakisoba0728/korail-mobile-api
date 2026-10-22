@@ -1514,6 +1514,27 @@ def test_recalculation_can_add_the_pnr_to_the_cart_like_the_app(mutation_client,
     assert len(requests) == 2
 
 
+@pytest.mark.parametrize(
+    "cart_reply, expected",
+    [
+        (httpx.ReadTimeout("synthetic cart timeout"), "KorailTransportError"),
+        ({**BASE, "strResult": "FAIL", "h_msg_cd": "P058", "h_msg_txt": "SYNTH"}, "KorailSessionExpiredError"),
+        ("not json", "KorailProtocolError"),
+    ],
+)
+def test_recalculated_hold_survives_a_failed_cart_step(scripted_client_factory, cart_reply, expected) -> None:
+    """2.6.2: the cart step's exception used to discard the hold the server had already recalculated."""
+    config = KorailConfig(base_url="https://offline.invalid", netfunnel_enabled=False, disable_dynapath=True)
+    reply = httpx.Response(200, text=cart_reply) if isinstance(cart_reply, str) else cart_reply
+    client, requests, _ = scripted_client_factory(
+        [hold_raw(), reply], config=config, session=KorailSession(jsessionid="SYNTH-SESSION")
+    )
+    result = client.recalculate_price(recalc_request(), add_to_cart=True)
+    assert result.received_amount == "1200" and result.cart_addition is None
+    assert type(result.cart_addition_error).__name__ == expected
+    assert len(requests) == 2
+
+
 @pytest.mark.parametrize("failed", [False, True], ids=["default-no-cart", "failed-no-cart"])
 def test_recalculation_adds_nothing_to_the_cart_by_default_or_after_a_failure(mutation_client, failed) -> None:
     raw = (
@@ -1558,6 +1579,9 @@ def test_recalculation_rows_come_from_the_first_journey_seats_like_the_app() -> 
         PriceRecalculationRequest.for_hold(hold(), ["SYNTH-NEW"])
     with pytest.raises(KorailProtocolError, match="successful hold"):
         PriceRecalculationRequest.for_hold(hold(journeys=journeys, str_result="FAIL"), ["", "SYNTH-NEW"])
+    # 2.6.2: recalculating a standby hold returned a payable hold, bypassing the card-payment block.
+    with pytest.raises(KorailProtocolError, match="standby"):
+        PriceRecalculationRequest.for_hold(hold(journeys=journeys, payable=False), ["", "SYNTH-NEW"])
 
 
 @pytest.mark.parametrize(
@@ -1775,6 +1799,15 @@ def test_merge_first_and_follow_up_holds_stay_payable(mutation_client) -> None:
     follow_up_client, _ = mutation_client([hold_raw()], "POST", ("certification.TicketReservation",), merged)
     assert follow_up_client.reserve_merge(train(), merge_rows()).payable is True
     assert hold().payable is True
+
+
+@pytest.mark.parametrize("job_type", [Job.STANDBY, Job.IMMEDIATE, Job.SEAT_DESIGNATED])
+def test_merge_reservation_refuses_other_job_types(mutation_client, job_type: Job) -> None:
+    """2.6.2: other job types were sent with the merge standing flag and came back as payable holds."""
+    client, requests = mutation_client([], "POST", (), {})
+    with pytest.raises(KorailProtocolError, match="MERGE_STANDING"):
+        client.reserve_merge(train(), merge_rows(), job_type=job_type)
+    assert not requests
 
 
 def test_standing_only_row_is_not_booked_as_immediate(mutation_client) -> None:
@@ -2046,3 +2079,28 @@ def test_recalculation_from_hold_keeps_raw_on_oversized_integer(key: str) -> Non
         assert isinstance(error.value.__cause__, ValueError)
     finally:
         sys.set_int_max_str_digits(previous)
+
+
+def test_documented_recovery_cancels_a_hold_whose_response_failed_to_parse(scripted_client_factory) -> None:
+    """docs/guide/errors.md#unparsed-hold: the PNR survives in raw and a hand-built hold cancels it."""
+    config = KorailConfig(base_url="https://offline.invalid", netfunnel_enabled=False, disable_dynapath=True)
+    unparsable = hold_raw()
+    unparsable["h_tot_rcvd_amt"] = "009999"
+    client, requests, _ = scripted_client_factory(
+        [unparsable, {**BASE}, {**BASE}], config=config, session=KorailSession(jsessionid="SYNTH-SESSION")
+    )
+    with pytest.raises(KorailProtocolError) as caught:
+        client.reserve(train())
+    raw = caught.value.raw
+    assert isinstance(raw, dict)
+    pending = ReservationHoldResponse(
+        str_result="SUCC", pnr_no=str(raw.get("h_pnr_no") or ""), journey_count=str(raw.get("h_jrny_cnt") or "")
+    )
+    client.cancel_unpaid_hold(pending)
+    cancel = dict(parse_qsl(requests[-1].content.decode()))
+    assert [request.url.path.rsplit(".", 1)[-1] for request in requests] == [
+        "TicketReservation",
+        "ReservationCancel",
+        "ReservationCancelChk",
+    ]
+    assert (cancel["txtPnrNo"], cancel["txtJrnyCnt"]) == (PNR, "0001")
