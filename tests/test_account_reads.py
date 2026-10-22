@@ -1511,6 +1511,32 @@ def test_optional_delay_run_date_uses_optional_scalar_policy(value: object) -> N
     assert parsed.raw is raw
 
 
+def test_ticket_list_parser_reads_the_response_mapping() -> None:
+    """Like the other read parsers it takes the raw mapping (it used to take a BaseKorailResponse, so a mapping
+    raised AttributeError). Rows keep their identity; a FAIL envelope is still an app error."""
+    from korail_mobile_api._domains.tickets.parsers import parse_ticket_list_response
+
+    train = {"h_trn_no": 999, "h_srcar_no": 3}
+    ticket = {"h_pnr_no": "TEST-PNR", "jrn_info": [train, "not-a-row"]}
+    reservation = {"ticket_list": [ticket], "isFinished": True, "seatAssignCount": "2"}
+    raw = {"strResult": "SUCC", "h_msg_cd": 0, "pnr_list": [reservation], "h_total_cnt": 1}
+    parsed = parse_ticket_list_response(raw)
+    assert (parsed.raw, parsed.h_msg_cd, parsed.total_count) == (raw, "0", "1") and parsed.raw is raw
+    row = parsed.reservations[0]
+    assert (row.raw, row.is_finished, row.seat_assign_count, row.additional_service) == (
+        reservation,
+        True,
+        2,
+        None,
+    )
+    assert row.raw is reservation and row.tickets[0].raw is ticket
+    assert row.tickets[0].train_info == (train,) and row.tickets[0].trains[0].raw is train
+    assert (row.tickets[0].trains[0].train_no, row.tickets[0].trains[0].car_no) == ("999", "3")
+    with pytest.raises(api.KorailApiError) as error:
+        parse_ticket_list_response({"strResult": "FAIL", "h_msg_cd": "SYNTHETIC-FAIL"})
+    assert error.value.raw == {"strResult": "FAIL", "h_msg_cd": "SYNTHETIC-FAIL"}
+
+
 @pytest.mark.parametrize(
     "value,expected",
     [
