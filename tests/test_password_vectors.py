@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from korail_mobile_api._core.crypto import transform_login_password
-from korail_mobile_api.models import LoginCryptoInfo
+from korail_mobile_api._domains.common.models import LoginCryptoInfo
 
 
 @pytest.mark.parametrize(

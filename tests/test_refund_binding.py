@@ -22,7 +22,7 @@ from korail_mobile_api import (
     RefundTicketDetailResponse,
     TicketResource,
 )
-from korail_mobile_api.read_parsers import parse_refund_commission_response
+from korail_mobile_api._domains.payments.parsers import parse_refund_commission_response
 
 
 def _reference():

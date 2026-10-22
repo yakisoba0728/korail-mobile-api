@@ -16,54 +16,41 @@ import httpx
 
 from ._core.cleanup import _close_connections
 from ._core.validation import _optional_text, _passenger_count, _required_text
-from .client import KorailClient
-from .config import KorailConfig
-from .constants import KorailReservationJobType, KorailReserveOption, KorailSeatClass
-from .errors import KorailNoResultsError, KorailProtocolError
-from .limousine_models import (
+from ._domains.airport_bus.forms import LIMOUSINE_CAR_NO, LimousineScheduleQuery, LimousineSeatInventoryQuery
+from ._domains.airport_bus.models import (
     LimousineSchedule,
-    LimousineScheduleQuery,
     LimousineScheduleResponse,
-    LimousineSeatInventoryQuery,
     LimousineSeatInventoryResponse,
     LimousineStop,
 )
-from .limousine_parsers import parse_limousine_stops
-from .models import (
-    BaseKorailResponse,
-    KorailSession,
-    KorailStation,
+from ._domains.airport_bus.parsers import parse_limousine_stops
+from ._domains.common.models import BaseKorailResponse, KorailSession, KorailStation
+from ._domains.payments.forms import CardPayment, PaidTicket, RefundCompanion
+from ._domains.payments.models import RefundCommissionResponse, RefundTicketResponse, ReservationPaymentResponse
+from ._domains.reservations.forms import KorailPassengerCounts, TicketReservationDetailRequest
+from ._domains.reservations.models import (
+    ReservationHistoryResponse,
+    ReservationHoldResponse,
+    TicketReservationDetailResponse,
+)
+from ._domains.tickets.forms import (
+    KorailMileageLedger,
+    KorailMileageMovement,
+    MileageHistoryRequest,
+    OriginalTicketReference,
+)
+from ._domains.tickets.models import DiscountCouponListResponse, MileageHistoryResponse, TicketListResponse
+from ._domains.trains.models import (
     TrainSearchContinuation,
     TrainSearchQuery,
     TrainSearchResult,
     TrainSummary,
     _train_datetime,
 )
-from .mutation_models import (
-    CardPayment,
-    KorailPassengerCounts,
-    PaidTicket,
-    RefundTicketResponse,
-    ReservationHoldResponse,
-    ReservationPaymentResponse,
-)
-from .mutation_payloads import LIMOUSINE_CAR_NO
-from .read_models import (
-    DiscountCouponListResponse,
-    MileageHistoryResponse,
-    RefundCommissionResponse,
-    ReservationHistoryResponse,
-    TicketListResponse,
-    TicketReservationDetailResponse,
-)
-from .read_payloads import (
-    KorailMileageLedger,
-    KorailMileageMovement,
-    MileageHistoryRequest,
-    OriginalTicketReference,
-    RefundCompanion,
-    TicketReservationDetailRequest,
-)
+from .client import KorailClient
+from .config import KorailConfig
+from .constants import KorailReservationJobType, KorailReserveOption, KorailSeatClass
+from .errors import KorailNoResultsError, KorailProtocolError
 
 KST = timezone(timedelta(hours=9))
 _PAST_TOLERANCE = timedelta(minutes=1)

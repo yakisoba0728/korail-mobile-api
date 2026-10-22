@@ -2,7 +2,9 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""선택값은 관대하게, 후속 요청에 필요한 값은 엄격하게 읽습니다; 공통 규칙은 checks/BEHAVIOR.md 참고."""
+"""선택값은 관대하게, 후속 요청에 필요한 값은 엄격하게 읽습니다; 공통 규칙은 checks/BEHAVIOR.md 참고.
+
+조회 봉투와 필수 행 규칙, 타입이 정해진 스칼라 읽기를 함께 둡니다."""
 
 from __future__ import annotations
 
@@ -12,8 +14,14 @@ from collections.abc import Callable, Mapping
 from functools import wraps
 from typing import Any, ParamSpec, TypedDict, TypeVar
 
-from ..errors import KorailApiError, KorailProtocolError
-from ..models import BaseKorailResponse, ReservationPassengerInfo
+from .._domains.common.models import BaseKorailResponse
+from ..errors import (
+    SESSION_EXPIRED_CODE,
+    KorailApiError,
+    KorailProtocolError,
+    KorailSessionExpiredError,
+    classify_app_error,
+)
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
@@ -252,38 +260,166 @@ def _nullable_scalar_fields(
     }
 
 
-RESERVATION_OUT_EXTRA_FIELDS: dict[str, str] = {
-    "customer_management_no": "h_cust_mg_no",
-    "mandatory_message": "h_msg_mndry",
-    "additional_service_flag": "h_add_srv_flg",
-    "disability_certificate_number": "h_hdcp_ctfc_num",
-    "pre_settlement_target_flag": "h_pre_stl_tgt_flg",
-    "family_info_confirm_flag": "h_fmly_info_cfm_flg",
-    "special_room_fare": "h_sprm_fare",
-    "issue_possible_date": "h_ise_psb_dt",
-    "issue_possible_time": "h_ise_psb_tm",
-}
-
-_RESERVATION_PASSENGER_FIELDS: dict[str, str] = {
-    "passenger_type_code": "h_psg_tp_cd",
-    "passenger_count": "h_psg_info_per_prnb",
-    "discount_kind_code": "h_dcnt_knd_cd",
-    "discount_kind_code_2": "h_dcnt_knd_cd2",
-    "discount_proof_no": "h_dcsp_no",
-    "discount_proof_no_2": "h_dcsp_no2",
-    "delay_original_window_no": "dlayOgtkWctNo",
-    "delay_original_sale_date": "dlayOgtkSaleDt",
-    "delay_original_sale_sequence": "dlayOgtkSaleSqno",
-    "delay_original_return_password": "dlayOgtkRetPwd",
-}
-
-
-def _reservation_passengers(raw: Mapping[str, Any]) -> tuple[ReservationPassengerInfo, ...]:
-    """컨테이너가 없거나 모양이 다르면 빈 튜플이고 원문은 raw 에 남습니다."""
-    return tuple(
-        ReservationPassengerInfo(
-            **_nullable_scalar_fields(row, _RESERVATION_PASSENGER_FIELDS, "reservation passenger"),
-            raw=dict(row),
+def _validate_envelope(
+    raw: Mapping[str, Any],
+    *,
+    accepted_empty_codes: frozenset[str] = frozenset(),
+    returned_failure_codes: frozenset[str] = frozenset(),
+    return_all_failures: bool = False,
+    allow_result_only_success: bool = False,
+) -> bool:
+    if not isinstance(raw, Mapping):
+        raise KorailProtocolError("KORAIL response must be a JSON object")
+    # raw 를 직접 받는 호출자는 http.parse_base_response 를 거치지 않으므로 봉투 필드 타입을 여기서도 확인합니다.
+    envelope = _envelope(raw)
+    if "strResult" not in raw:
+        raise KorailProtocolError(
+            "KORAIL response omitted strResult; the protected APK default "
+            "cannot be inferred for this typed read"
         )
-        for row in _nested_rows(raw, "psg_infos", "psg_info")
+    if allow_result_only_success and ("h_msg_cd" not in raw and "h_msg_txt" not in raw):
+        if raw["strResult"] != "SUCC":
+            raise KorailProtocolError("KORAIL result-only envelope requires the exact success result")
+        return False
+    code = envelope["h_msg_cd"]
+    message = envelope["h_msg_txt"]
+    result = envelope["strResult"]
+    # 앱은 strResult 실패일 때만 로그인 필요로 봅니다(CommonOut.java:426-438).
+    if result == "FAIL" and code == SESSION_EXPIRED_CODE:
+        raise KorailSessionExpiredError(code, message, raw=raw)
+    failed = result == "FAIL"
+    if (
+        failed
+        and not return_all_failures
+        and code not in accepted_empty_codes
+        and code not in returned_failure_codes
+    ):
+        raise classify_app_error(code, message, raw=raw)
+    return failed
+
+
+def _validate_strict_read_envelope(
+    raw: Mapping[str, Any],
+    *,
+    allow_result_only_success: bool = False,
+) -> None:
+    _validate_envelope(
+        raw,
+        allow_result_only_success=allow_result_only_success,
     )
+    if raw.get("strResult") != "SUCC":
+        raise KorailProtocolError("KORAIL strict read response strResult must be SUCC")
+
+
+def _required_read_rows(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+) -> list[Mapping[str, Any]]:
+    """누락·null·비객체 행은 거절합니다(ReceiptInfos.java:49, DeliveredTicketOut.java:50 의 필수 마스크)."""
+    value = data.get(key)
+    if not isinstance(value, list) or any(not isinstance(row, Mapping) for row in value):
+        raise KorailProtocolError(f"KORAIL {context} field {key} must be an object list")
+    return value
+
+
+def _required_read_strings(
+    data: Mapping[str, Any],
+    fields: Mapping[str, str],
+    context: str,
+) -> dict[str, Any]:
+    """누락·null 은 거절하고, JSON 정수는 문자열로 받습니다(String 선언 필드가 정수로 온 관측, :func:`_strict_scalar_string`)."""
+    values = {}
+    for attr, key in fields.items():
+        value = _strict_scalar_string(data, key, context)
+        if value is None:
+            raise KorailProtocolError(f"KORAIL {context} field {key} is required")
+        values[attr] = value
+    return values
+
+
+def _optional_read_rows(data: Mapping[str, Any], key: str, context: str) -> list[Mapping[str, Any]]:
+    """선택·nullable 객체 목록을 읽습니다. 누락·null 은 빈 목록이고, 목록이 아니거나 객체가 아닌 행은 거절합니다."""
+    if data.get(key) is None:
+        return []
+    return _required_read_rows(data, key, context)
+
+
+def _typed_required_string(
+    data: Mapping[str, object],
+    key: str,
+    *,
+    context: str,
+    non_empty: bool = False,
+) -> str:
+    value = _typed_required_scalar_string(data, key, context=context)
+    if non_empty and not value.strip():
+        raise KorailProtocolError(f"KORAIL {context} field {key} must be a non-empty string")
+    return value
+
+
+def _typed_required_scalar_string(
+    data: Mapping[str, object],
+    key: str,
+    *,
+    context: str,
+) -> str:
+    """일반 좌석 재고에서 layout_type 정수가 관측되어 String 선언과 달리 허용합니다."""
+    if key not in data:
+        raise KorailProtocolError(f"KORAIL {context} field {key} must be a string or an integer")
+    value = data[key]
+    if isinstance(value, str):
+        return value
+    # bool 을 정수 스칼라로 받지 않습니다.
+    if type(value) is int:
+        try:
+            return str(value)
+        except ValueError as exc:  # 파이썬의 정수→문자열 자릿수 한도
+            raise KorailProtocolError(f"KORAIL {context} field {key} is an integer too long to use") from exc
+    raise KorailProtocolError(f"KORAIL {context} field {key} must be a string or an integer")
+
+
+def _typed_optional_int(
+    data: Mapping[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> int | None:
+    """선택값을 음이 아닌 정수로 읽고 다른 값은 None으로 처리합니다."""
+    value = _optional_integer(data, key, context)
+    return value if value is not None and value >= 0 else None
+
+
+def _typed_non_negative_integer_value(
+    value: object,
+    key: str,
+    *,
+    context: str,
+) -> int:
+    if type(value) is int:
+        parsed = value
+    elif isinstance(value, str) and value and all("0" <= character <= "9" for character in value):
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise KorailProtocolError(
+                f"KORAIL {context} field {key} has an unsupported ASCII-decimal length"
+            ) from exc
+    else:
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be a non-negative integer or ASCII-decimal string"
+        )
+    if parsed < 0:
+        raise KorailProtocolError(f"KORAIL {context} field {key} must not be negative")
+    return parsed
+
+
+def _typed_defaulted_string(
+    data: Mapping[str, object],
+    key: str,
+    *,
+    context: str,
+) -> str:
+    """누락은 앱 합성 생성자의 기본값 "" 이고, 값이 있으면 문자열·JSON 정수만 받습니다. null 과 다른 타입은 앱의 Json 설정이 보호돼 있어 받아도 되는지 확인할 수 없으므로
+    거절합니다."""
+    return _typed_required_scalar_string(data, key, context=context) if key in data else ""

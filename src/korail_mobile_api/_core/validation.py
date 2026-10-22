@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""조회 요청의 문자열·숫자·날짜 검증입니다. 요청별 범위와 선택값 정책은 호출부가 정합니다."""
+"""요청의 문자열·숫자·날짜 검증입니다. 요청별 범위와 선택값 정책은 호출부가 정합니다."""
 
 from __future__ import annotations
 
@@ -87,3 +87,15 @@ def _wire_component(value: str, name: str) -> str:
     if "," in resolved:
         raise KorailProtocolError(f"{name} must not contain a comma")
     return resolved
+
+
+def _required_mutation_text(
+    value: object,
+    *,
+    field: str,
+    context: str = "discount card request",
+    allow_blank: bool = False,
+) -> str:
+    if not isinstance(value, str) or (not allow_blank and not value.strip()):
+        raise KorailProtocolError(f"KORAIL {context} requires a non-empty {field}")
+    return value

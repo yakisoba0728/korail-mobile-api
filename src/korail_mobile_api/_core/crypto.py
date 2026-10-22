@@ -11,8 +11,8 @@ import base64
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
 
+from .._domains.common.models import LoginCryptoInfo
 from ..errors import KorailProtocolError
-from ..models import LoginCryptoInfo
 
 
 def _aes_cbc_pkcs7_encrypt(plaintext: bytes, key: bytes, iv: bytes) -> bytes:

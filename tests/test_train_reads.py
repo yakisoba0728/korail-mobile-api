@@ -8,6 +8,7 @@ from dataclasses import replace
 from urllib.parse import parse_qsl
 
 import pytest
+from records._travel_search_unsupported import TravelProductSearchQuery
 
 from korail_mobile_api import (
     DynapathConfig,
@@ -28,7 +29,6 @@ from korail_mobile_api import (
     TrainSummary,
     TransferSearchResult,
 )
-from korail_mobile_api.read_payloads import TravelProductSearchQuery
 
 P = "/classes/com.korail.mobile."
 DATE = "20300102"
@@ -527,7 +527,7 @@ ABSENT = object()
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
-    monkeypatch.setattr("korail_mobile_api.payloads.time.time", lambda: 1700000000.0)
+    monkeypatch.setattr("korail_mobile_api._domains.common.forms.time.time", lambda: 1700000000.0)
 
 
 @pytest.fixture
@@ -1163,7 +1163,7 @@ def test_travel_search_is_record_only_and_keeps_the_dto_order(rig):
     """TravelSearchProductIn.java:60-81: funcDvCd, keyword field, bltnLstOrdr, nowPgNo, pgPrCnt. The app's codes
     are protected and the 2026-09-25 server refused a search without funcDvCd (WRR000100), so the call is
     record-only."""
-    from korail_mobile_api import _travel_search_unsupported as record
+    from records import _travel_search_unsupported as record
 
     query = TravelProductSearchQuery(
         "SYNTH", "theme", page_no=2, function_code="SYNTH-F", order_code="SYNTH-O", page_size="SYNTH-P"
@@ -1231,7 +1231,7 @@ def test_read_forms_follow_the_app_dto_order(name, expected, rig):
 
 def test_nested_parser_raw_promotes_partial_context(rig, monkeypatch):
     """_preserve_read_raw contract: preserve full response AND existing partial evidence."""
-    from korail_mobile_api import parsers
+    from korail_mobile_api._domains.trains import parsers
 
     partial = {"synthetic": "partial"}
 

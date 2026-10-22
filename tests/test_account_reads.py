@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections import Counter, UserDict
 from copy import deepcopy
 from dataclasses import dataclass, is_dataclass, replace
@@ -12,14 +13,13 @@ from urllib.parse import parse_qsl
 import httpx
 import pytest
 
-from korail_mobile_api import read_models as m
-from korail_mobile_api import read_payloads as p
-from korail_mobile_api._core.parsing import _nullable_scalar_fields, _reservation_passengers
+import korail_mobile_api as api
+from korail_mobile_api import KorailSession
+from korail_mobile_api._core.parsing import _nullable_scalar_fields
+from korail_mobile_api._domains.reservations.parsers import _reservation_passengers, parse_cart_list_response
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import KorailProtocolError, KorailSessionExpiredError
-from korail_mobile_api.models import KorailSession
-from korail_mobile_api.read_parsers import parse_cart_list_response
 
 PREFIX = "/classes/com.korail.mobile."
 COMMON = [
@@ -30,17 +30,17 @@ COMMON = [
 ]
 DATE = "20300102"
 STAMP = 1_800_000_000_125
-REFERENCE = p.OriginalTicketReference("TEST-WINDOW", "0102", "TEST-SEQUENCE", "TEST-RETURN")
+REFERENCE = api.OriginalTicketReference("TEST-WINDOW", "0102", "TEST-SEQUENCE", "TEST-RETURN")
 FULL_REFERENCE = replace(REFERENCE, sale_date=DATE)
 SECOND_REFERENCE = replace(FULL_REFERENCE, sale_sequence="TEST-SEQUENCE-2")
-PASS_DATA = m.PassMenuData(commuter_kind_code="TEST-KIND")
-DETAIL = m.RefundTicketDetailResponse(
+PASS_DATA = api.PassMenuData(commuter_kind_code="TEST-KIND")
+DETAIL = api.RefundTicketDetailResponse(
     sale_date=DATE,
     original_sale_date="0102",
     original_window_no="TEST-WINDOW",
     original_sale_sequence="TEST-SEQUENCE",
     original_return_password="TEST-RETURN",
-    journeys=(m.RefundTicketJourney(journey_sequence="001"),),
+    journeys=(api.RefundTicketJourney(journey_sequence="001"),),
 )
 ABSENT_LIST = object()
 DELAY_KEYS = ("runDay", "trnNo", "dptRsStnCd", "arvRsStnCd", "arvRsStnNm", "dlayArvFlg", "trnDlayTm")
@@ -214,7 +214,7 @@ CASES = [
     case(
         "get_mileage_history",
         "mlg.amtSpec.do",
-        {"request": p.MileageHistoryRequest(DATE, "20300203", page_no=2)},
+        {"request": api.MileageHistoryRequest(DATE, "20300203", page_no=2)},
         {
             "pontTpVal": "1",
             "qryDvVal": "0",
@@ -240,7 +240,7 @@ CASES = [
         "get_discount_card_schedule",
         "research.dcntCrdScheduleView.do",
         {
-            "request": p.DiscountCardScheduleRequest(
+            "request": api.DiscountCardScheduleRequest(
                 "TEST-MANAGEMENT",
                 "TEST-FROM",
                 "TEST-TO",
@@ -284,7 +284,7 @@ CASES = [
         "get_pass_schedule",
         "pass.passScheduleInfoList",
         {
-            "request": p.PassScheduleRequest(
+            "request": api.PassScheduleRequest(
                 "TEST-TRAIN",
                 DATE,
                 "120000",
@@ -385,7 +385,7 @@ CASES = [
     case(
         "get_commuter_info",
         "research.cmtrInfo.do",
-        {"request": p.CommuterInitialRequest(PASS_DATA)},
+        {"request": api.CommuterInitialRequest(PASS_DATA)},
         {"jobDvCd": "a", "cmtrKndCd": "TEST-KIND", "psgCnt": "0"},
         success(
             psgList=[
@@ -490,7 +490,7 @@ CASES = [
         "get_seat_assignment_schedule",
         "research.assignScheduleView.do",
         {
-            "request": p.SeatAssignmentScheduleRequest(
+            "request": api.SeatAssignmentScheduleRequest(
                 "TEST-MENU",
                 DATE,
                 "120000",
@@ -567,7 +567,7 @@ CASES = [
     case(
         "check_ticket_duplication",
         "ticket.ticketDupCheck.do",
-        {"request": p.TicketDuplicationCheckRequest("TEST-PNR")},
+        {"request": api.TicketDuplicationCheckRequest("TEST-PNR")},
         {"pnrNo": "TEST-PNR"},
         success(rsvCnt="0002"),
         (("reservation_count", "0002"),),
@@ -615,7 +615,7 @@ CASES = [
     case(
         "get_self_seat_change_info",
         "self.seatChgInfo.do",
-        {"request": p.SelfSeatChangeInfoRequest(DATE, "00999", "TEST-FROM", "TEST-TO", "1")},
+        {"request": api.SelfSeatChangeInfoRequest(DATE, "00999", "TEST-FROM", "TEST-TO", "1")},
         {"runDt": DATE, "trnNo": "00999", "dptRsStnCd": "TEST-FROM", "arvRsStnCd": "TEST-TO", "psrmClCd": "1"},
         success(
             trnNo="00999", chgStnList=[{"dptRsStnNm": "TEST-STATION"}], chgRsnList=[{"qryCode": "TEST-REASON"}]
@@ -642,7 +642,7 @@ CASES = [
     case(
         "get_ticket_reservation_detail",
         "certification.ReservationList",
-        {"request": p.TicketReservationDetailRequest("TEST-PNR")},
+        {"request": api.TicketReservationDetailRequest("TEST-PNR")},
         {"hidPnrNo": "TEST-PNR"},
         success(
             h_pnr_no="TEST-PNR",
@@ -667,7 +667,7 @@ CASES = [
     case(
         "get_refund_commission",
         "refunds.CommissionView",
-        {"ticket": REFERENCE, "companion": p.RefundCompanion("TEST-COMPANION", "TEST-CERTIFICATE")},
+        {"ticket": REFERENCE, "companion": api.RefundCompanion("TEST-COMPANION", "TEST-CERTIFICATE")},
         {
             "h_orgtk_ret_sale_dt": "0102",
             "h_orgtk_wct_no": "TEST-WINDOW",
@@ -798,7 +798,7 @@ BY_NAME = {c.method: c for c in CASES}
 @pytest.fixture(autouse=True)
 def fixed_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pin the timestamp sent by timestamp-bearing forms. conftest.f8_block_sockets blocks the network."""
-    monkeypatch.setattr(p.time, "time", lambda: STAMP / 1000)
+    monkeypatch.setattr(time, "time", lambda: STAMP / 1000)
 
 
 @pytest.fixture
@@ -849,7 +849,7 @@ def test_forms_follow_the_app_dto_order(name, expected, make_client) -> None:
     if name == "get_ticket_list":
         kwargs.update(boarding_date_from="20300101", boarding_date_to="20300131")
     else:
-        kwargs["companion"] = p.RefundCompanion("TEST-NAME", "TEST-CERT")
+        kwargs["companion"] = api.RefundCompanion("TEST-NAME", "TEST-CERT")
     getattr(client, name)(**kwargs)
     assert [key for key, _ in wire_pairs(calls[0])] == expected.split()
 
@@ -1206,7 +1206,7 @@ def test_optional_invalid_values_remain_raw(make_client) -> None:
         ),
         (
             BY_NAME["get_self_seat_change_info"],
-            {"request": p.SelfSeatChangeInfoRequest(DATE, "00999", "TEST-FROM", "TEST-TO")},
+            {"request": api.SelfSeatChangeInfoRequest(DATE, "00999", "TEST-FROM", "TEST-TO")},
             {"runDt": DATE, "trnNo": "00999", "dptRsStnCd": "TEST-FROM", "arvRsStnCd": "TEST-TO"},
         ),
         (
@@ -1269,7 +1269,7 @@ def test_reservation_detail_run_date_preserves_raw(value, expected, make_client)
     else:
         journey["h_run_dt"] = value
     client, _ = make_client(payload)
-    result = client.get_ticket_reservation_detail(p.TicketReservationDetailRequest("TEST-PNR"))
+    result = client.get_ticket_reservation_detail(api.TicketReservationDetailRequest("TEST-PNR"))
     assert result.journeys[0].run_date == expected
     assert result.journeys[0].raw == journey
 
@@ -1280,13 +1280,13 @@ def test_commuter_passengers_repeat_age_per_person(make_client) -> None:
     Intentional discrepancy: 2026-09-24 observation requires this primitive array
     key. Do not remove it just because the generic app flattener skips primitives.
     """
-    source = m.CommuterInfoResponse(
+    source = api.CommuterInfoResponse(
         passenger_options=(
-            m.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE-A"),
-            m.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE-B"),
+            api.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE-A"),
+            api.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE-B"),
         )
     )
-    request = p.CommuterPassengerRequest.from_response(PASS_DATA, source, (2, 1))
+    request = api.CommuterPassengerRequest.from_response(PASS_DATA, source, (2, 1))
     client, calls = make_client(BY_NAME["get_commuter_info"].response, lang=None)
     client.get_commuter_info(request)
     assert wire_pairs(calls[0]) == COMMON + [
@@ -1302,7 +1302,7 @@ def test_commuter_passengers_repeat_age_per_person(make_client) -> None:
 def test_commuter_original_ticket_stage(make_client) -> None:
     """CommutationInfoIn.java:64; SeatAssignViewModel.java:291: original-ticket query only."""
     client, calls = make_client(BY_NAME["get_commuter_info"].response, lang=None)
-    client.get_commuter_info(p.CommuterTicketInquiryRequest(REFERENCE, "1"))
+    client.get_commuter_info(api.CommuterTicketInquiryRequest(REFERENCE, "1"))
     assert wire_pairs(calls[0]) == COMMON + [
         ("jobDvCd", "c"),
         ("psgCnt", "0"),
@@ -1473,7 +1473,7 @@ def test_cart_nested_pay_details_stay_in_raw() -> None:
 @pytest.mark.parametrize("value", [True, 1.5, [], {}, "20300102", 20300102, None])
 def test_optional_delay_run_date_uses_optional_scalar_policy(value: object) -> None:
     """DelayCertificate.java:57-60 differs from the observed optional runDt; checks/BEHAVIOR.md governs it."""
-    from korail_mobile_api.read_parsers import parse_delay_certificate_response
+    from korail_mobile_api._domains.tickets.parsers import parse_delay_certificate_response
 
     row = {
         "runDay": "synthetic-day",

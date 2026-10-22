@@ -71,8 +71,7 @@ class World:
 def make_client(world: World, **config: Any) -> tuple[Any, list[float]]:
     import httpx
 
-    from korail_mobile_api import KorailClient, KorailConfig
-    from korail_mobile_api.models import KorailSession
+    from korail_mobile_api import KorailClient, KorailConfig, KorailSession
 
     client = KorailClient(KorailConfig(**config), transport=httpx.MockTransport(world.handler))
     client.session.current = KorailSession(jsessionid="SYNTHETIC-JSESSIONID", member_no="0000000000")

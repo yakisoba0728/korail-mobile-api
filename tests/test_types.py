@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import inspect
 import pickle
+import pkgutil
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 from pathlib import Path
@@ -13,23 +15,35 @@ from typing import get_type_hints
 import pytest
 
 import korail_mobile_api as api
-from korail_mobile_api import mutation_parsers, read_parsers, read_payloads
+from korail_mobile_api import TrainSummary, _domains
 from korail_mobile_api._core.session import infer_login_input_flag
-from korail_mobile_api.models import TrainSummary
-from korail_mobile_api.read_payloads import build_self_seat_change_info_form
+from korail_mobile_api._domains.payments.parsers import (
+    parse_refund_ticket_response,
+    parse_reservation_payment_response,
+)
+from korail_mobile_api._domains.reservations.parsers import parse_reservation_hold_response
+from korail_mobile_api._domains.tickets.forms import build_self_seat_change_info_form
+
+DOMAIN_MODULES = [
+    importlib.import_module(info.name)
+    for info in pkgutil.walk_packages(_domains.__path__, prefix=_domains.__name__ + ".")
+    if not info.ispkg
+]
 
 
-@pytest.mark.parametrize("module", [read_parsers, read_payloads])
-def test_split_parser_and_builder_import_contracts(module: ModuleType) -> None:
+@pytest.mark.parametrize("module", DOMAIN_MODULES, ids=lambda module: module.__name__.split("_domains.")[1])
+def test_domain_parser_and_builder_import_contracts(module: ModuleType) -> None:
+    """Functions keep the module they are defined in, so pickling by reference finds them again."""
+    own = 0
     for name, function in inspect.getmembers(module, inspect.isfunction):
         if not name.startswith(("parse_", "build_")) and name != "self_checkin_ticket_fields":
             continue
-        # This pre-existing alias intentionally points to the general payload module.
-        if name == "build_cache_query":
-            continue
-        assert function.__module__ == module.__name__, name
+        assert function.__module__.startswith(_domains.__name__ + "."), name
         assert pickle.loads(pickle.dumps(function)) is function, name
         assert "return" in get_type_hints(function), name
+        own += function.__module__ == module.__name__
+    if module.__name__.endswith((".forms", ".parsers")):
+        assert own, module.__name__
 
 
 def test_public_callable_signatures_are_concrete() -> None:
@@ -75,9 +89,9 @@ def test_public_raw_fields_expose_objects_not_any() -> None:
 @pytest.mark.parametrize(
     "parser",
     [
-        mutation_parsers.parse_reservation_hold_response,
-        mutation_parsers.parse_reservation_payment_response,
-        mutation_parsers.parse_refund_ticket_response,
+        parse_reservation_hold_response,
+        parse_reservation_payment_response,
+        parse_refund_ticket_response,
     ],
 )
 def test_mutation_responses_keep_shallow_raw_copies(parser) -> None:

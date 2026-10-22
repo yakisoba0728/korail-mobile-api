@@ -12,45 +12,45 @@ from urllib.parse import parse_qs, parse_qsl
 import httpx
 import pytest
 
+import korail_mobile_api._domains.payments.forms as payload_module
 import korail_mobile_api.client as client_module
-import korail_mobile_api.mutation_payloads as payload_module
-from korail_mobile_api import DynapathConfig
-from korail_mobile_api.client import KorailClient
-from korail_mobile_api.config import KorailConfig
-from korail_mobile_api.constants import KorailReservationJobType as Job
-from korail_mobile_api.constants import KorailSeatClass as Cabin
-from korail_mobile_api.errors import KorailApiError, KorailProtocolError, KorailSessionExpiredError
-from korail_mobile_api.facade import ReservationResource
-from korail_mobile_api.models import KorailSession, TrainSummary
-from korail_mobile_api.mutation_models import (
+from korail_mobile_api import (
     CardPayment,
     CartAddRequest,
     DiscountCardAdditionalUser,
     DiscountCardPurchaseRequest,
     DiscountCardSectionRequest,
     DiscountCardTicket,
+    DynapathConfig,
     KorailPassengerCounts,
     KorailSeatAssignment,
+    KorailSession,
+    OriginalTicketReference,
     PaidTicket,
-    PriceRecalculationRequest,
-    PriceRecalculationRow,
-    ReservationHoldResponse,
-    ReservationJourney,
-    StationRefundExecutionRequest,
-    StationRefundVerificationRequest,
-)
-from korail_mobile_api.mutation_parsers import parse_refund_ticket_response
-from korail_mobile_api.read_models import (
     PbpAcceptanceJourney,
     PbpAcceptanceTicket,
+    PriceRecalculationRequest,
+    PriceRecalculationRow,
     ProductDetailResponse,
     RefundCommissionResponse,
     RefundTicketDetailResponse,
     RefundTicketJourney,
+    ReservationHoldResponse,
+    ReservationJourney,
     SelfCheckInSeat,
+    StationRefundExecutionRequest,
+    StationRefundVerificationRequest,
     TrainScheduleItem,
+    TrainSummary,
 )
-from korail_mobile_api.read_payloads import OriginalTicketReference
+from korail_mobile_api._domains.payments.parsers import parse_refund_ticket_response
+from korail_mobile_api._domains.reservations.forms import build_transfer_reservation_form
+from korail_mobile_api.client import KorailClient
+from korail_mobile_api.config import KorailConfig
+from korail_mobile_api.constants import KorailReservationJobType as Job
+from korail_mobile_api.constants import KorailSeatClass as Cabin
+from korail_mobile_api.errors import KorailApiError, KorailProtocolError, KorailSessionExpiredError
+from korail_mobile_api.facade import ReservationResource
 
 COMMON = {
     "Device": "SYNTH-ANDROID",
@@ -1678,7 +1678,7 @@ def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order
     """TicketReservationIn.java:80 (two seat counts before the lists, trailing seats last);
     RefundTicketIn.write$Self (common fields first, then own identity and optional fields)."""
     config = KorailConfig(base_url="https://offline.invalid", lang=COMMON["lang"])
-    form = payload_module.build_transfer_reservation_form(
+    form = build_transfer_reservation_form(
         config,
         [train(), train(True)],
         job_type=Job.SEAT_DESIGNATED,
@@ -1854,7 +1854,7 @@ def test_merge_rows_with_the_same_run_date_are_accepted(mutation_client) -> None
 
 
 def test_mutation_parsers_read_integer_envelope_fields_as_strings() -> None:
-    from korail_mobile_api.mutation_parsers import parse_reservation_hold_response
+    from korail_mobile_api._domains.reservations.parsers import parse_reservation_hold_response
 
     raw = {**hold_raw(), "h_msg_cd": 0, "h_msg_txt": 7}
     result = parse_reservation_hold_response(raw)
@@ -2057,8 +2057,12 @@ def test_recalculation_from_hold_keeps_raw_on_oversized_integer(key: str) -> Non
     """ReservationOutSeatInfo.java:80–109 declares strings; conversion errors must preserve the hold."""
     import sys
 
-    from korail_mobile_api import KorailProtocolError, PriceRecalculationRequest, ReservationHoldResponse
-    from korail_mobile_api.mutation_models import ReservationJourney
+    from korail_mobile_api import (
+        KorailProtocolError,
+        PriceRecalculationRequest,
+        ReservationHoldResponse,
+        ReservationJourney,
+    )
 
     seat = {key: 10**700}
     journey_raw = {"seat_infos": {"seat_info": [seat]}}

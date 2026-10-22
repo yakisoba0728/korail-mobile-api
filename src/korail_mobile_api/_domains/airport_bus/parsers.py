@@ -2,31 +2,41 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""공항버스는 정확한 SUCC를 요구하며 null 목록의 허용은 라이브러리 정책입니다(TResidualSeatsResearchOut.java:79)."""
+"""공항버스·부가서비스 응답을 읽습니다. 공항버스는 정확한 SUCC를 요구하며 null 목록의 허용은 라이브러리 정책입니다(TResidualSeatsResearchOut.java:79)."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
 
-from ._core.parsing import (
+from ..._core.parsing import (
     _inventory_ratio,
+    _model_response_fields,
     _nullable_scalar_fields,
+    _optional_mapping,
     _optional_scalar_string,
     _preserve_read_raw,
+    _response_fields,
     _row,
+    _rows,
     _strict_scalar_string,
+    _validate_strict_read_envelope,
 )
-from ._core.parsing import _model_response_fields as _response_fields
-from .errors import KorailProtocolError
-from .limousine_models import (
+from ...errors import KorailProtocolError
+from ..common.models import BaseKorailResponse
+from ..trains.models import SeatWindow
+from .models import (
     LimousineSchedule,
     LimousineScheduleResponse,
     LimousineSeat,
     LimousineSeatInventoryResponse,
     LimousineStop,
+    MaasMenuItem,
+    MaasMenuListResponse,
+    MaasServiceDetail,
+    MaasServiceDetailInfo,
+    MaasServiceDetailListResponse,
 )
-from .models import BaseKorailResponse, SeatWindow
 
 
 def _required_list(
@@ -129,7 +139,7 @@ def parse_limousine_schedule_response(
             "limousine schedule",
         ),
         schedules=tuple(schedules),
-        **_response_fields(response),
+        **_model_response_fields(response),
     )
 
 
@@ -200,5 +210,159 @@ def parse_limousine_seat_inventory_response(
             "limousine seat inventory",
         ),
         seats=tuple(seats),
-        **_response_fields(response),
+        **_model_response_fields(response),
+    )
+
+
+_MAAS_ITEM_FIELDS: dict[str, str] = {
+    "active": "active",
+    "additional_service_code": "addSrvDvCd",
+    "app_data": "appData",
+    "icon_off": "iconOff",
+    "icon_on": "iconOn",
+    "info": "info",
+    "login_required": "login",
+    "name": "name",
+    "popup_image": "poppImg",
+    "menu_type": "type",
+    "url": "url",
+}
+
+_MAAS_RESPONSE_FIELDS: dict[str, str] = {
+    "departure_elevator_url": "dElevatorUrl",
+    "departure_navigation_url": "dLeadNaviUrl",
+    "departure_parking_url": "dParkingLotUrl",
+    "arrival_elevator_url": "aElevatorUrl",
+    "arrival_bus_info_url": "aBisInfoUrl",
+    "arrival_parking_url": "aParkingLotUrl",
+    "arrival_baggage_transfer_robot_url": "aBggTrsfRbtUrl",
+}
+
+
+@_preserve_read_raw
+def parse_maas_menu_list_response(
+    response: BaseKorailResponse,
+) -> MaasMenuListResponse:
+    items: list[MaasMenuItem] = [
+        MaasMenuItem(
+            **_nullable_scalar_fields(row, _MAAS_ITEM_FIELDS, context="train read"),
+            raw=dict(row),
+        )
+        for row in _rows(response.raw, "menuList")
+    ]
+    raw = response.raw
+    return MaasMenuListResponse(
+        h_msg_cd=response.h_msg_cd,
+        h_msg_txt=response.h_msg_txt,
+        str_result=response.str_result,
+        raw=raw,
+        items=tuple(items),
+        **_nullable_scalar_fields(raw, _MAAS_RESPONSE_FIELDS, context="train read"),
+    )
+
+
+_MAAS_DETAIL_FIELDS = {
+    "additional_service_division_code": "addSrvDvCd",
+    "additional_service_goods_code": "addSrvGdCd",
+    "additional_service_id": "addSrvId",
+    "marketing_entity_id": "addSrvMrkEntId",
+    "marketing_entity_name": "addSrvMrkEntNm",
+    "additional_service_name": "addSrvNm",
+    "progress_status_code": "addSrvPrgSttCd",
+    "request_no": "addSrvReqNo",
+    "passenger_reference_content": "cgPsRefAtclCont",
+    "partner_reservation_no": "coptEntRsvNo",
+    "delivery_close_time": "dlivPsbClsTm",
+    "delivery_start_time": "dlivPsbStTm",
+    "lead_message_1": "leadMsgCont1",
+    "lead_message_2": "leadMsgCont2",
+    "pnr_no": "pnrNo",
+    "request_date": "reqDt",
+    "request_quantity": "reqQnty",
+    "reservation_station_code_name": "rsStnCdNm",
+    "reservation_specification_url": "rsvSpecUrl",
+    "usage_close_date": "utlClsDt",
+    "usage_start_date": "utlStDt",
+}
+
+_MAAS_DETAIL_INFO_FIELDS = {
+    "additional_service_request_no": "addSrvReqNo",
+    "booking_time": "bookTime",
+    "branch_name": "branchName",
+    "partner_name": "coptEntName",
+    "delivery_datetime": "deliveryDtm",
+    "drop_times": "dropTimes",
+    "dropoff_name": "dropoffName",
+    "image": "image",
+    "name": "name",
+    "option_name": "optionName",
+    "pickup_name": "pickupName",
+    "pickup_place": "pickupPlace",
+    "pickup_times": "pickupTimes",
+    "reservation_date": "reserveDt",
+    "return_datetime": "returnDttm",
+    "start_datetime": "startDttm",
+    "cancel_deadline_date": "strCncDlnDt",
+    "cancel_return_amount": "strCncRetAmt",
+    "cancel_return_fee": "strCncRetFee",
+    "goods_sequence": "strGdSqno",
+    "intermediate_value": "strInt11",
+    "received_amount": "strRcvdAmt",
+    "reservation_status_name": "strRsvSttNm",
+    "reservation_passenger_name": "strRsvpsnm",
+    "settlement_deadline_date": "strStlDlnDt",
+    "settlement_deadline_datetime": "strStlDlnDttm",
+    "settlement_status_code": "strStlSttCd",
+    "settlement_status_name": "strStlSttNm",
+    "total_settlement_amount": "strTotStlAmt",
+    "usage_period_content": "strUtlTrmCont",
+}
+
+
+def _parse_add_srv_item(
+    item: Mapping[str, Any],
+    context: str,
+    info_context: str,
+) -> MaasServiceDetail:
+    """MaaS 상세와 승차권의 부가서비스를 같은 모델로 읽습니다 (AddSrvItem.java:28-49, MaasDetailOut.java:27,
+    MyTicketListOutReservation.java:39). @SerialName 이 없고 serializer 이름이 보호돼 있어 전송 키는 속성명에 따른 추정입니다."""
+    info_raw = _optional_mapping(item, "detailInfo")
+    detail_info = None
+    if info_raw is not None:
+        detail_info = MaasServiceDetailInfo(
+            **_nullable_scalar_fields(info_raw, _MAAS_DETAIL_INFO_FIELDS, info_context),
+            entity_one=tuple(_rows(info_raw, "entityOne")),
+            raw=info_raw,
+        )
+    return MaasServiceDetail(
+        **_nullable_scalar_fields(item, _MAAS_DETAIL_FIELDS, context),
+        detail_info=detail_info,
+        raw=item,
+    )
+
+
+def _optional_add_srv_item(
+    data: Mapping[str, Any],
+    key: str,
+    item_context: str,
+    info_context: str,
+) -> MaasServiceDetail | None:
+    """객체가 아니면 ``None``."""
+    item = _optional_mapping(data, key)
+    if item is None:
+        return None
+    return _parse_add_srv_item(item, item_context, info_context)
+
+
+@_preserve_read_raw
+def parse_maas_service_detail_list_response(
+    raw: Mapping[str, Any],
+) -> MaasServiceDetailListResponse:
+    _validate_strict_read_envelope(raw)
+    details = []
+    for item in _rows(raw, "addSrvList"):
+        details.append(_parse_add_srv_item(item, "MaaS service detail", "MaaS detail info"))
+    return MaasServiceDetailListResponse(
+        details=tuple(details),
+        **_response_fields(raw),
     )

@@ -16,6 +16,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from .._domains.common.models import BaseKorailResponse
 from ..config import KorailConfig
 from ..constants import DYNAPATH_REQUIRED_PATHS
 from ..errors import (
@@ -27,7 +28,6 @@ from ..errors import (
     KorailTransportError,
     classify_app_error,
 )
-from ..models import BaseKorailResponse
 from .dynapath import DynapathRequestContext, DynapathTokenGenerator
 from .parsing import _envelope
 from .wire import _device_version_key

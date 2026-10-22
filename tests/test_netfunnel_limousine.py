@@ -10,12 +10,29 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
+from korail_mobile_api import (
+    BaseKorailResponse,
+    KorailPassengerCounts,
+    LimousineSchedule,
+    LimousineScheduleQuery,
+    LimousineSeatInventoryQuery,
+    TrainSearchQuery,
+)
 from korail_mobile_api._core.netfunnel import (
     KORAIL_NETFUNNEL_GATES,
     KorailNetFunnelClient,
     KorailNetFunnelGate,
     korail_netfunnel_node_url,
     parse_netfunnel_body,
+)
+from korail_mobile_api._domains.airport_bus.forms import (
+    build_limousine_reservation_form,
+    build_limousine_schedule_form,
+    build_limousine_seat_inventory_form,
+)
+from korail_mobile_api._domains.airport_bus.parsers import (
+    parse_limousine_schedule_response,
+    parse_limousine_seat_inventory_response,
 )
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import (
@@ -26,22 +43,6 @@ from korail_mobile_api.errors import (
     KorailQueueRejectedError,
     KorailTransportError,
 )
-from korail_mobile_api.limousine_models import (
-    LimousineSchedule,
-    LimousineScheduleQuery,
-    LimousineSeatInventoryQuery,
-)
-from korail_mobile_api.limousine_parsers import (
-    parse_limousine_schedule_response,
-    parse_limousine_seat_inventory_response,
-)
-from korail_mobile_api.limousine_payloads import (
-    build_limousine_schedule_form,
-    build_limousine_seat_inventory_form,
-)
-from korail_mobile_api.models import BaseKorailResponse, TrainSearchQuery
-from korail_mobile_api.mutation_models import KorailPassengerCounts
-from korail_mobile_api.mutation_payloads import build_limousine_reservation_form
 
 
 @dataclass

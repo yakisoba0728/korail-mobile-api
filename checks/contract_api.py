@@ -100,10 +100,10 @@ def _partial_raw_errors() -> list[tuple[str, Callable[[], Exception]]]:
 
 
 def g9() -> None:
+    from korail_mobile_api import BaseKorailResponse
     from korail_mobile_api.client import KorailClient
     from korail_mobile_api.config import KorailConfig
     from korail_mobile_api.errors import KorailApiError, KorailProtocolError
-    from korail_mobile_api.models import BaseKorailResponse
 
     client = KorailClient(KorailConfig(), transport=_offline_transport())
 
@@ -173,10 +173,10 @@ def g9() -> None:
 def logout_state() -> None:
     import httpx
 
+    from korail_mobile_api import KorailSession
     from korail_mobile_api.client import KorailClient
     from korail_mobile_api.config import KorailConfig
     from korail_mobile_api.errors import KorailTransportError
-    from korail_mobile_api.models import KorailSession
 
     def logged_in(transport: Any) -> Any:
         client = KorailClient(KorailConfig(), transport=transport)

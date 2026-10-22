@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""공개하지 않는 소셜 로그인 호출을 기록합니다. 패키지 내부에서 가져오지 않으며 KorailClient에도 노출하지 않습니다.
+"""공개하지 않는 소셜 로그인 호출을 기록합니다. 배포 패키지에 들어가지 않는 테스트 기록이며 KorailClient에도 노출하지 않습니다.
 
 앱은 카카오·네이버·구글 SDK(com.kakao.sdk, com.navercorp.nid, GoogleLoginViewModel)로 인증한 뒤 custId를 login.Login에 보냅니다. 이
 라이브러리는 기기·앱 서명에 연결된 제공자 인증을 구현하지 않으며 checkValidPw도 보호돼 있습니다. 2026-09-24 기준 소셜 계정으로 실서버 검증 못 함이므로 지원하지 않습니다."""
@@ -11,11 +11,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .errors import KorailProtocolError
-from .models import KorailSession
+from korail_mobile_api._domains.common.models import KorailSession
+from korail_mobile_api.errors import KorailProtocolError
 
 if TYPE_CHECKING:
-    from ._core.session import KorailSessionClient
+    from korail_mobile_api._core.session import KorailSessionClient
 
 
 def login_social(

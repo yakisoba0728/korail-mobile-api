@@ -2,14 +2,14 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""정기권·N카드 조회 응답을 읽습니다."""
+"""정기권·패스·N카드·여행상품 응답을 읽습니다. 변경 응답 파싱 실패 시 전체 raw와 부분 parser_raw를 보존하며 재전송하지 않습니다."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
 
-from ._core.parsing import (
+from ..._core.parsing import (
     _nullable_scalar_fields,
     _optional_integer,
     _optional_mapping,
@@ -17,13 +17,17 @@ from ._core.parsing import (
     _preserve_read_raw,
     _response_fields,
     _rows,
+    _validate_envelope,
+    _validate_strict_read_envelope,
 )
-from ._read_parser_common import _validate_envelope, _validate_strict_read_envelope
-from .errors import KorailProtocolError
-from .read_models import (
+from ..._core.parsing import _response_fields as _base_fields
+from ...errors import KorailProtocolError
+from ..reservations.parsers import _response_mapping
+from .models import (
     CommuterInfoResponse,
     CommuterKindMenuResponse,
     CommuterPassengerOption,
+    DiscountCardPurchaseResponse,
     DiscountCardScheduleResponse,
     DiscountCardScheduleTrain,
     DiscountCardUsage,
@@ -44,6 +48,13 @@ from .read_models import (
     PassScheduleMainInfo,
     PassScheduleResponse,
     PassScheduleTrain,
+    ProductCancelResponse,
+    ProductDetailResponse,
+    ProductReservation,
+    ProductReservationListResponse,
+    TripMenuContent,
+    TripMenuItem,
+    TripMenuResponse,
 )
 
 _PASS_MENU_ITEM_FIELDS: dict[str, str] = {
@@ -519,4 +530,165 @@ def parse_commuter_info_response(
         ),
         passenger_options=tuple(passenger_options),
         **_response_fields(raw),
+    )
+
+
+_TRIP_MENU_CONTENT_FIELDS: dict[str, str] = {
+    "title": "contTitle",
+    "detail": "contDetail",
+    # detailType은 항목 종류로 해석하지 않습니다(TrGdMenuLtOutCont.java:42).
+    "detail_type": "detailType",
+    "active": "passActive",
+    "agree": "passAgree",
+    "info": "passInfo",
+    "image": "contImage",
+    "url": "contUrl",
+    # 앱은 cmtrKndCd로 항목을 찾아 passData가 없으면 화면을 되돌립니다(PassConditionViewModel.java:1241,1244,1247-1248).
+    # 실서버 관측: menuType='P'인 6/60행에서 확인했습니다.
+    "commuter_kind_code": "cmtrKndCd",
+    "pass_type": "passType",
+}
+
+_TRIP_MENU_ITEM_FIELDS: dict[str, str] = {
+    "title": "menuTitle",
+    "detail": "menuDetail",
+    "menu_type": "menuType",
+    "button": "menuBtn",
+    "url": "menuUrl",
+}
+
+_PRODUCT_RESERVATION_FIELDS: dict[str, str] = {
+    "product_name": "strGdNm",
+    "reservation_status": "strRsvSttNm",
+    "payment_deadline": "strStlDlnDt",
+    "payment_status": "strStlSttCd",
+    "virtual_reservation_no": "strVrRsvNo",
+    "reservation_sequence": "strVrRsvSqno",
+    "reservation_status_code": "strRsvSttCd",
+}
+
+_PRODUCT_DETAIL_FIELDS: dict[str, str] = {
+    "product_name": "strGdNm",
+    "reservation_status": "strRsvSttNm",
+    "cancellation_deadline": "strCncDlnDt",
+    "cancellation_amount": "strCncRetAmt",
+    "cancellation_fee": "strCncRetFee",
+    "received_amount": "strRcvdAmt",
+    "total_amount": "strTotStlAmt",
+    "usage_period": "strUtlTrmCont",
+    "virtual_reservation_no": "strVrRsvNo",
+    "goods_sequence": "strGdSqno",
+}
+
+
+@_preserve_read_raw
+def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
+    _validate_envelope(raw)
+    items = []
+    for item in _rows(raw, "menuList"):
+        contents = tuple(
+            TripMenuContent(
+                **_nullable_scalar_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
+                # TrGdMenuLtOutCont.java:45 passData → TrGdMenuLtOutPass.java:29-35.
+                pass_data=_parse_pass_menu_data(
+                    _optional_mapping(row, "passData"),
+                    # TrGdMenuLtOutPass.java:152 — 여행 메뉴의 키 철자는 별도입니다.
+                    station_selection_key="h_seiect_station",
+                ),
+                raw=row,
+            )
+            for row in _rows(item, "contList")
+        )
+        items.append(
+            TripMenuItem(
+                **_nullable_scalar_fields(item, _TRIP_MENU_ITEM_FIELDS),
+                content_count=_optional_integer(item, "contCount", "trip menu item"),
+                contents=contents,
+                raw=item,
+            )
+        )
+    return TripMenuResponse(
+        items=tuple(items),
+        popup_message=_optional_scalar_string(raw, "poppMsg"),
+        **_response_fields(raw),
+    )
+
+
+@_preserve_read_raw
+def parse_product_reservation_list_response(
+    raw: Mapping[str, Any],
+) -> ProductReservationListResponse:
+    _validate_envelope(raw, allow_result_only_success=True)
+    main = _optional_mapping(raw, "mainInfo")
+    if main is None:
+        return ProductReservationListResponse(**_response_fields(raw))
+    items = tuple(
+        ProductReservation(
+            **_nullable_scalar_fields(row, _PRODUCT_RESERVATION_FIELDS),
+            raw=row,
+        )
+        for row in _rows(main, "entity")
+    )
+    return ProductReservationListResponse(
+        items=items,
+        total_count=_optional_integer(main, "strTotCnt", "product reservation list"),
+        **_response_fields(raw),
+    )
+
+
+@_preserve_read_raw
+def parse_product_detail_response(
+    raw: Mapping[str, Any],
+) -> ProductDetailResponse:
+    _validate_envelope(raw)
+    main = _optional_mapping(raw, "mainInfo")
+    if main is None:
+        return ProductDetailResponse(**_response_fields(raw))
+    included_items = []
+    for item in _rows(main, "entityOne"):
+        name = _optional_scalar_string(item, "strGdConsItmNm")
+        if name is not None:
+            included_items.append(name)
+    return ProductDetailResponse(
+        **_nullable_scalar_fields(main, _PRODUCT_DETAIL_FIELDS),
+        included_item_names=tuple(included_items),
+        detail_raw=main,
+        **_response_fields(raw),
+    )
+
+
+_DISCOUNT_CARD_PURCHASE_FIELDS = {
+    "lump_settlement_target_no": "lumpStlTgtNo",
+    "received_amount": "rcvdAmt",
+    "usable_trip_count": "usePsbTno",
+    "validity_start_date": "vlidTrmStDt",
+    "validity_end_date": "vlidTrmClsDt",
+    "discount_card_settlement_target_no": "dcntCrdStlTgtNo",
+    "stx_amount": "stxAmt",
+    "taxt_supply_amount": "taxtSplAmt",
+    # NCardInfoOut.java:30 의 속성은 dcntCrdStlTgtNo 와 별개입니다. 전송 키는 @SerialName 없는 속성명에서 추정했으며 보호된 descriptor 로 직접
+    # 확인되지 않았습니다.
+    "registered_card_kind_management_no": "dcntCrdKndMgNo",
+}
+
+
+@_preserve_read_raw
+def parse_discount_card_purchase_response(
+    raw: Mapping[str, Any],
+) -> DiscountCardPurchaseResponse:
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. NCardInfoOut.java:30-38 의 자체 속성 9개를 읽습니다. serializer 이름이 보호돼
+    Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 실서버 검증 못 함입니다."""
+    data = _response_mapping(raw)
+    return DiscountCardPurchaseResponse(
+        **_base_fields(data),
+        **_nullable_scalar_fields(data, _DISCOUNT_CARD_PURCHASE_FIELDS, "discount card purchase"),
+    )
+
+
+@_preserve_read_raw
+def parse_product_cancel_response(raw: Mapping[str, Any]) -> ProductCancelResponse:
+    data = _response_mapping(raw)
+    return ProductCancelResponse(
+        **_base_fields(data),
+        integrated_message_code=_optional_scalar_string(data, "intgMsgCd", "product cancel"),
     )

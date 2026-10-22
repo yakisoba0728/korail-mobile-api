@@ -2,20 +2,25 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""보호된 기본값은 추측하지 않으며 순서·빈 값 처리의 근거는 각 빌더에 남깁니다."""
+"""열차 조회·좌석 입력과 폼입니다. 보호된 기본값은 추측하지 않으며 순서·빈 값 처리의 근거는 각 빌더에 남깁니다.
 
-import time
+조회 폼도 DTO 선언 순서를 따르며 보호된 입력 코드는 서버 메타데이터 또는 명시값을 사용합니다."""
+
+from __future__ import annotations
+
 from collections.abc import Sequence
+from dataclasses import dataclass
 
-from ._core.wire import _device_version, _device_version_key, _is_ascii_digits
-from .config import KorailConfig
-from .constants import (
+from ..._core.validation import _passenger_count, _required_text, _wire_component
+from ..._core.wire import _device_version, _device_version_key, _is_ascii_digits
+from ...config import KorailConfig
+from ...constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_MAX_PASSENGERS_PER_RESERVATION,
     KORAIL_TRANSFER_ITINERARY_CODE,
     KorailRoomClassCode,
 )
-from .errors import KorailProtocolError
+from ...errors import KorailProtocolError
 from .models import TrainSearchContinuation, TrainSearchQuery, TrainSummary
 
 
@@ -150,12 +155,6 @@ def build_seat_inventory_form(
         "isArrow": "false",
         "ctlDvCd": "",
     }
-
-
-def build_cache_query(timestamp_ms: int | None = None) -> dict[str, str]:
-    """캐시 요청에 현재 시각의 쿼리를 구성합니다. timestamp_ms 를 생략하면 현재 밀리초 epoch 이며, 제공한 값은 검증하지 않습니다."""
-    resolved = int(time.time() * 1000) if timestamp_ms is None else timestamp_ms
-    return {"timeStamp": str(resolved)}
 
 
 def validate_train_search_query(query: TrainSearchQuery) -> None:
@@ -303,77 +302,235 @@ def build_train_schedule_form(
     }
 
 
-def build_common_code_form(
-    config: KorailConfig,
-    code: str | Sequence[str],
-) -> dict[str, object]:
-    """라우트 선언: NetworkApi.java:317,321. 기기 크기·SDK 정수는 설정을 사용합니다 (CommonCodeIn.java:31-34,55)."""
-    form: dict[str, object] = {
-        **_device_version_key(config),
-        "code": [code] if isinstance(code, str) else list(code),
-        "deviceWidth": config.device_width,
-        "deviceHeight": config.device_height,
+@dataclass(frozen=True)
+class FreeSeatCarRequest:
+    """열차 한 편의 자유석 호차 조회 조건을 구성합니다."""
+
+    run_date: str
+    train_no: str
+    departure_construction_order: str
+    arrival_construction_order: str
+    departure_run_order: str
+    arrival_run_order: str
+
+
+@dataclass(frozen=True)
+class GuideSeatConditionRequest:
+    """도우미석 이용 안내 조회 조건을 구성합니다.
+
+    ``seat_attribute_code``에는 안내를 받을 좌석 속성 코드를 넣습니다. 앱이 도우미석에 쓰는 좌석 속성 코드는 앱 내부 값이
+    공개돼 있지 않아 확인하지 못했습니다."""
+
+    # 앱은 SeatType.HELPER 코드를 사용합니다(TrainOptionViewModel.java:270). 이 표본만으로 모든 입력·시점의 응답이 같다고
+    # 보장하지 않습니다.
+
+    seat_attribute_code: str
+
+
+@dataclass(frozen=True)
+class SeatAssignmentScheduleRequest:
+    """좌석배정 화면의 열차 조회 조건을 구성합니다."""
+
+    menu_id: str
+    departure_date: str
+    departure_time: str
+    departure_station_name: str
+    arrival_station_name: str
+    train_group_code: str
+    room_class_code: str
+    seat_attribute_code: str
+    passenger_count: int
+    standing_detour_division_name: str
+    transfer_type_code: str
+    connection_arrival_station_name: str
+
+    def __post_init__(self) -> None:
+        _passenger_count(self.passenger_count, "passenger_count")
+
+
+@dataclass(frozen=True)
+class MergeSeatsInquiryRequest:
+    """병합 가능한 좌석과 중간역 조회 조건을 구성합니다."""
+
+    boarding_datetime: str
+    run_datetime: str
+    train_no: str
+    departure_station_name: str
+    arrival_station_name: str
+    selected_station_name: str | None
+    room_class_code: str
+    seat_attribute_code: str
+    passenger_count: int
+
+    def __post_init__(self) -> None:
+        _passenger_count(self.passenger_count, "passenger_count")
+
+
+def build_free_seat_car_form(
+    request: FreeSeatCarRequest,
+) -> dict[str, str]:
+    return {
+        "runDt": request.run_date,
+        "trnNo": request.train_no.zfill(5),
+        "dptStnConsOrdr": request.departure_construction_order,
+        "arvStnConsOrdr": request.arrival_construction_order,
+        "dptStnRunOrdr": request.departure_run_order,
+        "arvStnRunOrdr": request.arrival_run_order,
     }
-    form["OSVersion"] = config.android_sdk_int
+
+
+def build_guide_seat_condition_form(
+    request: GuideSeatConditionRequest,
+) -> dict[str, str]:
+    return {"rqSeatAttCd": request.seat_attribute_code}
+
+
+def build_seat_assignment_schedule_form(
+    request: SeatAssignmentScheduleRequest,
+) -> dict[str, str]:
+    form = {
+        "menuId": request.menu_id,
+        "dptDt": request.departure_date,
+        "dptTm": request.departure_time,
+        "dptRsStnNm": request.departure_station_name,
+        "arvRsStnNm": request.arrival_station_name,
+        "trnGpCd": request.train_group_code,
+        "psrmClCd": request.room_class_code,
+        "dirtChtnDvCd": request.transfer_type_code,
+        "chtnArvRsStnNm": request.connection_arrival_station_name,
+    }
+    # 7.0.10 앱 DTO에서 확인한 번호 그룹은 한 묶음입니다. *2 이상은 기존 SDK 확장으로 유지하며,
+    # 앱 DTO와 동등하다고 보지 않습니다. SDK는 각 그룹의 psgNumN을 "1"로 보냅니다.
+    for slot in range(1, request.passenger_count + 1):
+        form[f"seatAttCd{slot}"] = request.seat_attribute_code
+        form[f"psgNum{slot}"] = "1"
+        form[f"stlbDturDvNm{slot}"] = request.standing_detour_division_name
     return form
 
 
-TICKET_LIST_MODE_ACTIVE = "1"
-
-
-def build_ticket_list_form(
-    config: KorailConfig,
-    page_no: int,
-    *,
-    mode: str = TICKET_LIST_MODE_ACTIVE,
-    boarding_date_from: str = "",
-    boarding_date_to: str = "",
+def build_merge_seats_inquiry_form(
+    request: MergeSeatsInquiryRequest,
 ) -> dict[str, str]:
-    """목록 종류·날짜·쪽번호를 보정하지 않으며 mode 의미는 관측값입니다(MyTicketListIn.java:62; 호출 리터럴 보호됨)."""
-    if not isinstance(mode, str) or not mode:
-        raise KorailProtocolError("ticket list mode must be a non-empty string")
-    if type(page_no) is not int:
-        raise KorailProtocolError("page_no must be an integer")
-    # 키 순서는 MyTicketListIn 합성 생성자(MyTicketListIn.java:62)의 선언 순서입니다.
-    return {
-        "txtIndex": mode,
-        "h_abrd_dt_from": boarding_date_from,
-        "h_abrd_dt_to": boarding_date_to,
-        "txtDeviceId": config.advertising_id,
-        "hiduserYn": "Y",
-        "h_page_no": str(page_no),
+    # 키 순서는 MergeSeatsCIn 합성 생성자(MergeSeatsCIn.java:63)의 선언 순서입니다.
+    form = {
+        "abrdDt": request.boarding_datetime,
+        "runDt": request.run_datetime,
+        "trnNo": request.train_no.zfill(5),
+        "dptRsStnNm": request.departure_station_name,
+        "arvRsStnNm": request.arrival_station_name,
     }
+    if request.selected_station_name is not None:
+        form["selRsStnNm"] = request.selected_station_name
+    form["psrmClCd"] = request.room_class_code
+    form["seatAttCd"] = request.seat_attribute_code
+    form["totPsgNum"] = str(request.passenger_count)
+    return form
 
 
-def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
-    """앱 DTO 는 CommonIn 기본 생성자를 사용합니다(GdMenuLtIn.java:59-61). 공통 필드 인코딩: CommonIn.java:448-465."""
-    return {
-        **_device_version_key(config),
-        "timeStamp": str(int(time.time() * 1000)),
-    }
+@dataclass(frozen=True)
+class PriceFareLeg:
+    """예매 전 운임을 조회할 열차 한 구간을 구성합니다.
+
+    ``goods_no``가 ``None``이면 앱처럼 상품 번호(``gdNo``) 칸을 빈 문자열로 보냅니다. ``None``이 아닌 값은 모두 비어 있지
+    않은 문자열이어야 하고 쉼표를 포함할 수 없으며, 아니면 ``KorailProtocolError``가 발생합니다."""
+
+    # 앱의 일반 열차 생성자는 기본값 마스크 64 로 gdNo 기본값을 쓰며(TrainOpInfoViewModel.java:794) 그 값은 길이 0 암호문,
+    # 곧 빈 문자열입니다(PrcFareInItem.java:109).
+
+    departure_station_code: str
+    arrival_station_code: str
+    run_date: str
+    train_no: str
+    requested_seat_attribute_code: str
+    train_group_code: str
+    train_class_code: str
+    goods_no: str | None = None
+
+    def __post_init__(self) -> None:
+        for value, name in (
+            (self.departure_station_code, "departure_station_code"),
+            (self.arrival_station_code, "arrival_station_code"),
+            (self.run_date, "run_date"),
+            (self.train_no, "train_no"),
+            (self.requested_seat_attribute_code, "requested_seat_attribute_code"),
+            (self.train_group_code, "train_group_code"),
+            (self.train_class_code, "train_class_code"),
+        ):
+            _wire_component(value, name)
+        if self.goods_no is not None:
+            _wire_component(self.goods_no, "goods_no")
+
+    @classmethod
+    def from_train(cls, train: TrainSummary) -> PriceFareLeg:
+        """조회한 열차의 운행일·역·좌석 속성을 복사합니다. 누락값은 추측하지 않고 거절합니다."""
+        if not isinstance(train, TrainSummary):
+            raise KorailProtocolError("train must be a TrainSummary")
+        return cls(
+            departure_station_code=_required_text(train.departure_station_code, "departure_station_code"),
+            arrival_station_code=_required_text(train.arrival_station_code, "arrival_station_code"),
+            run_date=_required_text(train.run_date, "run_date"),
+            train_no=train.train_no,
+            requested_seat_attribute_code=_required_text(train.seat_attribute_code, "seat_attribute_code"),
+            train_group_code=_required_text(train.train_group_code, "train_group_code"),
+            train_class_code=_required_text(train.train_class_code, "train_class_code"),
+            goods_no=None if train.goods_no == "" else train.goods_no,
+        )
 
 
-def _build_ticket_maas_menu_form(
-    pnr_no: str | None,
-    ticket_return_numbers: Sequence[str] | None,
-) -> list[tuple[str, str]]:
-    if not isinstance(pnr_no, str) or not pnr_no.strip():
-        raise KorailProtocolError("KORAIL ticket MaaS menu requires a PNR")
-    if (
-        ticket_return_numbers is None
-        or isinstance(ticket_return_numbers, (str, bytes))
-        or not ticket_return_numbers
-        or any(not isinstance(number, str) or not number.strip() for number in ticket_return_numbers)
-    ):
-        raise KorailProtocolError("KORAIL ticket MaaS menu requires at least one return number")
-    return [
-        ("pnrNo", pnr_no),
-        *(("tkRetNo", number) for number in ticket_return_numbers),
+@dataclass(frozen=True)
+class PriceFareQuoteRequest:
+    """한두 구간의 운임 조회 조건과 메뉴를 구성합니다.
+
+    ``legs``는 ``PriceFareLeg`` 한 개 또는 두 개여야 하며, 아니면 ``KorailProtocolError``가 발생합니다. ``goods_no``는 모든
+    구간에 넣거나 모두 비워 두세요. 앱이 보내는 메뉴 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다."""
+
+    # DTO: PrcFareIn.java:28-31,197. 생성자 TrainOpInfoViewModel.java:794 의 메뉴 리터럴은 보호됨.
+
+    legs: tuple[PriceFareLeg, ...]
+    menu_id: str = "11"
+
+    def __post_init__(self) -> None:
+        _wire_component(self.menu_id, "menu_id")
+        # 목록 타입은 가리지 않고 tuple 로 고정합니다.
+        if isinstance(self.legs, (str, bytes)) or not isinstance(self.legs, Sequence):
+            raise KorailProtocolError("legs must be a sequence of one or two legs")
+        object.__setattr__(self, "legs", tuple(self.legs))
+        if len(self.legs) not in {1, 2}:
+            raise KorailProtocolError("legs must contain one or two legs")
+        for leg in self.legs:
+            if not isinstance(leg, PriceFareLeg):
+                raise KorailProtocolError("legs must contain PriceFareLeg values")
+
+
+def build_price_fare_quote_form(
+    request: PriceFareQuoteRequest,
+) -> tuple[tuple[str, str], ...]:
+    if not isinstance(request, PriceFareQuoteRequest):
+        raise KorailProtocolError("request must be a PriceFareQuoteRequest")
+    columns = [
+        ("dptRsStnCd", "departure_station_code"),
+        ("arvRsStnCd", "arrival_station_code"),
+        ("runDt", "run_date"),
+        ("trnNo", "train_no"),
+        ("gdNo", "goods_no"),
+        ("rqSeatAttCd", "requested_seat_attribute_code"),
+        ("trnGpCd", "train_group_code"),
+        ("stlbTrnClsfCd", "train_class_code"),
     ]
-
-
-def build_maas_station_form(additional_service_code: str) -> dict[str, str]:
-    """부가서비스 코드(``addSrvDvCd``) 하나뿐이고 공통 필드도 붙지 않습니다."""
-    if not isinstance(additional_service_code, str) or not additional_service_code.strip():
-        raise KorailProtocolError("additional_service_code must be a non-empty string")
-    return {"addSrvDvCd": additional_service_code}
+    # 앱은 여덟 칸을 모두 같은 구분자로 이어 보내며 gdNo 도 빠지지 않습니다(NetworkService.java:9838-9905). 앱의 일반 열차 입력은 gdNo 가 null
+    # 이라(TrainOpInfoViewModel.java:794) 기본값인 빈 문자열(PrcFareInItem.java:109, 길이 0 암호문)이 들어갑니다.
+    supplied = [leg.goods_no is not None for leg in request.legs]
+    if any(supplied) and not all(supplied):
+        raise KorailProtocolError("goods_no must be set on every leg or on none of them")
+    return (
+        ("txtMenuId", request.menu_id),
+        ("chtnDvCd", str(len(request.legs))),
+        ("trnCnt", str(len(request.legs))),
+        *(
+            (
+                wire_name,
+                ",".join(getattr(leg, attribute) or "" for leg in request.legs),
+            )
+            for wire_name, attribute in columns
+        ),
+    )

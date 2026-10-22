@@ -20,10 +20,10 @@ from korail_mobile_api._core.http import KorailHttpClient, parse_base_response
 from korail_mobile_api._core.netfunnel import KorailNetFunnelClient
 from korail_mobile_api._core.session import infer_login_input_flag
 from korail_mobile_api._core.wire import _device_version_key
+from korail_mobile_api._domains.common.models import LoginCryptoInfo
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS, KORAIL_COMMON_CODE_BOOTSTRAP_CODES
-from korail_mobile_api.models import LoginCryptoInfo
 
 LOGIN = "/classes/com.korail.mobile.login.Login"
 LOGOUT = "/classes/com.korail.mobile.login.Logout"
@@ -368,7 +368,7 @@ def test_success_code_does_not_override_success_envelope(code):
 
 def test_read_envelope_does_not_fail_success_with_wrc000288():
     """CommonOut.java:426-463: the typed-read envelope follows the same failure gate as transport."""
-    from korail_mobile_api.read_parsers import _validate_envelope
+    from korail_mobile_api._core.parsing import _validate_envelope
 
     assert _validate_envelope(envelope("WRC000288")) is False
     with pytest.raises(E.KorailApiError):
@@ -961,11 +961,10 @@ def test_reservation_switch_late_and_exist_are_not_sold_out(code):
     ],
 )
 def test_record_modules_have_no_inbound_import_or_public_method(record_module, methods):
-    """Source imports, including TYPE_CHECKING imports, must not expose record-only calls."""
+    """The records live in tests/records; no package source (TYPE_CHECKING included) may import them."""
     root = Path(package.__file__).parent
-    for path in root.glob("*.py"):
-        if record_module == "_maas_unsupported" and path.stem == record_module:
-            continue
+    assert not any(root.rglob(record_module + ".py"))
+    for path in root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -1059,7 +1058,7 @@ def test_oversized_envelope_integer_is_protocol_error_with_raw(key: str, entrypo
 
     from korail_mobile_api import BaseKorailResponse, KorailProtocolError
     from korail_mobile_api._core.http import parse_base_response
-    from korail_mobile_api.read_parsers import parse_delay_return_receipt_response
+    from korail_mobile_api._domains.tickets.parsers import parse_delay_return_receipt_response
 
     parsers = {
         "http": parse_base_response,

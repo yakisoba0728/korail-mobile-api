@@ -10,6 +10,8 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Literal
 
+from .._domains.common.forms import build_common_code_form
+from .._domains.common.models import BaseKorailResponse, KorailSession, LoginCryptoInfo
 from ..constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES, KorailLoginInputFlag
 from ..errors import (
     ACCOUNT_LOCKED_CODES,
@@ -22,8 +24,6 @@ from ..errors import (
     KorailServiceUnavailableError,
     classify_app_error,
 )
-from ..models import BaseKorailResponse, KorailSession, LoginCryptoInfo
-from ..payloads import build_common_code_form
 from .crypto import transform_login_password
 from .http import KorailHttpClient
 from .parsing import _optional_scalar_string

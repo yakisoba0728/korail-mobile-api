@@ -2,15 +2,18 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""raw는 원문 객체이며 frozen 모델도 내부 값을 동결·마스킹하지 않습니다; 개인정보를 로그에 남기지 마십시오."""
+"""열차 조회·좌석 모델입니다. raw는 원문 객체이며 frozen 모델도 내부 값을 동결·마스킹하지 않습니다; 개인정보를 로그에 남기지 마십시오. 선택 스칼라의 부재는 None입니다."""
+
+from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Self
 
-from .constants import KORAIL_STANDBY_WAIT_FLAG
-from .errors import KorailProtocolError, resolve_error_message
+from ...constants import KORAIL_STANDBY_WAIT_FLAG
+from ...errors import KorailProtocolError
+from ..common.models import BaseKorailResponse
 
 
 def _train_datetime(date: str | None, time: str | None) -> datetime | None:
@@ -23,213 +26,6 @@ def _train_datetime(date: str | None, time: str | None) -> datetime | None:
         return datetime.strptime(value, "%Y%m%d%H%M%S")
     except ValueError:
         return None
-
-
-@dataclass(frozen=True)
-class KorailSession:
-    """로그인 쿠키와 계정 식별자를 보관합니다.
-
-    고객번호(``customer_no``)와 회원번호(``member_no``)는 서로 다른 값입니다. ``raw``와 ``repr()``은 개인정보를 가리지
-    않으므로 로그에 남기지 마세요."""
-
-    jsessionid: str | None = None
-    member_no: str | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
-    member_card_no: str | None = None
-    customer_no: str | None = None
-
-
-@dataclass(frozen=True)
-class BaseKorailResponse:
-    """응답의 공통 상태·메시지와 원본을 담습니다.
-
-    ``str_result``, ``h_msg_cd``, ``h_msg_txt``는 모든 응답에 공통인 봉투 필드이며, ``raw``에는 서버가 보낸 응답이 그대로
-    남습니다."""
-
-    # from_raw는 봉투 타입만 검사하며, 성공·실패 판정은 http.parse_base_response가 맡습니다.
-
-    h_msg_cd: str | None = None
-    h_msg_txt: str | None = None
-    str_result: str | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
-
-    @property
-    def display_message(self) -> str | None:
-        """읽을 서버 메시지 또는 앱 사전의 한국어 안내입니다. 성공·실패와 원문 필드는 바꾸지 않습니다."""
-        return resolve_error_message(self.h_msg_cd, self.h_msg_txt)
-
-    @classmethod
-    def from_raw(cls, raw: object) -> Self:
-        """봉투 세 필드를 그대로 옮겨 담아 응답을 만듭니다.
-
-        성공·실패는 판정하지 않습니다. ``raw``가 JSON 객체가 아니거나 봉투 필드가 문자열·정수·``null``이 아니면
-        ``KorailProtocolError``가 발생합니다."""
-        from ._core.parsing import _envelope
-
-        if not isinstance(raw, dict):
-            error = KorailProtocolError("KORAIL response must be a JSON object")
-            error.raw = raw
-            raise error
-        envelope = _envelope(raw)
-        return cls(
-            h_msg_cd=envelope["h_msg_cd"],
-            h_msg_txt=envelope["h_msg_txt"],
-            str_result=envelope["strResult"],
-            raw=raw,
-        )
-
-
-@dataclass(frozen=True)
-class AppVersionInfo:
-    """앱 버전과 업데이트 안내 주소를 담습니다."""
-
-    message: str | None = None
-    new_version: str | None = None
-    # 근거: MobilePlusMainVersion.java:52; AppKt.java:1240,1323,1635.
-    #: 앱 업데이트 안내 주소(``CNTAURL``)입니다.
-    store_url: str | None = None
-
-
-@dataclass(frozen=True)
-class AppDataResponse(BaseKorailResponse):
-    """앱 메인 캐시의 버전·공지 정보를 담습니다."""
-
-    disability_certification_msg: str | None = None
-    railplus_cardinfo: str | None = None
-    version: AppVersionInfo | None = None
-    notice: "NoticeResponse | None" = None
-
-
-@dataclass(frozen=True)
-class NoticeResponse(BaseKorailResponse):
-    """앱 메인 화면의 공지를 담습니다."""
-
-    board_id: str | None = None
-    post_sequence: str | None = None
-    post_title: str | None = None
-    post_content: str | None = None
-
-
-@dataclass(frozen=True)
-class UuidResponse(BaseKorailResponse):
-    """서버가 발급한 단말 검증값을 담습니다."""
-
-    verification_code: str | None = None
-
-
-@dataclass(frozen=True)
-class MaasMenuItem:
-    """부가서비스 메뉴 한 항목과 역 선택 조건을 담습니다."""
-
-    active: str | None = None
-    additional_service_code: str | None = None
-    app_data: str | None = None
-    icon_off: str | None = None
-    icon_on: str | None = None
-    info: str | None = None
-    login_required: str | None = None
-    name: str | None = None
-    popup_image: str | None = None
-    menu_type: str | None = None
-    url: str | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
-
-    @property
-    def uses_station_selection(self) -> bool:
-        """메뉴가 역 선택을 사용하는지 판정합니다.
-
-        ``active``가 ``"Y"``이고, ``menu_type``이 ``"N"``이 아니고, ``app_data``가 비어 있지 않으면서 ``"N"``도 아니고,
-        ``additional_service_code``가 있을 때 ``True``입니다."""
-        return (
-            self.active == "Y"
-            and self.menu_type != "N"
-            # appData='N'만 역 선택에서 제외합니다. 실서버 관측: 'C'(604)는 역 15개, 'N'(001)은 0개, 'Y'·'M30'은 25~111개였으므로 Y·M10·M30만 허용하는
-            # 방식으로 제한하지 않습니다.
-            and self.app_data not in (None, "", "N")
-            and isinstance(self.additional_service_code, str)
-            and bool(self.additional_service_code.strip())
-        )
-
-
-@dataclass(frozen=True)
-class MaasMenuListResponse(BaseKorailResponse):
-    """부가서비스 메뉴 목록을 담습니다."""
-
-    items: tuple[MaasMenuItem, ...] = ()
-    departure_elevator_url: str | None = None
-    departure_navigation_url: str | None = None
-    departure_parking_url: str | None = None
-    arrival_elevator_url: str | None = None
-    arrival_bus_info_url: str | None = None
-    arrival_parking_url: str | None = None
-    arrival_baggage_transfer_robot_url: str | None = None
-
-
-@dataclass(frozen=True)
-class KorailStation:
-    """역 코드·이름과 역별 안내 정보를 담습니다."""
-
-    code: str
-    name: str
-    longitude: str | None = None
-    latitude: str | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
-    group: str | None = None
-    major: str | None = None
-    # popupType 은 String 선언이므로 문자열로 유지합니다(StationDataOutStnItem.java:60).
-    #: 역 안내 팝업의 종류(``popupType``)입니다. 서버가 정수로 보내도 문자열로 담습니다.
-    popup_type: str | None = None
-    popup_message: str | None = None
-    popup_link_title: str | None = None
-    popup_link_url: str | None = None
-    area: str | None = None
-    stop: str | None = None
-
-
-@dataclass(frozen=True)
-class StationDataResponse(BaseKorailResponse):
-    """전체 역 목록을 담습니다."""
-
-    stations: tuple[KorailStation, ...] = ()
-
-
-@dataclass(frozen=True)
-class StationInfoResponse(BaseKorailResponse):
-    """역 데이터의 판본과 역 수를 담습니다."""
-
-    # count 는 String 선언이므로 정수로 바꾸지 않습니다(StationInfoOut.java:47).
-    #: 역 수입니다. 정수로 바꾸지 않고 문자열로 담습니다.
-    count: str = ""
-    map_version: str | None = None
-
-
-@dataclass(frozen=True)
-class TrainCalendarDay:
-    """열차 운행일 한 날짜와 예매 조건을 담습니다."""
-
-    run_date: str | None = None
-    business_day_stage_code: str | None = None
-    day_division_code: str | None = None
-    holiday_division_code: str | None = None
-    sale_day_division_code: str | None = None
-    a_train_operation_flag: str | None = None
-    d_train_operation_flag: str | None = None
-    g_train_operation_flag: str | None = None
-    o_train_operation_flag: str | None = None
-    s_train_operation_flag: str | None = None
-    v_train_operation_flag: str | None = None
-    x_train_operation_flag: str | None = None
-    raw: Mapping[str, object] = field(
-        default_factory=dict[str, object],
-        compare=False,
-    )
-
-
-@dataclass(frozen=True)
-class TrainCalendarResponse(BaseKorailResponse):
-    """예매 가능한 운행일 달력을 담습니다."""
-
-    days: tuple[TrainCalendarDay, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -308,13 +104,6 @@ class TransferStationListResponse(BaseKorailResponse):
     """환승 가능한 역 목록을 담습니다."""
 
     stations: tuple[TransferStation, ...] = ()
-
-
-@dataclass(frozen=True)
-class LoginCryptoInfo:
-    idx: str = ""
-    key: str = ""
-    pwd_aes_cphd: str = "N"
 
 
 @dataclass(frozen=True)
@@ -605,23 +394,6 @@ class TrainSummary:
             goods_no=(_train_value(raw, "h_gd_no", None) or _train_value(raw, "txtGdNo", None)),
             raw=raw,
         )
-
-
-@dataclass(frozen=True)
-class ReservationPassengerInfo:
-    """예약 응답의 승객 유형별 인원과 할인 정보를 담습니다."""
-
-    passenger_type_code: str | None = None
-    passenger_count: str | None = None
-    discount_kind_code: str | None = None
-    discount_kind_code_2: str | None = None
-    discount_proof_no: str | None = None
-    discount_proof_no_2: str | None = None
-    delay_original_window_no: str | None = None
-    delay_original_sale_date: str | None = None
-    delay_original_sale_sequence: str | None = None
-    delay_original_return_password: str | None = None
-    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -923,3 +695,169 @@ class TransferSearchResult:
             query_train_no=preceding if transfer_cursor else metadata.next_train_no or "",
             query_train_no2=connecting if transfer_cursor else "",
         )
+
+
+@dataclass(frozen=True)
+class FreeSeatCarResponse(BaseKorailResponse):
+    """열차의 자유석 호차와 안내 문구를 담습니다."""
+
+    title: str | None = None
+    #: 자유석 호차 번호(``fresScarNo``)입니다. 자유석이 없는 열차는 ``None``입니다.
+    car_no: str | None = None
+    content: str | None = None
+
+
+@dataclass(frozen=True)
+class GuideSeatConditionResponse(BaseKorailResponse):
+    """도우미석 이용 조건과 서버 안내를 담습니다.
+
+    실패 응답도 예외를 발생시키지 않고 돌려줍니다(세션 만료는 제외). 안내 문구는 ``h_msg_txt``에 있습니다. ``time_stamp``는 추정한
+    응답 키(``timeStamp``)로 읽으며, 실제 키 이름은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다."""
+
+    # 앱은 실패 응답의 h_msg_txt를 안내합니다. timeStamp는 long 선언이며(GuideSeatCndOut.java:29,50), 보호된 전송 키는 속성명에
+    # 따른 추정입니다.
+    time_stamp: int | None = None
+
+
+@dataclass(frozen=True)
+class TrainScheduleItem:
+    """좌석배정·병합 조회에 사용하는 열차 정보를 담습니다.
+
+    ``get_seat_assignment_schedule``과 ``get_merge_seats_inquiry``는 응답 모양이 달라 채우는 필드가 다릅니다. 한쪽 응답에 없는
+    필드는 ``None``입니다."""
+
+    # 각 DTO 는 다르므로 read_parsers 의 라우트별 필드 맵으로 채웁니다. 한쪽에 없는 필드는 None 이며 맵을 하나로 합치면 안 됩니다.
+    train_no: str | None = None
+    train_no_qb: str | None = None
+    train_sequence: str | None = None
+    train_group_code: str | None = None
+    train_class_code: str | None = None
+    train_class_name: str | None = None
+    run_date: str | None = None
+    departure_date: str | None = None
+    departure_time: str | None = None
+    departure_time_qb: str | None = None
+    arrival_date: str | None = None
+    arrival_time: str | None = None
+    arrival_time_qb: str | None = None
+    departure_station_code: str | None = None
+    departure_station_name: str | None = None
+    arrival_station_code: str | None = None
+    arrival_station_name: str | None = None
+    departure_construction_order: str | None = None
+    arrival_construction_order: str | None = None
+    departure_run_order: str | None = None
+    arrival_run_order: str | None = None
+    car_type_name: str | None = None
+    general_room_name: str | None = None
+    special_room_name: str | None = None
+    general_reservation_code: str | None = None
+    # h_gen_rsv_nm — 두 DTO 모두 선언합니다 (MergeSeatsCOutTrnInfo, TrainScheduleOutTrainInfo.java:1228).
+    #: 일반실 예약 표시 이름(``h_gen_rsv_nm``)입니다. 두 조회 모두 이 필드를 채웁니다.
+    general_reservation_name: str | None = None
+    special_reservation_code: str | None = None
+    free_seat_reservation_code: str | None = None
+    standing_reservation_code: str | None = None
+    # h_stnd_rsv_nm(TrainScheduleOutTrainInfo.java:1380). 관측: menu_id A2 일부 행이 '역발매중'이었습니다.
+    #: 입석 예약 표시 이름(``h_stnd_rsv_nm``)입니다. 고정값 ``"-"``가 아니라 행마다 다른 값(예: ``"역발매중"``)이 옵니다.
+    standing_reservation_name: str | None = None
+    journey_reservation_code: str | None = None
+    journey_reservation_name: str | None = None
+    seat_map_flag: str | None = None
+    delay_sale_flag: str | None = None
+    wait_reservation_flag: str | None = None
+    # h_rsv_psb_nm(TrainScheduleOutTrainInfo.java:1296). 이 필드에서 할인 라벨이 나오는 것은 매핑 실수가 아니라 서버가 그렇게
+    # 보내는 것입니다 — 다른 키로 "고치지" 마세요.
+    #: 예약 가능 표시 문구(``h_rsv_psb_nm``)입니다. 가부 플래그가 아니라 메뉴에 따라 내용이 달라지는 화면 문구이며, 할인 라벨이
+    #: 들어 있을 수도 있습니다.
+    reservation_possible_name: str | None = None
+    special_reservation_possible_name: str | None = None
+    info_text: str | None = None
+    popup_message: str | None = None
+    shuttle_standing_open_flag: str | None = None
+    remaining_standing_count: str | None = None
+    standard_remaining_seat_count: str | None = None
+    first_remaining_seat_count: str | None = None
+    merge_target_flag: str | None = None
+    train_suspended_flag: str | None = None
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    special_reservation_name: str | None = None
+    free_seat_reservation_name: str | None = None
+
+
+@dataclass(frozen=True)
+class SeatAssignmentScheduleResponse(BaseKorailResponse):
+    """좌석배정 예매 화면의 열차 목록과 조회 조건을 담습니다.
+
+    조회 조건 필드의 이름은 열차 조회 결과의 ``TrainSearchMetadata``와 대부분 같습니다. ``merge_reservation_possible_flag``는
+    이 응답에서 읽지 않으므로 항상 ``None``입니다."""
+
+    # 앱 근거: TrainScheduleOut.java:67. 같은 DTO 모양을 쓰는 형제 파서 parsers.py::parse_train_search_metadata/TrainSearchMetadata
+    # 가 이미 이 필드 집합을 정확히 이렇게 읽으므로 그 이름을 그대로 따릅니다. h_merge_rsv_psb_flg 는 MergeSeatsCOutTrnInfos 에만
+    # 선언됩니다.
+    next_page_flag: str | None = None
+    merge_reservation_possible_flag: str | None = None
+    job_id: str | None = None
+    menu_id: str | None = None
+    goods_no: str | None = None
+    notice_message: str | None = None
+    first_seat_count: str | None = None
+    second_seat_count: str | None = None
+    agreement_text: str | None = None
+    first_departure_time: str | None = None
+    result_count: str | None = None
+    next_query_station_no: str | None = None
+    next_train_no: str | None = None
+    next_preceding_train_no: str | None = None
+    next_connecting_train_no: str | None = None
+    remaining_seat_count: str | None = None
+    trains: tuple[TrainScheduleItem, ...] = ()
+
+
+@dataclass(frozen=True)
+class IntermediateStation:
+    """좌석 병합 구간이 나뉘는 중간역을 담습니다."""
+
+    code: str | None = None
+    name: str | None = None
+    run_order: str | None = None
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+
+
+@dataclass(frozen=True)
+class MergeSeatsInquiryResponse(BaseKorailResponse):
+    """병합 가능한 열차와 중간역 목록을 담습니다."""
+
+    merge_reservation_possible_flag: str | None = None
+    # 최상위 runDt 선언: MergeSeatsCOut.java:29,112. 관측 20여 회에는 없었고 행의 h_run_dt 는 존재했습니다.
+    #: 응답 최상위의 운행일(``runDt``)입니다. 응답에 없으면 ``None``이며, 열차별 운행일은 ``trains`` 각 항목의 ``run_date``에
+    #: 있습니다.
+    run_date: str | None = None
+    intermediate_stations: tuple[IntermediateStation, ...] = ()
+    trains: tuple[TrainScheduleItem, ...] = ()
+
+
+@dataclass(frozen=True)
+class PriceFare:
+    """열차 한 구간의 운임 정보를 담습니다."""
+
+    journey_sequence: str | None = None
+    room_class_name: str | None = None
+    # 앱 운임 표의 "요금" 칸(TrainOpInfoScreenKt.java:2123).
+    #: 요금(``rcvdFare``)입니다. 특실 추가 요금 등이 들어갑니다.
+    received_fare: str | None = None
+    # 앱 운임 표의 "운임" 칸(TrainOpInfoScreenKt.java:2089).
+    #: 운임(``rcvdPrc``)입니다. 쉼표와 "원"이 붙은 표시 문자열입니다(예: ``"21,600원"``).
+    received_price: str | None = None
+    # 앱 운임 표의 "합계" 칸(TrainOpInfoScreenKt.java:2158).
+    #: 합계 금액(``sumAmt``)입니다.
+    total_amount: str | None = None
+    train_no: str | None = None
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+
+
+@dataclass(frozen=True)
+class PriceFareQuoteResponse(BaseKorailResponse):
+    """예매 전 운임 조회 결과를 담습니다."""
+
+    fares: tuple[PriceFare, ...] = ()
