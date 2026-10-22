@@ -57,7 +57,7 @@ class PassScheduleRequest:
     weekend_use_flag: str
 
     def __post_init__(self) -> None:
-        # 문자열이 아닌 값은 만들 때 거절합니다. "" 는 이전처럼 전송 단계에서 생략됩니다.
+        # 문자열이 아닌 값은 만들 때 거절합니다. "" 는 전송 단계에서 생략됩니다.
         for item in fields(self):
             if not isinstance(getattr(self, item.name), str):
                 raise KorailInvalidInputError(f"{item.name} must be a string")

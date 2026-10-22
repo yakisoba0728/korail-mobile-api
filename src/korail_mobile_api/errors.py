@@ -14,8 +14,7 @@ from json import loads
 from typing import TypeGuard, cast
 
 _LANGUAGES = {"ko": "ko", "en": "en", "ja": "ja", "jp": "ja", "zh": "zh", "cn": "zh"}
-# P058's asset value is a browser redirect script, not a readable session-expiry explanation.
-# These descriptions are SDK text; they are not reconstructed app literals.
+# 앱 사전의 P058 값은 브라우저 리다이렉트 스크립트라 읽을 안내가 아닙니다. 아래 문구는 앱 리터럴이 아닌 SDK 문구입니다.
 _SESSION_MESSAGES = {
     "ko": "로그인이 만료되었습니다. 다시 로그인해 주세요.",
     "en": "Your session has expired. Please log in again.",
@@ -34,7 +33,7 @@ def _language(language: str) -> str:
 
 @cache
 def _messages() -> dict[str, dict[str, str]]:
-    # Load on the first lookup, not during package import or version resolution.
+    # 패키지 import·버전 확인 때가 아니라 첫 조회 때 읽습니다.
     catalog = loads(files("korail_mobile_api").joinpath("error_messages.json").read_text(encoding="utf-8"))
     return cast(dict[str, dict[str, str]], catalog["messages"])
 

@@ -28,7 +28,7 @@ from .http import build_transport, redact_failed_request
 
 T = TypeVar("T")
 
-# Logger names predate the _core move; docs/guide/configuration.md names this one.
+# 로거 이름은 모듈 경로가 아니라 _core 이동 전의 공개 이름을 유지합니다(docs/guide/configuration.md).
 _log = logging.getLogger("korail_mobile_api.netfunnel")
 _safety_log = logging.getLogger("korail_mobile_api.netfunnel_safety")
 

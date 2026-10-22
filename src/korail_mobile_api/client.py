@@ -333,7 +333,7 @@ def _hold_for_job(hold: ReservationHoldResponse, job_type: KorailReservationJobT
 
 
 class KorailClient:
-    """KORAIL 코레일+ 앱 7.0.8의 확인된 요청 계약을 따르는 비공식 동기 클라이언트입니다.
+    """KORAIL 코레일+ 앱의 요청을 재현하는 비공식 동기 클라이언트입니다.
 
     ``config``를 생략하면 기본값으로 만든 ``KorailConfig``를 쓰며, 기본 설정에서는 DynaPath와 대기열이 켜져 있습니다.
     ``transport``에 넣은 ``httpx`` 전송 계층은 KORAIL API 요청과 대기열 요청에 함께 쓰입니다. ``config.proxy``와 함께 넘기면

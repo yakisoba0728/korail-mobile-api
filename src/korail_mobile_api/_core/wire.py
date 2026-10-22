@@ -23,7 +23,6 @@ def _device_version(config: KorailConfig) -> dict[str, str]:
 def _device_version_key(config: KorailConfig) -> dict[str, str]:
     """7.0.8 공통 DTO의 Device·Version·AppVersion·Key·선택 lang 순서입니다."""
     fields = _device_version(config)
-    # lang은 공통 DTO의 마지막 필드입니다.
     fields.pop("lang", None)
     fields["Key"] = config.key
     if config.lang is not None:
