@@ -418,7 +418,12 @@ CASES = [
         "/file/CACHE/prdMobilePlusMain.cache",
         {**COMMON, "timeStamp": "1700000000000", "srtCheckYn": "Y"},
         APP,
-        {"version.new_version": "9", "notice.post_title": "SYNTH_TITLE"},
+        # CNTAURL is the app's store link (AppKt.java:1240,1323,1635).
+        {
+            "version.new_version": "9",
+            "version.store_url": "https://example.invalid/store",
+            "notice.post_title": "SYNTH_TITLE",
+        },
         False,
     ),
     (
@@ -622,7 +627,7 @@ OPTIONAL = [
 )
 def test_optional_strings_are_lenient_and_accept_integers(name, wire, model, value, expected, rig):
     """Optional constructors: TrainScheduleOutTrainInfo.java:172-563; seat:62-105;
-    RunDateOutItem.java:104-161.
+    RunDateOutItem.java:104-161; MobilePlusMainVersion.java:52.
     """
     case = BY_NAME[name]
     raw = deepcopy(case[5])
@@ -925,6 +930,26 @@ def test_numeric_station_codes_are_resolved_once_then_cached(rig):
         exact_request(request, P + "seatMovie.ScheduleView", SEARCH_FORM)
 
 
+def test_station_names_come_from_the_parsed_station_list(rig):
+    """StationDataRepositoryImpl.java:282-283: the app looks names up in the station list it parsed. An integer
+    stn_cd reads as its string, a row without a name is skipped, and an unknown code sends no search."""
+    raw = {
+        "stns": {
+            "stn": [
+                {"stn_cd": 1, "stn_nm": "SYNTH_DEP"},
+                {"stn_cd": "0099", "stn_nm": "SYNTH_ARR"},
+                {"stn_cd": "0050"},
+            ]
+        }
+    }
+    client, calls, _ = rig([raw, SEARCH])
+    client.search_trains(replace(QUERY, departure_station_code="1", arrival_station_code="0099"))
+    exact_request(calls[1], P + "seatMovie.ScheduleView", SEARCH_FORM)
+    with pytest.raises(KorailProtocolError, match="station code is unknown: 0050"):
+        client.search_trains(replace(QUERY, departure_station_code="0050"))
+    assert len(calls) == 2
+
+
 def test_direct_no_results_falls_back_once_and_resets_continuation(rig):
     """TrainScheduleViewModel.smali:35513-35566 confirms dialog, not plaintext WRD000061 (protected).
     The app's filter switch is TrainScheduleViewModel.java:3216-3219,11051-11079 (request field TrainScheduleIn.java:95).
@@ -1141,7 +1166,8 @@ def test_seat_attribute_override_follows_one_rule_for_both_seat_reads(method, ri
 
 
 def test_notice_missing_and_optional_lists_empty(rig):
-    """MobilePlusMainOut.java:57-77; RunDateOut.java:55-62; optional list defaults."""
+    """MobilePlusMainOut.java:57-77; MobilePlusMainNotice.java:52; RunDateOut.java:55-62; optional list
+    defaults."""
     client, _, _ = rig([{}, ENVELOPE, ENVELOPE, ENVELOPE])
     notice = client.get_notice()
     assert notice.post_title is None and notice.raw == {}
@@ -1221,7 +1247,7 @@ def test_all_public_methods_have_contract_cases():
     ],
 )
 def test_read_forms_follow_the_app_dto_order(name, expected, rig):
-    """TrainResearchIn.java:68; TResidualSeatsResearchIn.java:65; MergeSeatsCIn.java:63; CommonCodeIn.java:55;
+    """TrainResearchIn.java:68; TResidualSeatsResearchIn.java:65; MergeSeatsCIn.java:63; CommonCodeIn.java:31-34,55;
     MaasMenuLtIn.java:58: the app flattens each DTO in declaration order (NetworkService.java:15335-15392),
     Key before lang."""
     case = BY_NAME[name]
@@ -1314,6 +1340,16 @@ def test_common_code_and_status_unmodeled_values_remain_raw(rig):
         P + "common.code.do",
         {**COMMON, "code": "SYNTH_CODE", "deviceWidth": "101", "deviceHeight": "202", "OSVersion": "33"},
     )
+
+
+def test_common_code_default_sends_one_blank_code_and_empty_list_none(rig):
+    """The default "" is one blank code field; an empty sequence leaves the repeated field out."""
+    client, calls, _ = rig([ENVELOPE, ENVELOPE])
+    client.get_common_code()
+    client.get_common_code([])
+    form = {**COMMON, "deviceWidth": "101", "deviceHeight": "202", "OSVersion": "33"}
+    exact_request(calls[0], P + "common.code.do", {**form, "code": ""})
+    exact_request(calls[1], P + "common.code.do", form)
 
 
 @pytest.mark.parametrize(
