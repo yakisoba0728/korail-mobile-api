@@ -145,7 +145,16 @@ class KorailSessionClient:
     ) -> KorailSession:
         # 앱은 앱 시작 때 받아 둔 공통코드의 키를 쓰고 비었을 때만 다시 받습니다 (LoginRepositoryImpl.java:1229-1253). 여기서는 로그인마다 새로 받습니다 —
         # 캐시한 키가 서버에서 바뀌면 비밀번호 오류로 보이고, 반복되면 계정이 잠깁니다.
+        # 서비스 확인과 키 요청을 보내기 전에 입력을 검사합니다.
+        if not isinstance(member_no, str):
+            raise KorailProtocolError("KORAIL login member_no must be a str")
         resolved_input_flag = input_flag or infer_login_input_flag(member_no)
+        if not isinstance(password, str):
+            raise KorailProtocolError("KORAIL login password must be a str")
+        try:
+            password.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise KorailProtocolError("KORAIL login password cannot be encoded as UTF-8") from exc
         self.check_service()
         crypto_info = self.get_login_crypto_info()
         transformed = transform_login_password(password, crypto_info)

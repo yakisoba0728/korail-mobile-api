@@ -226,6 +226,30 @@ def test_error_bypass_modes(queue_factory, kind: str, mode: int) -> None:
 
 
 @pytest.mark.parametrize("mode", [0, 1])
+def test_unparseable_queue_url_is_a_queue_transport_failure(mode: int) -> None:
+    """2.6.2: httpx.InvalidURL used to escape raw and skip the error bypass."""
+    clock = Clock()
+    sent: list[str] = []
+    config = KorailConfig(netfunnel_url="https://q.example.invalid/\x00", netfunnel_timeout=3.0)
+    client = KorailNetFunnelClient(
+        config,
+        transport=httpx.MockTransport(lambda request: pytest.fail("queue request must not be built")),
+        sleeper=clock.sleep,
+        clock=clock,
+    )
+    gate = KorailNetFunnelGate("synthetic", "SYNTHETIC-AID", mode == 0)
+    try:
+        if mode == 0:
+            with pytest.raises(KorailNetFunnelError):
+                client.run(gate, lambda: sent.append("API"))
+        else:
+            client.run(gate, lambda: sent.append("API"))
+    finally:
+        client.close()
+    assert sent == ([] if mode == 0 else ["API"])
+
+
+@pytest.mark.parametrize("mode", [0, 1])
 @pytest.mark.parametrize(
     "replies,operations,sleeps",
     [

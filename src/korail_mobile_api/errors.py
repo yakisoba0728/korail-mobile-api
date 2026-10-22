@@ -258,7 +258,7 @@ class KorailAlreadyProcessedError(KorailAppError):
 
 
 class KorailAppUpdateRequiredError(KorailAppError):
-    """앱 업데이트를 요구하는 응답을 나타냅니다(결과 코드 ``SUPDATE``).
+    """앱 업데이트를 요구하는 응답을 나타냅니다(결과 코드 ``SUPDATE``, 실서버 관측 ``-8204``).
 
     로그인 응답이 이 결과 코드이면 ``KorailAuthError`` 대신 이 예외가 발생합니다."""
 
@@ -547,6 +547,9 @@ ACCOUNT_LOCKED_CODES = frozenset({"WRC000390"})
 # SUPDATE의 업데이트 요구 안내는 analysis/apktool/assets/error_json.json:65을 따릅니다. 앱 분기 리터럴은 보호돼 있습니다.
 #: ``KorailAppUpdateRequiredError``로 분류하는 결과 코드입니다.
 APP_UPDATE_REQUIRED_CODE = "SUPDATE"
+# -8204 는 앱 리터럴이 아니라 2026-10-21 부터 실서버가 보낸 관측 코드입니다(GitHub #32, "최신 버전으로 업데이트").
+#: 실서버 관측으로 ``KorailAppUpdateRequiredError``에 함께 분류하는 결과 코드입니다.
+OBSERVED_APP_UPDATE_REQUIRED_CODES = frozenset({"-8204"})
 
 #: 세션 만료를 나타내는 결과 코드입니다. 실패 응답에서 이 코드가 오면 ``KorailSessionExpiredError``가 발생합니다.
 SESSION_EXPIRED_CODE = "P058"
@@ -564,6 +567,7 @@ _APP_ERROR_BY_CODE: dict[str, type[KorailAppError]] = {
     **{code: KorailProcessingError for code in PROCESSING_CODES},
     **{code: KorailAlreadyProcessedError for code in ALREADY_PROCESSED_CODES},
     APP_UPDATE_REQUIRED_CODE: KorailAppUpdateRequiredError,
+    **{code: KorailAppUpdateRequiredError for code in OBSERVED_APP_UPDATE_REQUIRED_CODES},
 }
 
 

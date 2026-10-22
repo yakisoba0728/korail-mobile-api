@@ -275,6 +275,9 @@ def build_merge_reservation_form(
     seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
     """첫 홀드 폼에서 입석 플래그와 중간역 세 필드만 바꿉니다(ReservationMergeViewModel.smali:7671-7774)."""
+    # 다른 작업 유형은 입석 플래그를 덮어써 예약대기·입석 홀드를 결제 가능한 결과로 만들었습니다.
+    if job_type != KorailReservationJobType.MERGE_STANDING:
+        raise KorailProtocolError("KORAIL merge reservation only supports job_type MERGE_STANDING")
     rows = tuple(merge_rows) if not isinstance(merge_rows, (str, bytes)) else ()
     if not rows or not all(isinstance(row, TrainScheduleItem) for row in rows):
         raise KorailProtocolError("KORAIL 병합 reservation requires the research.mergeSeatsC.do rows")
@@ -349,7 +352,12 @@ def build_limousine_reservation_form(
         raise KorailProtocolError("KORAIL airport bus reservation requires distinct seat numbers")
     remaining = schedule.general_remaining_seat_count
     # 앱은 잔여석이 인원보다 적은 행을 고를 수 없게 합니다(AirportBusScheduleViewModel.java:407-426).
-    if isinstance(remaining, str) and remaining.isdigit() and int(remaining) < passengers.total:
+    if (
+        isinstance(remaining, str)
+        and remaining.isascii()
+        and remaining.isdigit()
+        and int(remaining) < passengers.total
+    ):
         raise KorailProtocolError("KORAIL airport bus schedule has fewer remaining seats than passengers")
     context = "airport bus reservation"
     journey = {
@@ -899,7 +907,7 @@ def build_unpaid_reservation_cancel_form(
     # BasketTicketViewModel.java:3232; MyReservationViewModel.java:1557. 보호 리터럴은 미확인입니다.
     journey_count = response.journey_count
     legs = None
-    if isinstance(journey_count, str) and journey_count.strip().isdigit():
+    if isinstance(journey_count, str) and journey_count.strip().isascii() and journey_count.strip().isdigit():
         legs = int(journey_count)
     pnr_no = _successful_hold_pnr(
         response,
@@ -985,7 +993,7 @@ def build_card_payment_form(
         )
     # 앱은 결제할 금액이 0 이면 카드 요청을 만들지 않고(PayViewModel.java:15572, 카드 입력 검사도 금액이 0 이 아닐 때만 :18144) 결제수단 없이 발권 요청을
     # 보냅니다(:5148). 라이브러리는 그 경로를 구현하지 않으므로 0원 카드 결제를 보내지 않습니다.
-    if int(amount) == 0:
+    if not amount.lstrip("0"):
         raise KorailProtocolError(
             "KORAIL card payment refuses a zero-amount hold: the app issues it without a card"
         )
