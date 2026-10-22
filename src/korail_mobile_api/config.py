@@ -2,11 +2,16 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""기본 DynaPath 진단 설정. base_url·netfunnel_url의 신뢰 여부는 호출자가 판단합니다."""
+"""기본 DynaPath 진단 설정. base_url·netfunnel_url의 신뢰 여부는 호출자가 판단합니다.
+
+한 기기의 DynaPath 값과 대기열 User-Agent를 함께 구성합니다.
+
+환경변수는 설정에만 사용하며 계정·카드 자격증명을 읽거나 저장하지 않습니다."""
 
 import math
+import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from urllib.parse import urlsplit
 
 from .constants import (
@@ -23,6 +28,7 @@ from .constants import (
     KORAIL_NETFUNNEL_URL,
     KORAIL_TIMEOUT_SECONDS,
     KORAIL_USER_AGENT,
+    build_dalvik_user_agent,
 )
 from .dynapath import DynapathConfig, _DiagnosticTokenProvider
 
@@ -150,3 +156,144 @@ class KorailConfig:
                 "DynapathConfig(enabled=True, ...) to supply your own"
             )
         object.__setattr__(self, "dynapath", enabled_dynapath_config())
+
+
+@dataclass(frozen=True)
+class KorailDeviceProfile:
+    """호출자가 보유한 기기값입니다. ``device_id``는 출력 표현에서 숨깁니다.
+
+    같은 계정으로 반복 실행한다면 같은 프로파일을 보관해 사용하세요. 이 객체는
+    자격 증명이나 세션을 담지 않으며, 실제 기기 여부를 검증하지 않습니다.
+    """
+
+    device_id: str = field(repr=False)
+    model: str
+    android_release: str
+    build_id: str
+    android_sdk_int: int = KORAIL_DEFAULT_ANDROID_SDK_INT
+    width: int = KORAIL_DEFAULT_DEVICE_WIDTH
+    height: int = KORAIL_DEFAULT_DEVICE_HEIGHT
+
+    def __post_init__(self) -> None:
+        for name in ("device_id", "model", "android_release", "build_id"):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value.strip() or "\r" in value or "\n" in value:
+                raise ValueError(f"{name} must be a non-empty single-line string")
+        for name in ("android_sdk_int", "width", "height"):
+            value = getattr(self, name)
+            if type(value) is not int or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+
+
+def build_config_from_profile(
+    profile: KorailDeviceProfile,
+    *,
+    base: KorailConfig | None = None,
+) -> KorailConfig:
+    """기기값을 DynaPath·대기열 UA·OS/화면 정보에 일관되게 적용합니다.
+
+    API User-Agent는 앱 관측값인 ``korailtalk``를 유지합니다. 직접 지정한
+    토큰 공급자나 DynaPath 비활성화 설정은 덮어쓰지 않습니다.
+    """
+    if not isinstance(profile, KorailDeviceProfile):
+        raise TypeError("profile must be a KorailDeviceProfile")
+    config = base if base is not None else KorailConfig()
+    provider = config.dynapath.token_provider
+    if config.disable_dynapath or (provider is not None and not isinstance(provider, _DiagnosticTokenProvider)):
+        raise ValueError("a device profile requires configurable DynaPath token settings")
+    settings = config.dynapath.token_settings
+    if isinstance(provider, _DiagnosticTokenProvider):
+        provider = replace(
+            provider,
+            os_version=profile.android_release.encode("utf-8"),
+            device_model=profile.model.encode("utf-8"),
+            install_id=profile.device_id.encode("utf-8"),
+        )
+    elif settings is None:
+        raise ValueError("DynaPath token settings are missing")
+    if settings is not None:
+        settings = replace(
+            settings,
+            device_id=profile.device_id,
+            os_version=profile.android_release,
+            device_model=profile.model,
+        )
+    return replace(
+        config,
+        dynapath=replace(
+            config.dynapath,
+            enabled=True,
+            token_provider=provider,
+            token_settings=settings,
+            device_name=profile.model,
+            os_version=profile.android_release,
+        ),
+        netfunnel_user_agent=build_dalvik_user_agent(
+            os_release=profile.android_release,
+            device_model=profile.model,
+            build_id=profile.build_id,
+        ),
+        android_sdk_int=profile.android_sdk_int,
+        device_width=profile.width,
+        device_height=profile.height,
+    )
+
+
+def _required_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"{name} is required for KORAIL live DynaPath")
+    return value
+
+
+def build_config_from_env() -> KorailConfig:
+    """환경변수에서 실제 기기 값을 읽어 DynaPath를 켠 ``KorailConfig``를 만듭니다.
+
+    ``KORAIL_DYNAPATH_DEVICE_ID``, ``KORAIL_DYNAPATH_OS_VERSION``, ``KORAIL_DYNAPATH_DEVICE_MODEL``은 반드시 있어야 하며,
+    ``KORAIL_NETFUNNEL_USER_AGENT``를 지정하지 않으면 ``KORAIL_ANDROID_BUILD_ID``도 필요합니다. 기기 모델과 OS 버전은
+    DynaPath 토큰과 대기열 ``User-Agent``에 함께 씁니다. 나머지 값은 ``KORAIL_BASE_URL``, ``KORAIL_USER_AGENT``,
+    ``KORAIL_DEVICE_WIDTH``, ``KORAIL_DEVICE_HEIGHT``, ``KORAIL_ANDROID_SDK_INT``,
+    ``KORAIL_ADVERTISING_ID``로 바꿀 수 있습니다. ``KORAIL_APP_VERSION``과 ``KORAIL_API_VERSION``은 요청의
+    ``AppVersion``과 ``Version``이 되며 비어 있으면 기본값을 씁니다. ``KORAIL_PROXY``는 ``proxy``가 되며 비어 있으면 지정하지 않습니다.
+    로그인 정보나 카드 정보는 환경변수에서 읽지 않습니다.
+
+    필요한 환경변수가 없거나 빈 값이면 ``RuntimeError``가 발생합니다. ``KORAIL_DEVICE_WIDTH``, ``KORAIL_DEVICE_HEIGHT``,
+    ``KORAIL_ANDROID_SDK_INT``가 정수가 아니거나 ``KORAIL_PROXY``가 올바른 프록시 URL이 아니면 ``ValueError``가 발생합니다."""
+    # 기기값은 토큰·대기열 UA에 공유하고 자격증명은 읽거나 저장하지 않습니다(a/a.java:15; a/b.java:85).
+    device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
+    os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
+    device_model = _required_env("KORAIL_DYNAPATH_DEVICE_MODEL")
+    if any(not value.strip() for value in (device_id, os_version, device_model)):
+        raise ValueError("DynaPath device values must not be whitespace")
+    advertising_id = os.environ.get("KORAIL_ADVERTISING_ID", "")
+    dynapath = DynapathConfig(
+        enabled=True,
+        token_provider=_DiagnosticTokenProvider(
+            os_version=os_version.encode("utf-8"),
+            device_model=device_model.encode("utf-8"),
+            install_id=device_id.encode("utf-8"),
+        ),
+        device_name=device_model,
+        os_version=os_version,
+    )
+    return KorailConfig(
+        base_url=os.environ.get(
+            "KORAIL_BASE_URL",
+            "https://smart.letskorail.com:443",
+        ),
+        version=os.environ.get("KORAIL_API_VERSION") or KORAIL_API_VERSION,
+        app_version=os.environ.get("KORAIL_APP_VERSION") or KORAIL_APP_VERSION,
+        user_agent=os.environ.get("KORAIL_USER_AGENT", KORAIL_API_USER_AGENT),
+        netfunnel_user_agent=os.environ.get("KORAIL_NETFUNNEL_USER_AGENT")
+        or build_dalvik_user_agent(
+            os_release=os_version,
+            device_model=device_model,
+            build_id=_required_env("KORAIL_ANDROID_BUILD_ID"),
+        ),
+        device_width=int(os.environ.get("KORAIL_DEVICE_WIDTH", KORAIL_DEFAULT_DEVICE_WIDTH)),
+        device_height=int(os.environ.get("KORAIL_DEVICE_HEIGHT", KORAIL_DEFAULT_DEVICE_HEIGHT)),
+        android_sdk_int=int(os.environ.get("KORAIL_ANDROID_SDK_INT", KORAIL_DEFAULT_ANDROID_SDK_INT)),
+        dynapath=dynapath,
+        advertising_id=advertising_id,
+        proxy=os.environ.get("KORAIL_PROXY") or None,
+    )

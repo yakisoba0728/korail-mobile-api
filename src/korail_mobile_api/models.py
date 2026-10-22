@@ -10,8 +10,7 @@ from datetime import datetime
 from typing import Self
 
 from .constants import KORAIL_STANDBY_WAIT_FLAG
-from .error_messages import resolve_error_message
-from .errors import KorailProtocolError
+from .errors import KorailProtocolError, resolve_error_message
 
 
 def _train_datetime(date: str | None, time: str | None) -> datetime | None:

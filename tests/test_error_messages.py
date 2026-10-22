@@ -230,7 +230,7 @@ def test_new_errors_survive_pickle_without_losing_original_fields(code, exceptio
 def test_catalog_is_loaded_lazily(f8_subprocess_env):
     code = (
         "import sys; sys.path.insert(0, sys.argv[1]); "
-        "from korail_mobile_api.error_messages import _messages; "
+        "from korail_mobile_api.errors import _messages; "
         "from korail_mobile_api import get_error_message; "
         "assert _messages.cache_info().currsize == 0; "
         "assert get_error_message('S003') is not None; "
