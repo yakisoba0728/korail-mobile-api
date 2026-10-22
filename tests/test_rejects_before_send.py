@@ -26,6 +26,7 @@ from korail_mobile_api.constants import KORAIL_STANDBY_WAIT_FLAG  # noqa: E402
 Job = api.KorailReservationJobType
 Cabin = api.KorailSeatClass
 Option = api.KorailReserveOption
+Invalid = api.KorailInvalidInputError
 
 F8 = _f8_arguments()
 TRAIN: api.TrainSummary = F8["reserve"]["train"]
@@ -119,6 +120,14 @@ def _recalc(c: api.KorailClient, row: dict[str, Any] | None = None, **changes: A
     if row is not None:
         changes["rows"] = (replace(RECALC.rows[0], **row),)
     return c.recalculate_price(replace(RECALC, **changes))
+
+
+def _free(**changes: Any) -> api.FreeSeatCarRequest:
+    return replace(F8["get_free_seat_car_info"]["request"], **changes)
+
+
+def _merge_inquiry(**changes: Any) -> api.MergeSeatsInquiryRequest:
+    return replace(F8["get_merge_seats_inquiry"]["request"], **changes)
 
 
 def _search(c: api.KorailClient, **changes: Any) -> object:
@@ -347,19 +356,101 @@ ROWS = [
         api.KorailAuthError,
     ),
     # Reads: seat maps, train search, lists, ticket references and fares.
-    Row("seat-cars-train-type", lambda c: c.get_seat_cars("90001"), "train must be a TrainSummary"),
+    Row("seat-cars-train-type", lambda c: c.get_seat_cars("90001"), "train must be a TrainSummary", Invalid),
     Row("seat-cars-no-passengers", lambda c: c.get_seat_cars(TRAIN, passenger_count=0), "passenger_count"),
-    Row("seat-inventory-car-zero", lambda c: c.get_seat_inventory(TRAIN, 0), "car_no must be a positive"),
-    Row("seat-cars-goods-no-space", lambda c: c.get_seat_cars(_train(goods_no="A B")), "printable ASCII"),
-    Row("seat-cars-room-class", lambda c: c.get_seat_cars(TRAIN, room_class_code="3"), "room_class_code must"),
-    Row("search-continuation-type", lambda c: c.search_trains(QUERY, continuation=("1", "2")), "continuation"),
-    Row("search-attribute-blank", lambda c: _search(c, seat_attribute_code=""), "seat_attribute_code must be"),
-    Row("search-division-blank", lambda c: _search(c, query_division_code=""), "query_division_code must be"),
-    Row("search-connections-text", lambda c: _search(c, connection_station_codes="0001"), "connection_station"),
+    Row(
+        "seat-inventory-car-zero",
+        lambda c: c.get_seat_inventory(TRAIN, 0),
+        "car_no must be a positive",
+        Invalid,
+    ),
+    Row(
+        "seat-cars-goods-no-space",
+        lambda c: c.get_seat_cars(_train(goods_no="A B")),
+        "printable ASCII",
+        Invalid,
+    ),
+    Row(
+        "seat-cars-room-class",
+        lambda c: c.get_seat_cars(TRAIN, room_class_code="3"),
+        "room_class_code",
+        Invalid,
+    ),
+    # Per-train reads send the row's identifiers; a missing one used to go out blank (or as 00000).
+    Row(
+        "seat-cars-train-no-blank", lambda c: c.get_seat_cars(_train(train_no="")), "train_no must not", Invalid
+    ),
+    Row(
+        "seat-cars-run-date-none",
+        lambda c: c.get_seat_cars(_train(run_date=None)),
+        "run_date must not",
+        Invalid,
+    ),
+    Row(
+        "seat-inventory-station-blank",
+        lambda c: c.get_seat_inventory(_train(arrival_station_code=" "), 1),
+        "arrival_station_code must not",
+        Invalid,
+    ),
+    Row(
+        "seat-inventory-run-order-none",
+        lambda c: c.get_seat_inventory(_train(departure_run_order=None), 1),
+        "departure_run_order must not",
+        Invalid,
+    ),
+    Row("train-schedule-train-no-none", lambda c: c.get_train_schedule(F8_DATE, None), "train_no", Invalid),
+    Row("train-schedule-train-no-blank", lambda c: c.get_train_schedule(F8_DATE, " "), "train_no", Invalid),
+    Row("train-schedule-train-no-int", lambda c: c.get_train_schedule(F8_DATE, 90001), "train_no", Invalid),
+    Row("train-schedule-run-date-blank", lambda c: c.get_train_schedule("", "90001"), "run_date", Invalid),
+    Row(
+        "free-seat-car-train-no-blank",
+        lambda c: c.get_free_seat_car_info(_free(train_no="")),
+        "train_no",
+        Invalid,
+    ),
+    Row(
+        "free-seat-car-construction-order-none",
+        lambda c: c.get_free_seat_car_info(_free(departure_construction_order=None)),
+        "departure_construction_order",
+        Invalid,
+    ),
+    Row(
+        "merge-inquiry-train-no-none",
+        lambda c: c.get_merge_seats_inquiry(_merge_inquiry(train_no=None)),
+        "train_no",
+        Invalid,
+    ),
+    Row(
+        "merge-inquiry-station-blank",
+        lambda c: c.get_merge_seats_inquiry(_merge_inquiry(departure_station_name="")),
+        "departure_station_name",
+        Invalid,
+    ),
+    Row(
+        "merge-inquiry-run-date-blank",
+        lambda c: c.get_merge_seats_inquiry(_merge_inquiry(run_datetime=" ")),
+        "run_datetime",
+        Invalid,
+    ),
+    Row(
+        "search-continuation-type",
+        lambda c: c.search_trains(QUERY, continuation=("1", "2")),
+        "continuation",
+        Invalid,
+    ),
+    Row("search-attribute-blank", lambda c: _search(c, seat_attribute_code=""), "seat_attribute_code", Invalid),
+    Row("search-division-blank", lambda c: _search(c, query_division_code=""), "query_division_code", Invalid),
+    Row(
+        "search-connections-text",
+        lambda c: _search(c, connection_station_codes="0001"),
+        "connection_station",
+        Invalid,
+    ),
     Row(
         "search-connection-group",
         lambda c: _search(c, connection_train_group_code=""),
         "connection_train_group",
+        Invalid,
     ),
     Row("ticket-list-page-text", lambda c: c.get_ticket_list("1"), "page_no must be an integer"),
     Row("ticket-list-mode-blank", lambda c: c.get_ticket_list(mode=""), "ticket list mode"),
@@ -395,16 +486,27 @@ ROWS = [
         "original_ticket must be",
     ),
     Row("commuter-request-type", lambda c: c.get_commuter_info({}), "commuter request variant"),
-    Row("fare-legs-text", lambda c: c.get_price_fare_quote(api.PriceFareQuoteRequest("x")), "one or two legs"),
-    Row("fare-no-legs", lambda c: c.get_price_fare_quote(api.PriceFareQuoteRequest(())), "one or two legs"),
-    Row("fare-leg-type", lambda c: c.get_price_fare_quote(api.PriceFareQuoteRequest(("x",))), "PriceFareLeg"),
-    Row("fare-request-type", lambda c: c.get_price_fare_quote({}), "must be a PriceFareQuoteRequest"),
+    Row(
+        "fare-legs-text",
+        lambda c: c.get_price_fare_quote(api.PriceFareQuoteRequest("x")),
+        "one or two",
+        Invalid,
+    ),
+    Row("fare-no-legs", lambda c: c.get_price_fare_quote(api.PriceFareQuoteRequest(())), "one or two", Invalid),
+    Row(
+        "fare-leg-type",
+        lambda c: c.get_price_fare_quote(api.PriceFareQuoteRequest(("x",))),
+        "PriceFareLeg",
+        Invalid,
+    ),
+    Row("fare-request-type", lambda c: c.get_price_fare_quote({}), "must be a PriceFareQuoteRequest", Invalid),
     Row(
         "fare-goods-no-on-one-leg",
         lambda c: c.get_price_fare_quote(
             api.PriceFareQuoteRequest((replace(FARE_LEG, goods_no="G1"), FARE_LEG))
         ),
         "every leg or on none",
+        Invalid,
     ),
     Row("reservation-detail-type", lambda c: c.get_ticket_reservation_detail({}), "TicketReservationDetail"),
     Row(

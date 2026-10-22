@@ -280,7 +280,6 @@ from ._domains.trains.forms import (
     build_seat_car_form,
     build_seat_inventory_form,
     build_train_schedule_form,
-    build_train_schedule_special_form,
     build_train_search_form,
     validate_train_search_query,
 )
@@ -584,14 +583,11 @@ class KorailClient:
             room_class_code=room_class_code,
             seat_attribute_code=seat_attribute_code,
         )
-        return self._run_read(
-            lambda: parse_seat_car_list_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.research.TrainResearch",
-                    form,
-                    include_common=False,
-                )
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.research.TrainResearch",
+            form,
+            parser=parse_seat_car_list_response,
+            include_common=False,
         )
 
     def get_seat_inventory(
@@ -616,14 +612,11 @@ class KorailClient:
             room_class_code=room_class_code,
             seat_attribute_code=seat_attribute_code,
         )
-        return self._run_read(
-            lambda: parse_seat_inventory_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.research.TResidualSeatsResearch.do",
-                    form,
-                    include_common=False,
-                )
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.research.TResidualSeatsResearch.do",
+            form,
+            parser=parse_seat_inventory_response,
+            include_common=False,
         )
 
     def get_limousine_schedules(
@@ -1623,28 +1616,20 @@ class KorailClient:
         departure_name = self._resolve_station_reference(query.departure_station_code)
         arrival_name = self._resolve_station_reference(query.arrival_station_code)
         current = self.session.current
-        if use_special_schedule:
-            form = build_train_schedule_special_form(
-                self.config,
-                query,
-                departure_name=departure_name,
-                arrival_name=arrival_name,
-                member_card_no=current.member_card_no if current else None,
-                continuation=continuation,
-                transfer=transfer,
-            )
-            route = "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
-        else:
-            form = build_train_search_form(
-                self.config,
-                query,
-                departure_name=departure_name,
-                arrival_name=arrival_name,
-                member_card_no=current.member_card_no if current else None,
-                continuation=continuation,
-                transfer=transfer,
-            )
-            route = "/classes/com.korail.mobile.seatMovie.ScheduleView"
+        form = build_train_search_form(
+            self.config,
+            query,
+            departure_name=departure_name,
+            arrival_name=arrival_name,
+            member_card_no=current.member_card_no if current else None,
+            continuation=continuation,
+            transfer=transfer,
+        )
+        route = (
+            "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
+            if use_special_schedule
+            else "/classes/com.korail.mobile.seatMovie.ScheduleView"
+        )
         return self._queued(
             self._inquiry_gate(peak_season=peak_season, special=use_special_schedule),
             lambda: self.http.post_form(route, form, include_common=False),
@@ -1670,18 +1655,11 @@ class KorailClient:
         train_no: str,
     ) -> TrainScheduleResponse:
         """열차 한 편이 하루 동안 서는 정차역과 지연 상황을 조회합니다."""
-        return self._run_read(
-            lambda: parse_train_schedule_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.research.actualTrainSchedule.do",
-                    build_train_schedule_form(
-                        self.config,
-                        run_date,
-                        train_no,
-                    ),
-                    include_common=False,
-                )
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.research.actualTrainSchedule.do",
+            build_train_schedule_form(self.config, run_date, train_no),
+            parser=parse_train_schedule_response,
+            include_common=False,
         )
 
     def get_transfer_stations(
@@ -1690,16 +1668,10 @@ class KorailClient:
         arrival_station_code: str,
     ) -> TransferStationListResponse:
         """한 구간에서 환승할 수 있는 역들을 조회합니다."""
-        return self._run_read(
-            lambda: parse_transfer_station_list_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.qry.chtnStn.do",
-                    {
-                        "dptRsStnCd": departure_station_code,
-                        "arvRsStnCd": arrival_station_code,
-                    },
-                )
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.qry.chtnStn.do",
+            {"dptRsStnCd": departure_station_code, "arvRsStnCd": arrival_station_code},
+            parser=parse_transfer_station_list_response,
         )
 
     def get_ticket_list(

@@ -17,6 +17,7 @@ from korail_mobile_api import (
     KorailApiError,
     KorailAuthError,
     KorailConfig,
+    KorailInvalidInputError,
     KorailProtocolError,
     KorailSession,
     KorailSessionExpiredError,
@@ -238,6 +239,7 @@ CASES = [
         {"trains.0.train_no": "7"},
         False,
     ),
+    # ActualTrainScheduleIn.java:53; CommonIn.java:40,432,467-474: no Key, configured lang kept, 5-digit train.
     (
         "get_train_schedule",
         (DATE, "7"),
@@ -313,6 +315,7 @@ CASES = [
         {"car_no": "2", "title": "SYNTH"},
         False,
     ),
+    # TrainOptionViewModel.java:270 sends SeatType.HELPER's code (protected); the request takes it explicitly.
     (
         "get_guide_seat_condition",
         (GuideSeatConditionRequest("015"),),
@@ -622,7 +625,9 @@ OPTIONAL = [
 )
 def test_optional_strings_are_lenient_and_accept_integers(name, wire, model, value, expected, rig):
     """Optional constructors: TrainScheduleOutTrainInfo.java:172-563; seat:62-105;
-    RunDateOutItem.java:104-161.
+    RunDateOutItem.java:104-161. ActualTrainScheduleOutDlay.java:30,71-76 (String actArvDlayTnum; stopStnNm has an
+    app default the library does not reproduce); ActualTrainScheduleOut.java:38,47,75-85 (protected trnNo1/runDt1
+    defaults); ChtnStnOut.java:54-60, ChtnStnOutItem.java:51-61 (missing chtnList is empty, codes optional).
     """
     case = BY_NAME[name]
     raw = deepcopy(case[5])
@@ -911,6 +916,31 @@ def test_exact_form_options_and_three_continuation_fields(special, rig):
     exact_request(calls[0], P + "seatMovie.ScheduleView" + ("Special" if special else ""), form)
 
 
+def test_special_search_sends_the_normal_form_byte_for_byte(rig):
+    """ScheduleViewSpecial reuses the normal builder: the ordered body is identical and only the route differs.
+    Blank date/time/third cursor and an absent member card are left out by the transport on both routes."""
+    query = replace(
+        QUERY, departure_time="", connection_station_codes=("0050",), connection_train_group_code="G"
+    )
+    client, calls, _ = rig([SEARCH] * 4, auth=True)
+    for member_card_no in ("SYNTH-MEMBER", None):
+        client.session.current = KorailSession(jsessionid="SYNTH-SESSION", member_card_no=member_card_no)
+        for special in (False, True):
+            client.search_transfer_trains(
+                query, continuation=TrainSearchContinuation("S", "A"), use_special_schedule=special
+            )
+    assert [call.url.path for call in calls] == [
+        P + "seatMovie.ScheduleView",
+        P + "seatMovie.ScheduleViewSpecial",
+    ] * 2
+    assert calls[0].content == calls[1].content and calls[2].content == calls[3].content
+    keys = [key for key, _ in parse_qsl(calls[1].content.decode())]
+    assert (
+        "txtGoHour" not in keys and "qryStTrnNo2" not in keys and keys.index("mbCrdNo") < keys.index("qryDvCd")
+    )
+    assert "mbCrdNo" not in dict(parse_qsl(calls[3].content.decode()))
+
+
 def test_numeric_station_codes_are_resolved_once_then_cached(rig):
     """StationDataOut.java:44-49, TrainScheduleIn.java:95-285 expects departure/arrival names."""
     raw = {
@@ -1103,6 +1133,14 @@ def test_price_fare_quote_sends_empty_goods_numbers_like_the_app(rig):
     assert sent[0]["gdNo"] == "" and sent[1]["gdNo"] == ","
 
 
+def test_fare_quote_rejects_goods_numbers_on_one_leg_at_construction():
+    """F2 B7: a request whose legs disagree on goods_no used to construct fine and fail only when sent."""
+    with pytest.raises(KorailInvalidInputError, match="every leg or on none"):
+        PriceFareQuoteRequest((replace(FARE_LEG, goods_no="SYNTH-G1"), FARE_LEG))
+    with pytest.raises(KorailInvalidInputError, match="every leg or on none"):
+        PriceFareQuoteRequest((FARE_LEG, replace(FARE_LEG, goods_no="SYNTH-G2")))
+
+
 @pytest.mark.parametrize("method", ["get_seat_cars", "get_seat_inventory"])
 def test_optional_goods_and_seat_attribute_are_not_invented(method, rig):
     """TrainResearchIn.java:68-110; TResidualSeatsResearchIn.java:107-110,127-130.
@@ -1122,7 +1160,8 @@ def test_optional_goods_and_seat_attribute_are_not_invented(method, rig):
 @pytest.mark.parametrize("method", ["get_seat_cars", "get_seat_inventory"])
 def test_seat_attribute_override_follows_one_rule_for_both_seat_reads(method, rig):
     """An explicit value replaces the row value (even an unusable one); "" and None both fall back to the
-    row."""
+    row. The app copies the selected segment's attribute (TrainSeatMapViewModel.java:2527,2546,2573-2577;
+    TrainResearchIn.java:39,43,68)."""
     response = CARS if method == "get_seat_cars" else INVENTORY
     key = "txtSeatAttCd" if method == "get_seat_cars" else "seatAttCd"
     args = (1,) if method == "get_seat_inventory" else ()
@@ -1152,7 +1191,8 @@ def test_notice_missing_and_optional_lists_empty(rig):
 
 @pytest.mark.parametrize("value", [ABSENT, None, True, [], {}, 1.5])
 def test_optional_long_on_guidance_is_lenient(value, rig):
-    """GuideSeatCndOut.java:50-57 optional Long timeStamp; descriptor plaintext protected."""
+    """GuideSeatCndOut.java:29,50-57 optional Long timeStamp (key guessed from the attribute name; descriptor
+    plaintext protected). TrainOptionViewModel.java:290-300 shows a FAIL's h_msg_txt, so FAIL is returned."""
     raw = {**ENVELOPE, "timeStamp": 1}
     put(raw, "timeStamp", value)
     client, _, _ = rig([raw])
@@ -1241,7 +1281,7 @@ def test_nested_parser_raw_promotes_partial_context(rig, monkeypatch):
         error.raw = partial
         raise error
 
-    monkeypatch.setattr(parsers, "_inventory_string", fail)
+    monkeypatch.setattr(parsers, "_inventory_ratio", fail)
     client, _, _ = rig([INVENTORY], auth=True)
     with pytest.raises(KorailProtocolError) as error:
         client.get_seat_inventory(TRAIN, 2, passenger_count=2)
@@ -1251,7 +1291,8 @@ def test_nested_parser_raw_promotes_partial_context(rig, monkeypatch):
 
 @pytest.mark.parametrize("bad", [True, [], {}, 1.5])
 def test_optional_merge_flag_is_lenient_and_raw_survives(bad, rig):
-    """MergeSeatsCOutTrnInfos.java:54-61 optional merge flag."""
+    """MergeSeatsCOutTrnInfos.java:25-26,54-61,85 optional merge flag; TrainScheduleOutTrainInfos.java:25-26,78
+    declares only trn_info, so seat assignment never reads it."""
     raw = {**ENVELOPE, "trn_infos": {"h_merge_rsv_psb_flg": bad, "trn_info": []}}
     client, _, _ = rig([raw])
     result = client.get_merge_seats_inquiry(MERGE_REQUEST)
