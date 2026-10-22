@@ -144,7 +144,7 @@ from .payloads import (
     build_train_schedule_form,
     build_train_schedule_special_form,
     build_train_search_form,
-    validate_train_search_passengers,
+    validate_train_search_query,
 )
 from .read_models import (
     CartListResponse,
@@ -1583,7 +1583,7 @@ class KorailClient:
         use_special_schedule: bool = False,
         peak_season: bool = False,
     ) -> BaseKorailResponse:
-        validate_train_search_passengers(query)
+        validate_train_search_query(query)
         departure_name = self._resolve_station_reference(query.departure_station_code)
         arrival_name = self._resolve_station_reference(query.arrival_station_code)
         current = self.session.current

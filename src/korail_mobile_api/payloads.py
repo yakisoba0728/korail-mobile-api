@@ -158,8 +158,11 @@ def build_cache_query(timestamp_ms: int | None = None) -> dict[str, str]:
     return {"timeStamp": str(resolved)}
 
 
-def validate_train_search_passengers(query: TrainSearchQuery) -> None:
-    """역 이름 조회 같은 선행 요청 전에도 부를 수 있는 승객 수 검사입니다."""
+def validate_train_search_query(query: TrainSearchQuery) -> None:
+    """역 이름 조회·대기열 같은 선행 요청 전에 부르는 검사입니다. 빈 문자열은 기존처럼 생략 대상입니다."""
+    for name in ("departure_date", "departure_time", "train_group_code"):
+        if not isinstance(getattr(query, name), str):
+            raise KorailProtocolError(f"{name} must be a string")
     counts = (
         query.passengers,
         query.child_passengers,
@@ -189,7 +192,7 @@ def build_train_search_form(
     """다음 쪽 커서는 세 필드만 보내며 pgPrCnt는 보내지 않습니다(TrainScheduleIn.java:641-650; TrainScheduleViewModel.java:7340)."""
     if continuation is not None and not isinstance(continuation, TrainSearchContinuation):
         raise KorailProtocolError("KORAIL train search continuation must be a TrainSearchContinuation")
-    validate_train_search_passengers(query)
+    validate_train_search_query(query)
     if not isinstance(query.seat_attribute_code, str) or not query.seat_attribute_code:
         raise KorailProtocolError("seat_attribute_code must be a non-empty string")
     form = {

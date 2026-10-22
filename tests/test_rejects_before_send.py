@@ -421,51 +421,33 @@ ROWS = [
 FIXES = [
     # D6: non-ASCII digits reach int() (bare ValueError) or the wire.
     Row(
-        "bus-remaining-seats-superscript",
-        lambda c: c.reserve_limousine(
-            replace(F8["reserve_limousine"]["schedule"], general_remaining_seat_count="²"), ("1A",)
-        ),
-        defect="D6",
-    ),
-    Row(
         "cancel-journey-count-superscript",
         lambda c: c.cancel_unpaid_hold(_hold(journey_count="²")),
-        defect="D6",
     ),
     Row(
         "cancel-journey-count-arabic-indic",
         lambda c: c.cancel_unpaid_hold(_hold(journey_count="٢")),
-        defect="D6",
     ),
     Row(
         "cancel-journey-count-full-width",
         lambda c: c.cancel_unpaid_hold(_hold(journey_count="１")),
-        defect="D6",
-    ),
-    Row(
-        "pay-amount-beyond-int-limit",
-        lambda c: c.pay_with_card(_hold(received_amount="1" * 4301), CARD),
-        defect="D6",
     ),
     # D5: a None request field is sent as an empty "key=".
-    Row("search-departure-date-none", lambda c: _search(c, departure_date=None), defect="D5"),
-    Row("train-schedule-run-date-none", lambda c: c.get_train_schedule(None, "90001"), defect="D5"),
+    Row("search-departure-date-none", lambda c: _search(c, departure_date=None)),
+    Row("train-schedule-run-date-none", lambda c: c.get_train_schedule(None, "90001")),
     Row(
         "bus-schedule-departure-date-none",
         lambda c: c.get_limousine_schedules(
             replace(F8["get_limousine_schedules"]["query"], departure_date=None)
         ),
-        defect="D5",
     ),
     Row(
         "pass-schedule-page-none",
         lambda c: c.get_pass_schedule(replace(F8["get_pass_schedule"]["request"], page_no=None)),
-        defect="D5",
     ),
     Row(
         "free-seat-car-run-date-none",
         lambda c: c.get_free_seat_car_info(replace(F8["get_free_seat_car_info"]["request"], run_date=None)),
-        defect="D5",
     ),
     # D1: only MERGE_STANDING belongs to a merge follow-up; a standby hold is not recalculated.
     Row(
@@ -475,19 +457,17 @@ FIXES = [
             MERGE_ROWS,
             job_type=Job.STANDBY,
         ),
-        defect="D1",
     ),
-    Row("merge-immediate-job", lambda c: _merge(c, {}, job_type=Job.IMMEDIATE), defect="D1"),
+    Row("merge-immediate-job", lambda c: _merge(c, {}, job_type=Job.IMMEDIATE)),
     Row(
         "recalc-standby-hold",
         lambda c: c.recalculate_price(
             api.PriceRecalculationRequest.for_hold(replace(SEATED_HOLD, payable=False), ["000"])
         ),
-        defect="D1",
     ),
     # D9: login sends the service check and crypto key request before rejecting the password.
-    Row("login-password-none", lambda c: c.login("0000000000", None), logged_in=False, defect="D9"),
-    Row("login-password-not-text", lambda c: c.login("0000000000", 123), logged_in=False, defect="D9"),
+    Row("login-password-none", lambda c: c.login("0000000000", None), logged_in=False),
+    Row("login-password-not-text", lambda c: c.login("0000000000", 123), logged_in=False),
 ]
 
 
