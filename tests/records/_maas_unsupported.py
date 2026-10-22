@@ -110,7 +110,7 @@ def parse_maas_cancel_fee_response(raw: Mapping[str, Any]) -> MaasCancelFeeRespo
     """지원하지 않는 부가서비스 환불 수수료 응답을 읽습니다. maas.cncFee.do 응답. cncRetFee 는 선택 스칼라로 읽습니다(MaasCancelFeeOut.java)."""
     _validate_envelope(raw)
     return MaasCancelFeeResponse(
-        cancel_fee=_optional_scalar_string(raw, "cncRetFee", "MaaS cancel fee"),
+        cancel_fee=_optional_scalar_string(raw, "cncRetFee"),
         **_response_fields(raw),
     )
 
@@ -121,7 +121,7 @@ def parse_maas_cancel_response(raw: Mapping[str, Any]) -> MaasCancelResponse:
     data = _response_mapping(raw)
     return MaasCancelResponse(
         **_base_fields(data),
-        integrated_message_code=_optional_scalar_string(data, "intgMsgCd", "MaaS cancel"),
+        integrated_message_code=_optional_scalar_string(data, "intgMsgCd"),
     )
 
 

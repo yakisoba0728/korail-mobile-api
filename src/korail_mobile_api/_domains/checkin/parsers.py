@@ -176,9 +176,7 @@ def parse_recent_delivery_history_response(
             )
         )
     return RecentDeliveryHistoryResponse(
-        changed_acceptance_reservation_no=_optional_scalar_string(
-            raw, "chgePbpRsvNo", "recent delivery history"
-        ),
+        changed_acceptance_reservation_no=_optional_scalar_string(raw, "chgePbpRsvNo"),
         recipients=tuple(recipients),
         **_response_fields(raw),
     )
@@ -260,7 +258,7 @@ def parse_self_checkin_cancel_response(raw: Mapping[str, Any]) -> SelfCheckInCan
     data = _response_mapping(raw)
     return SelfCheckInCancelResponse(
         **_base_fields(data),
-        message_id=_optional_scalar_string(data, "msgId", "self check-in cancel"),
+        message_id=_optional_scalar_string(data, "msgId"),
     )
 
 

@@ -133,7 +133,7 @@ def parse_delay_discount_ticket_response(
     items = tuple(
         DelayDiscountTicket(
             **_nullable_scalar_fields(row, _DELAY_DISCOUNT_TICKET_FIELDS),
-            **_nullable_scalar_fields(row, _DELAY_DISCOUNT_TICKET_SCALAR_FIELDS, "delay discount ticket"),
+            **_nullable_scalar_fields(row, _DELAY_DISCOUNT_TICKET_SCALAR_FIELDS),
             raw=row,
         )
         for row in rows
@@ -145,7 +145,6 @@ def parse_delay_discount_ticket_response(
         pagination = _nullable_scalar_fields(
             main_info,
             _DELAY_DISCOUNT_MAIN_INFO_FIELDS,
-            "delay discount ticket list main_info",
         )
     return DelayDiscountTicketListResponse(
         items=items,
@@ -188,17 +187,17 @@ def parse_discount_coupon_response(
     for item in rows:
         items.append(
             DiscountCoupon(
-                **_nullable_scalar_fields(item, _DISCOUNT_COUPON_FIELDS, "discount coupon"),
+                **_nullable_scalar_fields(item, _DISCOUNT_COUPON_FIELDS),
                 remarks=_present_strings(item, ("h_rmk_1_cont", "h_rmk_2_cont", "h_rmk_3_cont")),
                 raw=item,
             )
         )
     return DiscountCouponListResponse(
         items=tuple(items),
-        current_page=_optional_integer(raw, "h_page_no", "coupon response"),
-        total_pages=_optional_integer(raw, "h_tot_page_cnt", "coupon response"),
-        total_count=_optional_scalar_string(raw, "h_tot_cnt", "coupon response"),
-        row_count=_optional_scalar_string(raw, "h_row_cnt", "coupon response"),
+        current_page=_optional_integer(raw, "h_page_no"),
+        total_pages=_optional_integer(raw, "h_tot_page_cnt"),
+        total_count=_optional_scalar_string(raw, "h_tot_cnt"),
+        row_count=_optional_scalar_string(raw, "h_row_cnt"),
         **_response_fields(raw),
     )
 
@@ -257,7 +256,7 @@ def parse_korail_point_summary_response(
     _validate_strict_read_envelope(raw)
     return KorailPointSummaryResponse(
         # MyXPointViewOut.java:27-74 는 String 이고 표본도 48키 모두 문자열이었습니다.
-        **_nullable_scalar_fields(raw, _KORAIL_POINT_SUMMARY_FIELDS, "korail point summary"),
+        **_nullable_scalar_fields(raw, _KORAIL_POINT_SUMMARY_FIELDS),
         **_response_fields(raw),
     )
 
@@ -274,13 +273,12 @@ def parse_mileage_history_response(
                 **_nullable_scalar_fields(
                     item,
                     _MILEAGE_HISTORY_ENTRY_FIELDS,
-                    "mileage history entry",
                 ),
                 raw=item,
             )
         )
     return MileageHistoryResponse(
-        **_nullable_scalar_fields(raw, _MILEAGE_HISTORY_FIELDS, "mileage history"),
+        **_nullable_scalar_fields(raw, _MILEAGE_HISTORY_FIELDS),
         entries=tuple(entries),
         **_response_fields(raw),
     )
@@ -366,7 +364,7 @@ def parse_customer_trip_info_response(
     for item in _required_read_rows(raw, "mainList", "customer trip info"):
         trips.append(
             CustomerTripInfo(
-                **_nullable_scalar_fields(item, _CUSTOMER_TRIP_FIELDS, "customer trip info"),
+                **_nullable_scalar_fields(item, _CUSTOMER_TRIP_FIELDS),
                 raw=item,
             )
         )
@@ -410,12 +408,12 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
             train_info = tuple(_rows(ticket_raw, "jrn_info"))
             tickets.append(
                 TicketListTicket(
-                    **_nullable_scalar_fields(ticket_raw, _TICKET_LIST_TICKET_FIELDS, "ticket list"),
+                    **_nullable_scalar_fields(ticket_raw, _TICKET_LIST_TICKET_FIELDS),
                     train_info=train_info,
                     raw=ticket_raw,
                     trains=tuple(
                         TicketListTrain(
-                            **_nullable_scalar_fields(row, _TICKET_LIST_TRAIN_FIELDS, "ticket list jrn_info"),
+                            **_nullable_scalar_fields(row, _TICKET_LIST_TRAIN_FIELDS),
                             raw=row,
                         )
                         for row in train_info
@@ -440,27 +438,20 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
                         "ticket_kind_code": "hTkKndCd",
                         "list_count": "listCnt",
                     },
-                    "ticket list reservation",
                 ),
-                seat_assign_count=_optional_integer(
-                    reservation_raw, "seatAssignCount", "ticket list reservation"
-                ),
-                ticket_status=_optional_scalar_string(
-                    reservation_raw, "ticketStatus", "ticket list reservation"
-                ),
+                seat_assign_count=_optional_integer(reservation_raw, "seatAssignCount"),
+                ticket_status=_optional_scalar_string(reservation_raw, "ticketStatus"),
                 is_finished=_optional_bool(reservation_raw, "isFinished"),
                 is_history=_optional_bool(reservation_raw, "isHistory"),
                 is_emergency=_optional_bool(reservation_raw, "isEmergency"),
-                display_ticket_name=_optional_scalar_string(
-                    reservation_raw, "displayTicketName", "ticket list reservation"
-                ),
+                display_ticket_name=_optional_scalar_string(reservation_raw, "displayTicketName"),
                 is_non_member=_optional_bool(reservation_raw, "isNonMember"),
                 is_transfer=_optional_bool(reservation_raw, "isTransfer"),
                 is_wheelchair_member=_optional_bool(reservation_raw, "isWheelchairMember"),
                 is_rail_police_enabled=_optional_bool(reservation_raw, "isRailPoliceEnabled"),
                 raw=reservation_raw,
                 additional_service=additional_service,
-                ticket_kind=_optional_scalar_string(reservation_raw, "ticketKind", "ticket list reservation"),
+                ticket_kind=_optional_scalar_string(reservation_raw, "ticketKind"),
             )
         )
     return TicketListResponse(
@@ -469,7 +460,7 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
         str_result=response.str_result,
         raw=raw,
         reservations=tuple(reservations),
-        total_count=_optional_scalar_string(raw, "h_total_cnt", "ticket list"),
+        total_count=_optional_scalar_string(raw, "h_total_cnt"),
     )
 
 
@@ -660,7 +651,6 @@ def parse_self_seat_change_info_response(
             **_nullable_scalar_fields(
                 station,
                 _SELF_SEAT_CHANGE_STATION_FIELDS,
-                "self seat change station",
             ),
             raw=station,
         )
@@ -677,7 +667,6 @@ def parse_self_seat_change_info_response(
             **_nullable_scalar_fields(
                 reason,
                 _SELF_SEAT_CHANGE_REASON_FIELDS,
-                "self seat change reason",
             ),
             raw=reason,
         )
@@ -693,7 +682,6 @@ def parse_self_seat_change_info_response(
         **_nullable_scalar_fields(
             raw,
             _SELF_SEAT_CHANGE_INFO_FIELDS,
-            "self seat change info",
         ),
         stations=stations,
         reasons=reasons,
@@ -780,7 +768,6 @@ def parse_original_ticket_inquiry_response(
                     **_nullable_scalar_fields(
                         seat,
                         _ORIGINAL_TICKET_SEAT_FIELDS,
-                        "original ticket seat",
                     ),
                     raw=seat,
                 )
@@ -797,7 +784,6 @@ def parse_original_ticket_inquiry_response(
                     **_nullable_scalar_fields(
                         journey,
                         _ORIGINAL_TICKET_JOURNEY_FIELDS,
-                        "original ticket journey",
                     ),
                     seats=seats,
                     raw=journey,
@@ -808,7 +794,6 @@ def parse_original_ticket_inquiry_response(
                 **_nullable_scalar_fields(
                     ticket,
                     _ORIGINAL_TICKET_FIELDS,
-                    "original ticket",
                 ),
                 journeys=tuple(journeys),
                 raw=ticket,
@@ -840,7 +825,7 @@ def parse_delay_certificate_response(raw: Mapping[str, Any]) -> DelayCertificate
         delays.append(
             DelayCertificateRow(
                 **_required_read_strings(row, _DELAY_CERTIFICATE_FIELDS, "delay certificate"),
-                run_date=_optional_scalar_string(row, "runDt", "delay certificate"),
+                run_date=_optional_scalar_string(row, "runDt"),
                 raw=row,
             )
         )
@@ -858,7 +843,6 @@ def parse_delay_return_receipt_response(raw: Mapping[str, Any]) -> DelayReturnRe
                 "payment_method_name": "dlayFarePymtMtdNm",
                 "return_amount": "dlayFareRetAmt",
             },
-            "delay return receipt",
         ),
         **_response_fields(raw),
     )

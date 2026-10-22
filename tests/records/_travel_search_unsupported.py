@@ -140,13 +140,13 @@ def parse_travel_product_search_response(raw: Mapping[str, Any]) -> TravelProduc
     if not isinstance(listing, Mapping):
         raise KorailProtocolError("KORAIL travel product search field lst must be an object or null")
     products = tuple(
-        TravelProduct(**_nullable_scalar_fields(row, _TRAVEL_PRODUCT_FIELDS, "travel product"), raw=row)
+        TravelProduct(**_nullable_scalar_fields(row, _TRAVEL_PRODUCT_FIELDS), raw=row)
         for row in _optional_read_rows(listing, "gdList", "travel product search")
     )
     return TravelProductSearchResponse(
         products=products,
-        query_count=_optional_scalar_string(listing, "qryCnt", "travel product search"),
-        page_count=_optional_scalar_string(listing, "pgCnt", "travel product search"),
+        query_count=_optional_scalar_string(listing, "qryCnt"),
+        page_count=_optional_scalar_string(listing, "pgCnt"),
         **_response_fields(raw),
     )
 

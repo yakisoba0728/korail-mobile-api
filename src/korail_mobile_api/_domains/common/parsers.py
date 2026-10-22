@@ -53,7 +53,7 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
         version = AppVersionInfo(
             message=_optional_scalar_string(version_raw, "AMESSAGE"),
             new_version=_optional_scalar_string(version_raw, "NEWDVERSION"),
-            store_url=_optional_scalar_string(version_raw, "CNTAURL", "app data version"),
+            store_url=_optional_scalar_string(version_raw, "CNTAURL"),
         )
     return AppDataResponse(
         **_model_response_fields(response),
@@ -169,7 +169,6 @@ def parse_station_data_response(
                 **_nullable_scalar_fields(
                     row,
                     _STATION_OPTIONAL_STRING_FIELDS,
-                    context="train read",
                 ),
             )
         )
@@ -230,7 +229,6 @@ def parse_train_calendar_response(
                     "v_train_operation_flag": "vTrnOpFlg",
                     "x_train_operation_flag": "xTrnOpFlg",
                 },
-                context="train read",
             ),
             raw=dict(row),
         )

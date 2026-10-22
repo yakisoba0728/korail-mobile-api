@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import Counter, UserDict
 from copy import deepcopy
-from dataclasses import dataclass, is_dataclass, replace
+from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as dataclass_fields
 from typing import Any
 from urllib.parse import parse_qsl
@@ -15,7 +15,20 @@ import pytest
 
 import korail_mobile_api as api
 from korail_mobile_api import KorailSession
-from korail_mobile_api._core.parsing import _nullable_scalar_fields
+from korail_mobile_api._core.parsing import (
+    _nullable_scalar_fields,
+    defaulted_str,
+    nullable_str,
+    optional_bool,
+    optional_int,
+    present_str,
+    required_int,
+    required_str,
+    strict_str,
+    wire,
+    wire_model,
+    wire_models,
+)
 from korail_mobile_api._domains.reservations.parsers import _reservation_passengers, parse_cart_list_response
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
@@ -1511,7 +1524,53 @@ def test_nullable_field_map_preserves_optional_policy(value: object, expected: s
     raw = {"wire": value}
     fields = {"present": "wire", "missing": "absent"}
     assert _nullable_scalar_fields(raw, fields) == {"present": expected, "missing": None}
-    assert _nullable_scalar_fields(raw, fields, "synthetic context") == {"present": expected, "missing": None}
+    # The field-metadata reader kind keeps the same lenient policy.
+    assert (nullable_str(raw, "wire", "synthetic"), nullable_str(raw, "absent", "synthetic")) == (
+        expected,
+        None,
+    )
+
+
+@pytest.mark.parametrize(
+    "read,missing,null,wrong,integer",
+    [
+        (nullable_str, None, None, None, "17"),
+        (strict_str, None, None, KorailProtocolError, "17"),
+        (present_str, KorailProtocolError, None, KorailProtocolError, "17"),
+        (required_str, KorailProtocolError, KorailProtocolError, KorailProtocolError, "17"),
+        (defaulted_str, "", KorailProtocolError, KorailProtocolError, "17"),
+        (optional_int, None, None, None, 17),
+        (required_int, KorailProtocolError, KorailProtocolError, KorailProtocolError, 17),
+        (optional_bool, None, None, None, None),
+    ],
+    ids=lambda value: getattr(value, "__name__", None),
+)
+def test_wire_reader_kinds_follow_the_documented_table(read, missing, null, wrong, integer) -> None:
+    """The reader table in the _core/parsing.py docstring: missing / null / wrong type (a float) / JSON integer."""
+    for data, expected in (({}, missing), ({"k": None}, null), ({"k": 1.5}, wrong), ({"k": 17}, integer)):
+        if expected is KorailProtocolError:
+            with pytest.raises(KorailProtocolError, match="synthetic context field k"):
+                read(data, "k", "synthetic context")
+        else:
+            assert read(data, "k", "synthetic context") == expected
+
+
+def test_wire_fields_keep_constructor_defaults_and_raw_rules() -> None:
+    @dataclass(frozen=True)
+    class Synthetic:
+        required: str = wire("req", required_str)
+        optional: str | None = wire("opt")
+        raw: dict[str, object] = field(default_factory=dict)
+
+    row: dict[str, object] = {"req": 7, "opt": False}
+    parsed = wire_model(Synthetic, row, "synthetic", raw=row)
+    assert (parsed.required, parsed.optional) == ("7", None) and parsed.raw is row
+    assert wire_models(Synthetic, [row], "synthetic")[0].raw is row
+    copied = wire_models(Synthetic, [row], "synthetic", copy_raw=True)[0].raw
+    assert copied == row and copied is not row
+    assert Synthetic(required="x").optional is None
+    with pytest.raises(TypeError):
+        Synthetic()  # required at runtime, although type checkers see a default
 
 
 @pytest.mark.parametrize("container", [None, [], "invalid", {}, {"psg_info": None}, {"psg_info": {}}])

@@ -55,12 +55,7 @@ def _ascii_digits(
             expected = ", ".join(str(length) for length in sorted(lengths))
             raise KorailProtocolError(f"{name} must contain {expected} ASCII digit(s)")
         return value
-    if (
-        not isinstance(value, str)
-        or not value
-        or any(character < "0" or character > "9" for character in value)
-        or (maximum_length is not None and len(value) > maximum_length)
-    ):
+    if not _is_ascii_digits(value) or (maximum_length is not None and len(value) > maximum_length):
         suffix = f" with at most {maximum_length} digits" if maximum_length is not None else ""
         raise KorailProtocolError(f"{name} must be an ASCII decimal string{suffix}")
     return value

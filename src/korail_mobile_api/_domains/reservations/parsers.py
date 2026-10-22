@@ -77,7 +77,7 @@ def _reservation_passengers(raw: Mapping[str, Any]) -> tuple[ReservationPassenge
     """컨테이너가 없거나 모양이 다르면 빈 튜플이고 원문은 raw 에 남습니다."""
     return tuple(
         ReservationPassengerInfo(
-            **_nullable_scalar_fields(row, _RESERVATION_PASSENGER_FIELDS, "reservation passenger"),
+            **_nullable_scalar_fields(row, _RESERVATION_PASSENGER_FIELDS),
             raw=dict(row),
         )
         for row in _nested_rows(raw, "psg_infos", "psg_info")
@@ -127,7 +127,7 @@ def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
         items.append(
             CartItem(
                 **_nullable_scalar_fields(item, _CART_ITEM_FIELDS),
-                **_nullable_scalar_fields(item, _CART_ITEM_SCALAR_FIELDS, "cart item"),
+                **_nullable_scalar_fields(item, _CART_ITEM_SCALAR_FIELDS),
                 # h_tk_cnt 는 String 선언입니다(CartInfo.java:51).
                 ticket_count=_optional_scalar_string(item, "h_tk_cnt"),
                 raw=item,
@@ -225,7 +225,6 @@ def _parse_reservation_history_reservation(
             **_nullable_scalar_fields(
                 item,
                 _RESERVATION_HISTORY_TICKET_FIELDS,
-                "reservation history ticket",
             ),
             raw=item,
         )
@@ -236,7 +235,6 @@ def _parse_reservation_history_reservation(
             **_nullable_scalar_fields(
                 item,
                 _RESERVATION_HISTORY_ORIGINAL_TICKET_FIELDS,
-                "reservation history original ticket",
             ),
             raw=item,
         )
@@ -247,7 +245,6 @@ def _parse_reservation_history_reservation(
             **_nullable_scalar_fields(
                 item,
                 _RESERVATION_HISTORY_PASSENGER_FIELDS,
-                "reservation history passenger",
             ),
             raw=item,
         )
@@ -257,7 +254,6 @@ def _parse_reservation_history_reservation(
         **_nullable_scalar_fields(
             raw,
             _RESERVATION_HISTORY_RESERVATION_FIELDS,
-            "reservation history reservation",
         ),
         tickets=tickets,
         original_tickets=original_tickets,
@@ -278,29 +274,21 @@ def parse_reservation_history_response(
     if empty:
         return ReservationHistoryResponse(**_response_fields(raw))
     guide_infos = _optional_mapping(raw, "guide_infos")
-    guide_info = (
-        _optional_scalar_string(guide_infos, "guide_info", "reservation history guide_infos")
-        if guide_infos is not None
-        else None
-    )
+    guide_info = _optional_scalar_string(guide_infos, "guide_info") if guide_infos is not None else None
     journeys: list[ReservationHistoryJourney] = []
     all_trains: list[ReservationHistoryTrain] = []
     for journey in _nested_rows(raw, "jrny_infos", "jrny_info"):
         trains: list[ReservationHistoryTrain] = []
         for train in _nested_rows(journey, "train_infos", "train_info"):
             history_train = ReservationHistoryTrain(
-                **_nullable_scalar_fields(
-                    train, _RESERVATION_HISTORY_TRAIN_FIELDS, "reservation history train"
-                ),
+                **_nullable_scalar_fields(train, _RESERVATION_HISTORY_TRAIN_FIELDS),
                 seat_count=_optional_integer(
                     train,
                     "h_tot_seat_cnt",
-                    "reservation history train",
                 ),
                 standing_count=_optional_integer(
                     train,
                     "h_tot_stnd_cnt",
-                    "reservation history train",
                 ),
                 raw=train,
             )
@@ -321,8 +309,8 @@ def parse_reservation_history_response(
             )
         )
     return ReservationHistoryResponse(
-        **_nullable_scalar_fields(raw, _RESERVATION_HISTORY_TOP_FIELDS, "reservation history"),
-        journey_count=_optional_scalar_string(raw, "h_jrny_cnt", "reservation history"),
+        **_nullable_scalar_fields(raw, _RESERVATION_HISTORY_TOP_FIELDS),
+        journey_count=_optional_scalar_string(raw, "h_jrny_cnt"),
         guide_info=guide_info,
         journeys=tuple(journeys),
         items=tuple(all_trains),
@@ -340,7 +328,6 @@ def parse_ticket_duplication_check_response(
         reservation_count=_optional_scalar_string(
             raw,
             "rsvCnt",
-            "ticket duplication check",
         ),
         **_response_fields(raw),
     )
@@ -409,20 +396,14 @@ def parse_ticket_reservation_detail_response(
         ):
             seats.append(
                 ReservationSeatDetail(
-                    **_nullable_scalar_fields(seat, _RESERVATION_SEAT_DETAIL_FIELDS, "reservation seat detail"),
+                    **_nullable_scalar_fields(seat, _RESERVATION_SEAT_DETAIL_FIELDS),
                     raw=seat,
                 )
             )
         journeys.append(
             ReservationDetailJourney(
-                **_nullable_scalar_fields(
-                    journey, _RESERVATION_DETAIL_JOURNEY_FIELDS, "reservation detail journey"
-                ),
-                run_date=(
-                    _optional_scalar_string(journey, "h_run_dt", "reservation detail journey")
-                    if "h_run_dt" in journey
-                    else ""
-                ),
+                **_nullable_scalar_fields(journey, _RESERVATION_DETAIL_JOURNEY_FIELDS),
+                run_date=(_optional_scalar_string(journey, "h_run_dt") if "h_run_dt" in journey else ""),
                 seats=tuple(seats),
                 raw=journey,
             )
@@ -431,10 +412,9 @@ def parse_ticket_reservation_detail_response(
         **_nullable_scalar_fields(
             raw,
             _TICKET_RESERVATION_DETAIL_FIELDS,
-            "ticket reservation detail",
         ),
         journeys=tuple(journeys),
-        **_nullable_scalar_fields(raw, RESERVATION_OUT_EXTRA_FIELDS, "ticket reservation detail"),
+        **_nullable_scalar_fields(raw, RESERVATION_OUT_EXTRA_FIELDS),
         passengers=_reservation_passengers(raw),
         **_response_fields(raw),
     )
@@ -499,7 +479,7 @@ def _received_amount(
             except ValueError:
                 # 큰 정수의 문자열 변환 실패도 0원으로 취급하지 않습니다.
                 return None
-            seat_no = _optional_scalar_string(seat, "h_seat_no", "reservation seat") or ""
+            seat_no = _optional_scalar_string(seat, "h_seat_no") or ""
             if value == 0 and not seat_no.strip():
                 # 예약대기 관측: 좌석번호 없는 0원 행은 정산 좌석이 아니었습니다.
                 continue
@@ -580,7 +560,7 @@ def parse_reservation_hold_response(
         row = dict(_row(value, "reservation journey"))
         journeys.append(
             ReservationJourney(
-                **_nullable_scalar_fields(row, _RESERVATION_JOURNEY_FIELDS, "reservation journey"),
+                **_nullable_scalar_fields(row, _RESERVATION_JOURNEY_FIELDS),
                 reservation_change_no=_strict_scalar_string(row, "h_rsv_chg_no", "reservation journey"),
                 raw=row,
             )
@@ -593,13 +573,13 @@ def parse_reservation_hold_response(
     return ReservationHoldResponse(
         **_base_fields(copied),
         **required,
-        **_nullable_scalar_fields(copied, _RESERVATION_HOLD_FIELDS, "reservation"),
+        **_nullable_scalar_fields(copied, _RESERVATION_HOLD_FIELDS),
         received_amount=_received_amount(
             copied,
             [journey.raw for journey in journeys],
         ),
         journeys=tuple(journeys),
-        **_nullable_scalar_fields(copied, RESERVATION_OUT_EXTRA_FIELDS, "reservation"),
+        **_nullable_scalar_fields(copied, RESERVATION_OUT_EXTRA_FIELDS),
         passengers=_reservation_passengers(copied),
     )
 
@@ -665,7 +645,7 @@ def _cart_discount_additions(
     return tuple(
         CartDiscountAddition(
             raw=item,
-            **_nullable_scalar_fields(item, _CART_DISCOUNT_ADDITION_FIELDS, "cart add discount row"),
+            **_nullable_scalar_fields(item, _CART_DISCOUNT_ADDITION_FIELDS),
         )
         for item in _nested_rows(data, "psgDiscAdd_infos", "psgDiscAdd_info")
     )

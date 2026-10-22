@@ -53,7 +53,7 @@ from .models import (
 )
 
 _inventory_string = partial(_typed_defaulted_string, context="seat inventory")
-_inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
+_inventory_optional_int = _typed_optional_int
 
 
 @_preserve_read_raw
@@ -87,7 +87,7 @@ def parse_train_search_metadata(
 
     return TrainSearchMetadata(
         job_id=optional("strJobId"),
-        menu_id=_optional_scalar_string(raw, "h_menu_id", "train search metadata"),
+        menu_id=_optional_scalar_string(raw, "h_menu_id"),
         product_no=optional("h_gd_no"),
         next_page_flag=optional("h_next_pg_flg"),
         next_query_station_no=optional("h_qry_st_no_next"),
@@ -123,7 +123,6 @@ def parse_train_schedule_response(
                     "station_construction_order": "stnConsOrdr",
                     "run_order": "runOrdr",
                 },
-                context="train read",
             ),
             # ActualTrainScheduleOutDlay.java:30 — 앱 DTO 는 String("001" 등)입니다.
             actual_arrival_delay_count=_optional_scalar_string(row, "actArvDlayTnum"),
@@ -147,7 +146,6 @@ def parse_train_schedule_response(
                     "regular_flag": "rgulFlg",
                     "service_flag": "saodFlg",
                 },
-                context="train read",
             ),
             raw=dict(row),
         )
@@ -294,7 +292,7 @@ def parse_seat_car_list_response(
         train_class_code=_optional_scalar_string(raw, "h_trn_clsf_cd"),
         train_group_code=_optional_scalar_string(raw, "h_trn_gp_cd"),
         # TrainResearchOut.java:27,105 의 고유 필드.
-        car_count=_optional_scalar_string(raw, "h_scar_num", "seat car list"),
+        car_count=_optional_scalar_string(raw, "h_scar_num"),
     )
 
 
@@ -462,7 +460,6 @@ def parse_free_seat_car_response(
                 "car_no": "fresScarNo",
                 "content": "fresCont",
             },
-            context="train read",
         ),
         **_response_fields(raw),
     )
@@ -479,7 +476,7 @@ def parse_guide_seat_condition_response(
     # 실서버 검증 못 함. timeStamp 는 속성명(GuideSeatCndOut.java:29). 보호된 descriptor 의 9자 길이는 평문을 증명하지
     # 않습니다(GuideSeatCndOut$$serializer.java:39).
     return GuideSeatConditionResponse(
-        time_stamp=_optional_integer(raw, "timeStamp", "guide seat condition"),
+        time_stamp=_optional_integer(raw, "timeStamp"),
         **_response_fields(raw),
     )
 
@@ -489,7 +486,7 @@ def _parse_train_schedule_item(
     field_map: Mapping[str, str],
 ) -> TrainScheduleItem:
     return TrainScheduleItem(
-        **_nullable_scalar_fields(raw, field_map, "train schedule item"),
+        **_nullable_scalar_fields(raw, field_map),
         raw=raw,
     )
 
@@ -546,7 +543,6 @@ def parse_seat_assignment_schedule_response(
                 "next_connecting_train_no": "h_ectb_trn_no_next",
                 "remaining_seat_count": "h_rest_seat_cnt",
             },
-            "seat assignment schedule",
         ),
         trains=trains,
         **_response_fields(raw),
@@ -569,7 +565,6 @@ def parse_merge_seats_inquiry_response(
                         "name": "rsStnNm",
                         "run_order": "runOrdr",
                     },
-                    context="train read",
                 ),
                 raw=station,
             )
@@ -583,7 +578,7 @@ def parse_merge_seats_inquiry_response(
         merge_reservation_possible_flag=merge_flag,
         # runDt 는 최상위 선언(MergeSeatsCOut.java:29,112)이지만 관측 20여 회에는 없었고 행별 h_run_dt 만 있었습니다. 다른 조건에서도 없다고 일반화하지
         # 않습니다.
-        run_date=_optional_scalar_string(raw, "runDt", "merge seats inquiry"),
+        run_date=_optional_scalar_string(raw, "runDt"),
         intermediate_stations=tuple(stations),
         trains=trains,
         **_response_fields(raw),
@@ -612,7 +607,6 @@ def parse_price_fare_quote_response(
                 **_nullable_scalar_fields(
                     item,
                     _PRICE_FARE_FIELDS,
-                    context="train read",
                 ),
                 raw=item,
             )

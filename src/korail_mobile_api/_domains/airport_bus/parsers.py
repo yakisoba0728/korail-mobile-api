@@ -119,11 +119,8 @@ def parse_limousine_schedule_response(
         row = _row(value, "limousine schedule trainList")
         schedules.append(
             LimousineSchedule(
-                **_nullable_scalar_fields(row, _SCHEDULE_FIELDS, "limousine schedule"),
-                **{
-                    name: _optional_scalar_string(row, wire, "limousine schedule")
-                    for name, wire in _SCHEDULE_ADDED_FIELDS.items()
-                },
+                **_nullable_scalar_fields(row, _SCHEDULE_FIELDS),
+                **{name: _optional_scalar_string(row, wire) for name, wire in _SCHEDULE_ADDED_FIELDS.items()},
                 raw=row,
             )
         )
@@ -131,12 +128,10 @@ def parse_limousine_schedule_response(
         following_page_extension=_optional_scalar_string(
             raw,
             "fllwPgExt",
-            "limousine schedule",
         ),
         long_short_division_code=_optional_scalar_string(
             raw,
             "lgtmShtmDvCd",
-            "limousine schedule",
         ),
         schedules=tuple(schedules),
         **_model_response_fields(response),
@@ -173,7 +168,7 @@ def parse_limousine_seat_inventory_response(
         row = _row(value, "limousine seat inventory seatList")
         seats.append(
             LimousineSeat(
-                **_nullable_scalar_fields(row, _SEAT_FIELDS, "limousine seat inventory"),
+                **_nullable_scalar_fields(row, _SEAT_FIELDS),
                 raw=row,
             )
         )
@@ -199,15 +194,13 @@ def parse_limousine_seat_inventory_response(
                 "car_no": "scar_no",
                 "seat_arrangement_code": "seat_ary_cd",
             },
-            "limousine seat inventory",
         ),
-        layout_type=_optional_scalar_string(raw, "layout_type", "limousine seat inventory"),
-        vr_banner_url=_optional_scalar_string(raw, "vrBnrUrl", "limousine seat inventory"),
+        layout_type=_optional_scalar_string(raw, "layout_type"),
+        vr_banner_url=_optional_scalar_string(raw, "vrBnrUrl"),
         windows=tuple(windows),
         up_down_division_code=_optional_scalar_string(
             raw,
             "up_dn_dv_cd",
-            "limousine seat inventory",
         ),
         seats=tuple(seats),
         **_model_response_fields(response),
@@ -245,7 +238,7 @@ def parse_maas_menu_list_response(
 ) -> MaasMenuListResponse:
     items: list[MaasMenuItem] = [
         MaasMenuItem(
-            **_nullable_scalar_fields(row, _MAAS_ITEM_FIELDS, context="train read"),
+            **_nullable_scalar_fields(row, _MAAS_ITEM_FIELDS),
             raw=dict(row),
         )
         for row in _rows(response.raw, "menuList")
@@ -257,7 +250,7 @@ def parse_maas_menu_list_response(
         str_result=response.str_result,
         raw=raw,
         items=tuple(items),
-        **_nullable_scalar_fields(raw, _MAAS_RESPONSE_FIELDS, context="train read"),
+        **_nullable_scalar_fields(raw, _MAAS_RESPONSE_FIELDS),
     )
 
 
@@ -330,12 +323,12 @@ def _parse_add_srv_item(
     detail_info = None
     if info_raw is not None:
         detail_info = MaasServiceDetailInfo(
-            **_nullable_scalar_fields(info_raw, _MAAS_DETAIL_INFO_FIELDS, info_context),
+            **_nullable_scalar_fields(info_raw, _MAAS_DETAIL_INFO_FIELDS),
             entity_one=tuple(_rows(info_raw, "entityOne")),
             raw=info_raw,
         )
     return MaasServiceDetail(
-        **_nullable_scalar_fields(item, _MAAS_DETAIL_FIELDS, context),
+        **_nullable_scalar_fields(item, _MAAS_DETAIL_FIELDS),
         detail_info=detail_info,
         raw=item,
     )

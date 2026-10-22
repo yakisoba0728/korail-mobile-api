@@ -198,7 +198,6 @@ def _parse_pass_goods_info(
                     h_cls_prnb=_optional_integer(
                         item,
                         "h_cls_prnb",
-                        "pass passenger info",
                     ),
                     h_dcnt_knd_cd=_optional_scalar_string(
                         item,
@@ -207,7 +206,6 @@ def _parse_pass_goods_info(
                     h_st_prnb=_optional_integer(
                         item,
                         "h_st_prnb",
-                        "pass passenger info",
                     ),
                     raw=item,
                 )
@@ -243,7 +241,7 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
         items.append(
             PassMenuItem(
                 **_nullable_scalar_fields(item, _PASS_MENU_ITEM_FIELDS),
-                **_nullable_scalar_fields(item, _PASS_MENU_ITEM_SCALAR_FIELDS, "pass menu item"),
+                **_nullable_scalar_fields(item, _PASS_MENU_ITEM_SCALAR_FIELDS),
                 goods_data=_parse_pass_goods_info(
                     _optional_mapping(item, "goodsData"),
                 ),
@@ -286,8 +284,8 @@ def parse_pass_availability_response(
         pass_rows.append(
             PassOpenDate(
                 open_date=date,
-                item_sequence=_optional_scalar_string(item, "h_item_sqno", "pass date"),
-                pnr_no=_optional_scalar_string(item, "h_pnr_no", "pass date"),
+                item_sequence=_optional_scalar_string(item, "h_item_sqno"),
+                pnr_no=_optional_scalar_string(item, "h_pnr_no"),
                 raw=item,
             )
         )
@@ -310,7 +308,7 @@ def parse_pass_availability_response(
     main_raw = _optional_mapping(raw, "main_info")
     main_info = (
         PassAvailabilityMainInfo(
-            **_nullable_scalar_fields(main_raw, _PASS_AVAILABILITY_MAIN_FIELDS, "pass availability main info"),
+            **_nullable_scalar_fields(main_raw, _PASS_AVAILABILITY_MAIN_FIELDS),
             raw=main_raw,
         )
         if main_raw is not None
@@ -340,7 +338,7 @@ def parse_pass_schedule_response(
     main_raw = _optional_mapping(raw, "main_info")
     main_info = (
         PassScheduleMainInfo(
-            **_nullable_scalar_fields(main_raw, _PASS_SCHEDULE_MAIN_FIELDS, "pass schedule main info"),
+            **_nullable_scalar_fields(main_raw, _PASS_SCHEDULE_MAIN_FIELDS),
             raw=main_raw,
         )
         if main_raw is not None
@@ -350,7 +348,7 @@ def parse_pass_schedule_response(
     for schedule in _rows(raw, "schedule_info"):
         trains = tuple(
             PassScheduleTrain(
-                **_nullable_scalar_fields(row, _PASS_SCHEDULE_TRAIN_FIELDS, "pass schedule train"),
+                **_nullable_scalar_fields(row, _PASS_SCHEDULE_TRAIN_FIELDS),
                 raw=row,
             )
             for row in _rows(
@@ -416,7 +414,7 @@ def parse_discount_card_usage_response(
         items.append(
             DiscountCardUsage(
                 # 다른 조회의 숫자형 관측을 고려해 순번은 문자열·정수를 모두 허용합니다(이 경로는 미검증).
-                **_nullable_scalar_fields(item, _DISCOUNT_CARD_USAGE_FIELDS, "discount card usage"),
+                **_nullable_scalar_fields(item, _DISCOUNT_CARD_USAGE_FIELDS),
                 raw=item,
             )
         )
@@ -437,9 +435,7 @@ def parse_discount_card_schedule_response(
         trains.append(
             DiscountCardScheduleTrain(
                 # 이 라우트의 라이브 근거는 없으며 파서 정책입니다.
-                **_nullable_scalar_fields(
-                    item, _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS, "discount card schedule train"
-                ),
+                **_nullable_scalar_fields(item, _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS),
                 raw=item,
             )
         )
@@ -459,7 +455,7 @@ def _primitive_json_integer(
     """Kotlin Int 값을 읽되 누락은 0, 잘못된 형식은 None으로 처리합니다."""
     if data.get(key) is None:
         return 0
-    return _optional_integer(data, key, context)
+    return _optional_integer(data, key)
 
 
 @_preserve_read_raw
@@ -588,7 +584,7 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
     for item in _rows(raw, "menuList"):
         contents = tuple(
             TripMenuContent(
-                **_nullable_scalar_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
+                **_nullable_scalar_fields(row, _TRIP_MENU_CONTENT_FIELDS),
                 # TrGdMenuLtOutCont.java:45 passData → TrGdMenuLtOutPass.java:29-35.
                 pass_data=_parse_pass_menu_data(
                     _optional_mapping(row, "passData"),
@@ -602,7 +598,7 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
         items.append(
             TripMenuItem(
                 **_nullable_scalar_fields(item, _TRIP_MENU_ITEM_FIELDS),
-                content_count=_optional_integer(item, "contCount", "trip menu item"),
+                content_count=_optional_integer(item, "contCount"),
                 contents=contents,
                 raw=item,
             )
@@ -631,7 +627,7 @@ def parse_product_reservation_list_response(
     )
     return ProductReservationListResponse(
         items=items,
-        total_count=_optional_integer(main, "strTotCnt", "product reservation list"),
+        total_count=_optional_integer(main, "strTotCnt"),
         **_response_fields(raw),
     )
 
@@ -681,7 +677,7 @@ def parse_discount_card_purchase_response(
     data = _response_mapping(raw)
     return DiscountCardPurchaseResponse(
         **_base_fields(data),
-        **_nullable_scalar_fields(data, _DISCOUNT_CARD_PURCHASE_FIELDS, "discount card purchase"),
+        **_nullable_scalar_fields(data, _DISCOUNT_CARD_PURCHASE_FIELDS),
     )
 
 
@@ -690,5 +686,5 @@ def parse_product_cancel_response(raw: Mapping[str, Any]) -> ProductCancelRespon
     data = _response_mapping(raw)
     return ProductCancelResponse(
         **_base_fields(data),
-        integrated_message_code=_optional_scalar_string(data, "intgMsgCd", "product cancel"),
+        integrated_message_code=_optional_scalar_string(data, "intgMsgCd"),
     )

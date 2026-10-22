@@ -61,7 +61,6 @@ def parse_refund_commission_response(
         **_nullable_scalar_fields(
             raw,
             _REFUND_COMMISSION_FIELDS,
-            "refund commission",
         ),
         **_response_fields(raw),
     )
@@ -154,7 +153,6 @@ def _discount_card_on_ticket(
                 **_nullable_scalar_fields(
                     item,
                     _DISCOUNT_CARD_SECTION_FIELDS,
-                    "discount card section",
                 ),
                 raw=item,
             )
@@ -163,7 +161,6 @@ def _discount_card_on_ticket(
         card_no=_optional_scalar_string(
             info,
             "h_dcnt_crd_no",
-            "discount card info",
         ),
         term_extension_possible_flag=_optional_scalar_string(
             info,
@@ -195,7 +192,6 @@ def parse_refund_ticket_detail_response(
                     **_nullable_scalar_fields(
                         seat,
                         _REFUND_TICKET_SEAT_FIELDS,
-                        "refund ticket seat",
                     ),
                     raw=seat,
                 )
@@ -205,20 +201,17 @@ def parse_refund_ticket_detail_response(
                 **_nullable_scalar_fields(
                     journey,
                     _REFUND_TICKET_JOURNEY_FIELDS,
-                    "refund ticket journey",
                 ),
                 seats=tuple(seats),
                 raw=journey,
             )
         )
-    detail_fields = _nullable_scalar_fields(raw, _REFUND_TICKET_DETAIL_FIELDS, "refund ticket detail")
+    detail_fields = _nullable_scalar_fields(raw, _REFUND_TICKET_DETAIL_FIELDS)
     # pbpAcepTgtFlg는 보호된 전송 키 대신 속성명으로 읽는 후보입니다(TicketDetailOut.java:65). 40응답에는 없었습니다.
     if "pbpAcepTgtFlg" in raw:
-        detail_fields["pbp_acceptance_target_flag"] = _optional_scalar_string(
-            raw, "pbpAcepTgtFlg", "refund ticket detail"
-        )
+        detail_fields["pbp_acceptance_target_flag"] = _optional_scalar_string(raw, "pbpAcepTgtFlg")
     # h_qrcode 의 명시적 별칭: TicketDetailOut.java:478.
-    qr_code = _optional_scalar_string(raw, "h_qrcode", "refund ticket detail")
+    qr_code = _optional_scalar_string(raw, "h_qrcode")
     # psgNmList/seatTicketList/limousine/dtlList 는 명시적 별칭이 없어 속성명으로 추정합니다. 보호된 descriptor 를 확인한 전송 키라는 뜻은 아닙니다.
     passenger_names = tuple(_rows(raw, "psgNmList"))
     seat_tickets = tuple(_rows(raw, "seatTicketList"))
@@ -306,8 +299,8 @@ def parse_station_refund_verification_response(
         received_amount=_strict_scalar_string(copied, "rcvd_amt", "station refund verification"),
         refund_fee=_strict_scalar_string(copied, "ret_fee", "station refund verification"),
         refund_amount=_strict_scalar_string(copied, "ret_amt", "station refund verification"),
-        popup_message=_optional_scalar_string(copied, "poppMsg", "station refund verification"),
-        result_message=_optional_scalar_string(copied, "strMsg", "station refund verification"),
+        popup_message=_optional_scalar_string(copied, "poppMsg"),
+        result_message=_optional_scalar_string(copied, "strMsg"),
         original_tickets=tuple(original_tickets),
         original_ticket_list_is_null=rows is None,
     )
@@ -320,7 +313,7 @@ def parse_station_refund_execution_response(
     copied = _response_mapping(raw)
     return StationRefundExecutionResponse(
         **_base_fields(copied),
-        refund_division_code=_optional_scalar_string(copied, "h_ret_dv_cd", "station refund execution"),
+        refund_division_code=_optional_scalar_string(copied, "h_ret_dv_cd"),
     )
 
 
@@ -430,7 +423,7 @@ def parse_reservation_payment_response(
         row = dict(value)
         coupons.append(
             ReservationPaymentCoupon(
-                **_nullable_scalar_fields(row, _PAYMENT_COUPON_FIELDS, "payment coupon"),
+                **_nullable_scalar_fields(row, _PAYMENT_COUPON_FIELDS),
                 raw=row,
             )
         )
@@ -440,7 +433,7 @@ def parse_reservation_payment_response(
         row = dict(value)
         tickets.append(
             ReservationPaymentTicket(
-                **_nullable_scalar_fields(row, _RESERVATION_PAYMENT_TICKET_FIELDS, "payment ticket"),
+                **_nullable_scalar_fields(row, _RESERVATION_PAYMENT_TICKET_FIELDS),
                 raw=row,
             )
         )
@@ -450,7 +443,7 @@ def parse_reservation_payment_response(
         row = dict(value)
         settlements.append(
             ReservationPaymentSettlement(
-                **_nullable_scalar_fields(row, _RESERVATION_PAYMENT_SETTLEMENT_FIELDS, "payment settlement"),
+                **_nullable_scalar_fields(row, _RESERVATION_PAYMENT_SETTLEMENT_FIELDS),
                 raw=row,
             )
         )
@@ -460,15 +453,15 @@ def parse_reservation_payment_response(
         row = dict(value)
         table_seats.append(
             ReservationPaymentTableSeat(
-                **_nullable_scalar_fields(row, _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS, "payment table seat"),
+                **_nullable_scalar_fields(row, _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS),
                 raw=row,
             )
         )
 
     return ReservationPaymentResponse(
         **_base_fields(copied),
-        image_ticket_flag=_optional_scalar_string(copied, "h_im_flg", "payment"),
-        **_nullable_scalar_fields(copied, _RESERVATION_PAYMENT_FIELDS, "payment"),
+        image_ticket_flag=_optional_scalar_string(copied, "h_im_flg"),
+        **_nullable_scalar_fields(copied, _RESERVATION_PAYMENT_FIELDS),
         coupons=tuple(coupons),
         tickets=tuple(tickets),
         settlements=tuple(settlements),

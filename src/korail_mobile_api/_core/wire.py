@@ -30,8 +30,12 @@ def _device_version_key(config: KorailConfig) -> dict[str, str]:
     return fields
 
 
-def _is_ascii_digits(value: object, lengths: frozenset[int]) -> TypeGuard[str]:
-    """value가 허용된 길이의 ASCII 숫자 문자열인지 검사합니다. str.isdigit은 전각 숫자도 받으므로 사용하지 않으며, 거절 예외와 문구는 각 빌더가 정합니다."""
+def _is_ascii_digits(value: object, lengths: frozenset[int] | None = None) -> TypeGuard[str]:
+    """value가 (허용된 길이의) 비지 않은 ASCII 숫자 문자열인지 검사합니다. isdigit 만으로는 전각·위첨자 숫자도 받으므로 isascii 를 함께 봅니다.
+    거절 예외와 문구는 호출부가 정합니다."""
     return (
-        isinstance(value, str) and len(value) in lengths and all("0" <= character <= "9" for character in value)
+        isinstance(value, str)
+        and value.isascii()
+        and value.isdigit()
+        and (lengths is None or len(value) in lengths)
     )
