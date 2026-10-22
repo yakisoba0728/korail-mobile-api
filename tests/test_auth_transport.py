@@ -15,15 +15,14 @@ import korail_mobile_api as package
 from korail_mobile_api import DynapathConfig, DynapathTokenSettings
 from korail_mobile_api import errors as E
 from korail_mobile_api._core.crypto import transform_login_password
-from korail_mobile_api._core.dynapath import DynapathTokenGenerator
+from korail_mobile_api._core.dynapath import DYNAPATH_ALLOWLIST_PATHS, DynapathTokenGenerator
 from korail_mobile_api._core.http import KorailHttpClient, parse_base_response
 from korail_mobile_api._core.netfunnel import KorailNetFunnelClient
-from korail_mobile_api._core.session import infer_login_input_flag
+from korail_mobile_api._core.session import KORAIL_COMMON_CODE_BOOTSTRAP_CODES, infer_login_input_flag
 from korail_mobile_api._core.wire import _device_version_key
 from korail_mobile_api._domains.common.models import LoginCryptoInfo
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
-from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS, KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 
 LOGIN = "/classes/com.korail.mobile.login.Login"
 LOGOUT = "/classes/com.korail.mobile.login.Logout"
@@ -458,6 +457,7 @@ def test_non2xx_before_json_or_app_error(factory, status, json_body):
         client.http.post_form(SERVICE)
     assert type(caught.value) is E.KorailTransportError
     assert caught.value.raw == (raw if json_body else b"synthetic non-json")
+    assert caught.value.status_code == status
     assert len(requests) == 1
 
 
@@ -537,6 +537,7 @@ def test_transport_errors_are_wrapped_without_retry(factory, failure):
     with pytest.raises(E.KorailTransportError) as caught:
         client.http.post_form(SERVICE)
     assert caught.value.__cause__ is failure
+    assert caught.value.status_code is None
     assert len(requests) == 1
 
 
@@ -871,7 +872,7 @@ def test_ordered_and_mapping_forms_encode_bool_alike_and_refuse_none(factory):
         lambda: client.http.post_form(SERVICE, {"a": None}),
         lambda: client.http.post_form(SERVICE, [("a", None)]),
         lambda: client.http.post_query(SERVICE, {"a": None}),
-        lambda: client.http.post_mutation_form(SERVICE, {"a": None}),
+        lambda: client.http.post_form(SERVICE, {"a": None}, include_common=False),
         lambda: client.http.get_json(SERVICE, {"a": None}),
     ):
         with pytest.raises(E.KorailProtocolError, match="field a is None"):
@@ -918,7 +919,13 @@ EXPECTED = {code: getattr(E, name) for name, codes in EXPECTED_GROUPS.items() fo
 
 @pytest.mark.parametrize("code, expected", sorted(EXPECTED.items()))
 def test_error_table_each_code_type_message_and_raw(code, expected):
-    """ErrorHelper.java:44-114 + per-code messages in assets/error_json.json; policy, not UI equivalence."""
+    """ErrorHelper.java:44-114 + per-code messages in assets/error_json.json; policy, not UI equivalence.
+
+    Sources of the sets (app 7.0.6 unless noted): envelope CommonOut.java:40-44; S000/S003 7.0.8
+    NetworkConstants.java:143 + CommonOut.checkServiceError; ERI411321/EAZ000038 and ERR911081 (LATE, not seat
+    unavailable) TicketReservationKt.java:95-135; error_json.json lines 65 (SUPDATE), 2475 (ERR299943), 2633
+    (ERR911501 = ERR911531 text), 4177-4196/11019-11060/11097+ (input errors), 4238-4239 (WRG500113/4 sold out),
+    4340 (WRI411345), 4600/4625 (WRT100002/124), 11063/12013/12059/12492 (not entitled). -8204 is GitHub #32."""
     raw = envelope(code, "FAIL", synthetic_nested={"keep": True})
     error = E.classify_app_error(code, "synthetic message", raw=raw)
     assert type(error) is expected
@@ -996,7 +1003,8 @@ def test_record_modules_have_no_inbound_import_or_public_method(record_module, m
     ],
 )
 def test_crypto_independent_openssl_vectors(key, password, expected):
-    """AESCrypto.java:174-182, LoginRepositoryImpl.java:929-931. Cipher/IV are compatibility vectors only."""
+    """AESCrypto.java:31,60-83,174-182, LoginRepositoryImpl.java:929-931,1245 (NO_WRAP inner, wrapped URL_SAFE outer).
+    Cipher/IV are compatibility vectors only."""
     actual = transform_login_password(password, LoginCryptoInfo(key=key))
     assert actual == expected
     assert actual.endswith("\n") and all(len(line) <= 76 for line in actual.splitlines())
@@ -1015,7 +1023,8 @@ def test_login_wire_encryption_matches_independent_vector(factory):
 @pytest.mark.parametrize("lang", [None, "synthetic-language"])
 @pytest.mark.parametrize("optional", [False, True])
 def test_login_form_matches_dto_declaration_order(factory, lang: str | None, optional: bool) -> None:
-    """LoginIn.java:57-80,141-164; CommonIn.java:467-474; NetworkService.java:15335-15392."""
+    """LoginIn.java:57-80,141-164; CommonIn.java:467-474; NetworkService.java:15335-15392. The @FieldMap route
+    (NetworkApi.java:458-460) rejects null values, so absent options are omitted (ParameterHandler.java:276-293)."""
     config = KorailConfig(
         base_url="https://api.example.invalid",
         netfunnel_enabled=False,
@@ -1137,3 +1146,121 @@ def test_default_diagnostic_login_keeps_bootstrap_and_session_contract(factory):
         "2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus",
     ]
     assert PASSWORD not in requests[-1].content.decode()
+
+
+MUTATION = "/classes/com.korail.mobile.synthetic.Mutation"
+MAYBE_PROCESSED = "KORAIL may have processed this request"
+
+
+@pytest.mark.parametrize(
+    "reply, expected",
+    [
+        (httpx.ConnectError("synthetic"), E.KorailTransportError),
+        (httpx.Response(503, json=envelope()), E.KorailTransportError),
+        (httpx.Response(200, content=b"<html>synthetic</html>"), E.KorailProtocolError),
+        (httpx.Response(200, json=["synthetic", "array"]), E.KorailProtocolError),
+        (httpx.Response(200, json=envelope(h_msg_txt=["synthetic"])), E.KorailProtocolError),
+    ],
+)
+def test_mutation_failure_after_handoff_is_marked_sent_with_a_note(factory, reply, expected):
+    """3.0 spec section 4: request_sent tells 'outcome unknown' from 'refused before sending'; nothing is resent."""
+    client, requests = factory([reply])
+    with pytest.raises(expected) as caught:
+        client._mutation(MUTATION, {"a": "1"})
+    assert caught.value.request_sent is True and len(requests) == 1
+    assert any(MAYBE_PROCESSED in note for note in caught.value.__notes__)
+
+
+def test_mutation_parse_failure_is_marked_sent_with_a_note(factory):
+    def parser(raw):
+        raise ValueError("synthetic parser failure")
+
+    client, requests = factory([envelope()])
+    with pytest.raises(E.KorailProtocolError) as caught:
+        client._mutation(MUTATION, {"a": "1"}, parser=parser)
+    assert isinstance(caught.value.__cause__, ValueError) and caught.value.raw == envelope()
+    assert caught.value.request_sent is True and len(requests) == 1
+    assert any(MAYBE_PROCESSED in note for note in caught.value.__notes__)
+
+
+@pytest.mark.parametrize("refusal", ["closed", "none-field", "provider"])
+def test_mutation_refused_before_sending_keeps_request_sent_unset(factory, refusal):
+    def provider(context):
+        raise RuntimeError("synthetic provider failure")
+
+    config = KorailConfig(
+        base_url="https://offline.invalid",
+        netfunnel_enabled=False,
+        dynapath=DynapathConfig(enabled=True, token_provider=provider, allowlist_paths=frozenset({MUTATION})),
+    )
+    client, requests = factory(config=config if refusal == "provider" else None)
+    if refusal == "closed":
+        client.close()
+    with pytest.raises(E.KorailProtocolError) as caught:
+        client._mutation(MUTATION, {"a": None if refusal == "none-field" else "1"})
+    assert caught.value.request_sent is None and not getattr(caught.value, "__notes__", None)
+    assert not requests
+
+
+def test_server_answer_on_a_mutation_is_not_marked_as_unknown(factory):
+    client, requests = factory([envelope("WRR800029", "FAIL")])
+    with pytest.raises(E.KorailReservationRefusedError) as caught:
+        client._mutation(MUTATION, {"a": "1"})
+    assert caught.value.request_sent is None and not getattr(caught.value, "__notes__", None)
+    assert len(requests) == 1
+
+
+def test_read_failure_after_handoff_is_marked_sent_without_the_mutation_note(factory):
+    client, requests = factory([httpx.ConnectError("synthetic")])
+    with pytest.raises(E.KorailTransportError) as caught:
+        client.http.post_form(SERVICE)
+    assert caught.value.request_sent is True and len(requests) == 1
+    assert not getattr(caught.value, "__notes__", None)
+
+
+def test_queue_http_status_error_carries_status_code():
+    client = KorailNetFunnelClient(
+        KorailConfig(netfunnel_timeout=3.0),
+        transport=httpx.MockTransport(lambda request: httpx.Response(503, text="synthetic")),
+        sleeper=lambda _: None,
+    )
+    try:
+        with pytest.raises(E.KorailTransportError) as caught:
+            client._post("https://queue.example.invalid/ts.wseq?opcode=5101")
+    finally:
+        client.close()
+    assert caught.value.status_code == 503 and caught.value.request_sent is None
+
+
+@pytest.mark.parametrize("app_version", ["7.0.10", None])
+def test_dynapath_context_carries_the_encoded_body_and_app_version(factory, app_version):
+    """Hook for a body-signing provider: the context sees the exact bytes that are sent."""
+    contexts = []
+
+    def provider(context):
+        contexts.append(context)
+        return "synthetic-token"
+
+    config = KorailConfig(
+        base_url="https://offline.invalid",
+        netfunnel_enabled=False,
+        app_version=app_version,
+        dynapath=DynapathConfig(enabled=True, token_provider=provider),
+    )
+    client, requests = factory([envelope(), envelope()], config=config)
+    client.http.post_form(LOGIN, {"txtMemberNo": "synthetic 한글 &=+", "flag": True})
+    client.http.get_json(LOGIN, {"q": "synthetic"})
+    assert contexts[0].body == requests[0].content and b"txtMemberNo=synthetic+%ED%95%9C" in contexts[0].body
+    assert contexts[1].method == "GET" and contexts[1].body == b"" == requests[1].content
+    assert [context.app_version for context in contexts] == [app_version, app_version]
+    assert all(request.headers["x-dynapath-m-token"] == "synthetic-token" for request in requests)
+
+
+def test_invalid_input_error_is_both_a_protocol_error_and_a_value_error():
+    error = package.KorailInvalidInputError("synthetic invalid input")
+    assert package.KorailInvalidInputError is E.KorailInvalidInputError
+    assert "KorailInvalidInputError" in package.__all__
+    assert isinstance(error, E.KorailProtocolError) and isinstance(error, ValueError)
+    assert isinstance(error, E.KorailApiError) and error.request_sent is None
+    with pytest.raises(ValueError):
+        raise error

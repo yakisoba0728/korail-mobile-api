@@ -896,6 +896,10 @@ def test_parser_failure_retains_whole_response_and_never_retries(
     else:
         assert isinstance(caught.value.__cause__, ValueError)
     assert len(requests) == 1
+    # 3.0: the response arrived, so the failure is marked as sent; only state-changing calls get the note.
+    assert caught.value.request_sent is True
+    notes = getattr(caught.value, "__notes__", [])
+    assert any("may have processed" in note for note in notes) is (case.name != "verify_station_ticket_refund")
 
 
 @pytest.mark.parametrize(
@@ -1116,6 +1120,8 @@ def test_real_hold_parse_failure_keeps_committed_identifiers(mutation_client, da
         client.reserve(train())
     assert caught.value.raw == raw
     assert len(requests) == 1
+    assert caught.value.request_sent is True
+    assert any("may have processed" in note for note in caught.value.__notes__)
 
 
 @pytest.mark.parametrize(

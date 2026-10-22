@@ -6,13 +6,14 @@
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
-from typing import Any, Literal, TypeVar, overload
+from types import TracebackType
+from typing import Any, Literal, Self, TypeVar, overload
 
 import httpx
 
 from ._core.cleanup import _close_connections
 from ._core.http import KorailHttpClient
-from ._core.netfunnel import KorailNetFunnelClient
+from ._core.netfunnel import KorailNetFunnelClient, KorailNetFunnelGateName
 from ._core.parsing import _preserve_read_raw
 from ._core.session import KorailSessionClient
 from ._domains.airport_bus.forms import (
@@ -322,9 +323,15 @@ from .errors import (
     KorailNoDirectTrainError,
     KorailProtocolError,
     KorailSessionExpiredError,
+    KorailTransportError,
 )
 
 T = TypeVar("T")
+
+
+def _note_possible_processing(error: KorailApiError) -> None:
+    if error.request_sent:
+        error.add_note("KORAIL may have processed this request; check its state before sending it again")
 
 
 def _hold_for_job(hold: ReservationHoldResponse, job_type: KorailReservationJobType) -> ReservationHoldResponse:
@@ -341,7 +348,7 @@ class KorailClient:
     ``transport``에 넣은 ``httpx`` 전송 계층은 KORAIL API 요청과 대기열 요청에 함께 쓰입니다. ``config.proxy``와 함께 넘기면
     ``ValueError``가 발생합니다. 예약·결제·환불처럼 서버
     상태를 바꾸는 메서드는 호출하는 즉시 요청을 보내며, 실패해도 KORAIL API 요청을 자동으로 다시 보내지 않습니다. 다 쓴
-    뒤에는 ``close``를 호출해 연결을 닫으세요."""
+    뒤에는 ``close``를 호출해 연결을 닫으세요. ``with`` 문으로 쓰면 블록이 끝날 때 닫습니다."""
 
     # 안전한 사용과 한계는 checks/BEHAVIOR.md 를 따릅니다.
 
@@ -373,6 +380,17 @@ class KorailClient:
         두 연결의 정리를 모두 시도하며 실패하면 첫 오류를 발생시키고 후속 실패는 예외 note에 남깁니다."""
         closers = (self.http.close,) if self.netfunnel is None else (self.http.close, self.netfunnel.close)
         _close_connections(*closers)
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        _close_connections(self.close, primary=exc)
 
     def login(
         self,
@@ -415,13 +433,13 @@ class KorailClient:
             self.clear_session()
             raise
 
-    def _queued(self, gate: str, send: Callable[[], T]) -> T:
+    def _queued(self, gate: KorailNetFunnelGateName, send: Callable[[], T]) -> T:
         if self.netfunnel is None:
             return send()
         return self.netfunnel.run(gate, send)
 
     @staticmethod
-    def _inquiry_gate(*, peak_season: bool, special: bool = False) -> str:
+    def _inquiry_gate(*, peak_season: bool, special: bool = False) -> KorailNetFunnelGateName:
         """앱 근거: TrainScheduleViewModel.java:5213-5235."""
         if special:
             return "product_inquiry"
@@ -447,7 +465,6 @@ class KorailClient:
         *,
         parser: Callable[[Mapping[str, object]], T],
         include_common: bool = True,
-        include_dynapath: bool = False,
         require_envelope: bool = True,
         raise_on_fail: bool = True,
         omit_empty_fields: bool = True,
@@ -459,7 +476,6 @@ class KorailClient:
                     route,
                     form,
                     include_common=include_common,
-                    include_dynapath=include_dynapath,
                     require_envelope=require_envelope,
                     raise_on_fail=raise_on_fail,
                     omit_empty_fields=omit_empty_fields,
@@ -483,7 +499,6 @@ class KorailClient:
                     route,
                     params,
                     include_common=include_common,
-                    include_dynapath=False,
                     require_envelope=require_envelope,
                     omit_empty_fields=omit_empty_fields,
                 ).raw
@@ -519,16 +534,16 @@ class KorailClient:
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse | T:
         """파싱 실패만으로 서버 변경 여부를 알 수 없으므로 상태 확인 없이 재전송하지 마십시오."""
-        response = self._run_read(
-            lambda: self.http.post_mutation_form(
-                route,
-                form,
-                raise_on_fail=raise_on_fail,
+        try:
+            response = self._run_read(
+                lambda: self.http.post_form(route, form, include_common=False, raise_on_fail=raise_on_fail)
             )
-        )
-        if parser is not None:
-            return self._parse_mutation_response(response.raw, parser)
-        return response
+            if parser is not None:
+                return self._parse_mutation_response(response.raw, parser)
+            return response
+        except (KorailTransportError, KorailProtocolError) as error:
+            _note_possible_processing(error)
+            raise
 
     @staticmethod
     @_preserve_read_raw
@@ -539,14 +554,17 @@ class KorailClient:
         """POST·GET 변경 및 환불 검증의 파싱 오류에 전체 응답을 보존합니다. 재전송하지 않습니다."""
         try:
             return parser(raw)
+        except KorailProtocolError as error:
+            error.request_sent = True
+            raise
         except KorailApiError:
             raise
         except Exception as error:
             # 패키지 밖 예외도 원문을 붙인 KorailProtocolError로 감싸며 재전송하지 않습니다.
             wrapped = KorailProtocolError(
-                f"KORAIL response was received but could not be parsed: {type(error).__name__}"
+                f"KORAIL response was received but could not be parsed: {type(error).__name__}", raw=raw
             )
-            wrapped.raw = raw
+            wrapped.request_sent = True
             raise wrapped from error
 
     def get_seat_cars(
@@ -572,7 +590,6 @@ class KorailClient:
                     "/classes/com.korail.mobile.research.TrainResearch",
                     form,
                     include_common=False,
-                    include_dynapath=False,
                 )
             )
         )
@@ -605,7 +622,6 @@ class KorailClient:
                     "/classes/com.korail.mobile.research.TResidualSeatsResearch.do",
                     form,
                     include_common=False,
-                    include_dynapath=False,
                 )
             )
         )
@@ -622,7 +638,6 @@ class KorailClient:
                     "/classes/com.korail.mobile.lmu.scdlQry.do",
                     form,
                     include_common=False,
-                    include_dynapath=False,
                 )
             )
         )
@@ -639,7 +654,6 @@ class KorailClient:
                     "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do",
                     form,
                     include_common=False,
-                    include_dynapath=False,
                 )
             )
         )
@@ -706,7 +720,6 @@ class KorailClient:
                 self.http.post_query(
                     "/classes/com.korail.mobile.passCard.DelayDiscountView",
                     build_delay_discount_ticket_form(departure_date_to),
-                    include_dynapath=False,
                     omit_empty_fields=True,
                     require_envelope=False,
                 ).raw
@@ -919,17 +932,20 @@ class KorailClient:
         같은 GET이 미결제 취소와 결제 후 환불에 쓰이므로 상세 수수료를 먼저 확인합니다(MyTicketDetailViewModel.java:1183-1192,3271-3291)."""
         self._require_session("product cancel requires")
         query = build_product_cancel_query(detail)
-        return self._run_read(
-            lambda: self._parse_mutation_response(
-                self.http.get_json(
-                    "/classes/com.korail.mobile.product.ReservationCancel",
-                    query,
-                    include_common=True,
-                    include_dynapath=False,
-                ).raw,
-                parse_product_cancel_response,
+        try:
+            return self._run_read(
+                lambda: self._parse_mutation_response(
+                    self.http.get_json(
+                        "/classes/com.korail.mobile.product.ReservationCancel",
+                        query,
+                        include_common=True,
+                    ).raw,
+                    parse_product_cancel_response,
+                )
             )
-        )
+        except (KorailTransportError, KorailProtocolError) as error:
+            _note_possible_processing(error)
+            raise
 
     def get_ticket_receipt(
         self,
@@ -1100,7 +1116,6 @@ class KorailClient:
             "/classes/com.korail.mobile.trn.prcFare.do",
             form,
             parser=parse_price_fare_quote_response,
-            include_dynapath=True,
             omit_empty_fields=False,
         )
 
@@ -1399,7 +1414,6 @@ class KorailClient:
                     "/ebizcross/getUUID.do",
                     include_common=False,
                     form_encoded=False,
-                    include_dynapath=False,
                     require_envelope=False,
                 )
             )
@@ -1428,7 +1442,6 @@ class KorailClient:
                     "/classes/com.korail.mobile.copt.gdMenuLt.do",
                     form,
                     include_common=include_common,
-                    include_dynapath=False,
                 )
             )
         )
@@ -1445,7 +1458,6 @@ class KorailClient:
                     "/ebizmaas/EbizMaasStationList.do",
                     form,
                     include_common=False,
-                    include_dynapath=False,
                     require_envelope=False,
                 )
             )

@@ -19,18 +19,28 @@ from ...config import KorailConfig
 from ...constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_DIRECT_JOURNEY_TYPE_CODE,
-    KORAIL_MAX_JOURNEY_LEGS,
     KORAIL_MAX_PASSENGERS_PER_RESERVATION,
-    KORAIL_MERGE_SEAT_FLAGS_BY_CABIN,
     KORAIL_STANDBY_WAIT_FLAG,
     KORAIL_TRANSFER_ITINERARY_CODE,
-    KORAIL_TRANSFER_JOURNEY_TYPE_CODE,
     KorailReservationJobType,
     KorailSeatClass,
 )
 from ...errors import KorailProtocolError
 from ..trains.models import PhysicalSeat, SeatInventoryResponse, TrainScheduleItem, TrainSummary
 from .models import ReservationHoldResponse
+
+# 병합 홀드 응답의 여정 종류는 선행 "21"·후행 "22" 이지만 요청은 여정을 나누지 않습니다(build_merge_reservation_form).
+# evidence: app 7.0.6 JourneyDefine.java:87-90 (평문은 보호돼 미확인)
+KORAIL_TRANSFER_JOURNEY_TYPE_CODE = "14"
+# 객실 등급 코드별로 병합 예약을 할 수 있는 merge_seat_application_flag 값입니다.
+# evidence: app 7.0.6 TrainScheduleOutTrainInfo.java:147,1480,1500-1552
+KORAIL_MERGE_SEAT_FLAGS_BY_CABIN = {
+    "1": frozenset({"A", "G"}),
+    "2": frozenset({"A", "S"}),
+}
+# 선행·후행 좌석 필드가 한 쌍이라는 근거이며 모든 앱 여정의 상한을 증명하지는 않습니다.
+# evidence: app 7.0.6 TicketReservationIn.java:32-54
+KORAIL_MAX_JOURNEY_LEGS = 2
 
 
 @dataclass(frozen=True)

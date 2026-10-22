@@ -22,9 +22,9 @@ def build_cache_query(timestamp_ms: int | None = None) -> dict[str, str]:
 def build_common_code_form(
     config: KorailConfig,
     code: str | Sequence[str],
-) -> dict[str, object]:
+) -> dict[str, str | int | list[str]]:
     """라우트 선언: NetworkApi.java:317,321. 기기 크기·SDK 정수는 설정을 사용합니다 (CommonCodeIn.java:31-34,55)."""
-    form: dict[str, object] = {
+    form: dict[str, str | int | list[str]] = {
         **_device_version_key(config),
         "code": [code] if isinstance(code, str) else list(code),
         "deviceWidth": config.device_width,

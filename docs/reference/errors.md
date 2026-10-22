@@ -10,6 +10,8 @@
 
 ::: korail_mobile_api.KorailProtocolError
 
+::: korail_mobile_api.KorailInvalidInputError
+
 ::: korail_mobile_api.KorailAuthError
 
 ::: korail_mobile_api.KorailSessionExpiredError

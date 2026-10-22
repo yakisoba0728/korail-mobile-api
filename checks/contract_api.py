@@ -118,7 +118,7 @@ def g9() -> None:
             )
 
         raised: BaseException | None = None
-        with patch.object(client.http, "post_mutation_form", side_effect=fake_post):
+        with patch.object(client.http, "post_form", side_effect=fake_post):
             try:
                 client._mutation("/x", {}, parser=parser)
                 check("G9", False, f"{label}: 파싱 실패가 전파되지 않음")

@@ -2,17 +2,16 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""로그인 성공 코드는 관측값이며 보호된 앱 리터럴을 확정하지 않습니다(LoginOut.java:1161-1180)."""
+"""로그인 성공 코드는 관측값이며 보호된 앱 리터럴을 확정하지 않습니다."""
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable, Mapping
 from typing import Literal
 
 from .._domains.common.forms import build_common_code_form
 from .._domains.common.models import BaseKorailResponse, KorailSession, LoginCryptoInfo
-from ..constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES, KorailLoginInputFlag
+from ..constants import KorailLoginInputFlag
 from ..errors import (
     ACCOUNT_LOCKED_CODES,
     KorailAccountLockedError,
@@ -25,20 +24,42 @@ from ..errors import (
     classify_app_error,
 )
 from .crypto import transform_login_password
+from .dynapath import _now_ms
 from .http import KorailHttpClient
 from .parsing import _optional_scalar_string
 
+# evidence: app 7.0.6 LoginOut.java:1161-1180 (값은 보호돼 관측값을 씁니다)
 KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
-#: LoginViewModel.java:1390-1520의 hashCode 분기 -699977554·-699974646은 error_json.json의 해당 코드와 일치합니다. 다른 거절은 앱 오류
-#: 분류 또는 KorailAuthError로 처리하며 웹 조치를 자동으로 이어 가지 않습니다.
+# 앱의 hashCode 분기 -699977554·-699974646 과 일치하는 코드입니다. 다른 거절은 웹 조치를 이어 가지 않습니다.
+# evidence: app 7.0.6 LoginViewModel.java:1390-1520
 KORAIL_LOGIN_CONTINUATION_CODES = frozenset({"WRC000116", "WRC000420"})
 KORAIL_LOGIN_TYPE_MEMBER_NO: KorailLoginInputFlag = "2"
 KORAIL_LOGIN_TYPE_PHONE: KorailLoginInputFlag = "4"
 KORAIL_LOGIN_TYPE_EMAIL: KorailLoginInputFlag = "5"
+KORAIL_COMMON_CODE_BOOTSTRAP_CODES = (
+    "app.display.image",
+    "app.menu.railpoint",
+    "app.main.popup",
+    "app.easyLogin.isShow",
+    "app.korail.boss",
+    "app.menu.buynow",
+    "app.menu.lost112",
+    "app.event.easyPay",
+    "app.hndy.athn",
+    "app.view.visibility",
+    "app.menu.biz",
+    "app.event.point",
+    "app.var.data",
+    "app.login.cphd",
+    "app.illegal.report",
+    "app.holiday.popup",
+    "app.MaaS.test",
+    "app.limousine.mainMsg",
+)
 
 
 def infer_login_input_flag(login_id: str) -> KorailLoginInputFlag:
-    """앱처럼 숫자·이메일 외 입력은 거절하되 보호된 전화번호 검사는 재현하지 않습니다(LoginViewModel.java:1850-1876)."""
+    """앱처럼 숫자·이메일 외 입력은 거절하되 보호된 전화번호 검사는 재현하지 않습니다."""
     if "@" in login_id:
         return KORAIL_LOGIN_TYPE_EMAIL
     if not (login_id.isascii() and login_id.isdigit()):
@@ -51,7 +72,7 @@ def infer_login_input_flag(login_id: str) -> KorailLoginInputFlag:
 
 
 def extract_login_crypto_payload(raw: Mapping[str, object]) -> dict[str, object]:
-    """암호화 파라미터는 최상위가 아닌 app.login.cphd 객체에서만 읽습니다(CommonCodeOut.java:267; 실서버 관측)."""
+    """암호화 파라미터는 최상위가 아닌 app.login.cphd 객체에서만 읽습니다."""
     value = raw.get("app.login.cphd")
     return value if isinstance(value, dict) else {}
 
@@ -73,12 +94,12 @@ class KorailSessionClient:
         """예매 서비스 상태를 조회하고 운영 중이 아니면 오류를 냅니다."""
         self.http.post_form(
             "/file/CACHE/MobileService.cache",
-            {"timeStamp": int(time.time() * 1000)},
+            {"timeStamp": _now_ms()},
             include_common=False,
         )
 
     def get_login_crypto_info(self) -> LoginCryptoInfo:
-        """로그인에는 key를 바로 쓰고 pwdAESCphd는 참고값으로만 남깁니다(LoginRepositoryImpl.java:922-936)."""
+        """로그인에는 key를 바로 쓰고 pwdAESCphd는 참고값으로만 남깁니다."""
         response = self.http.post_form(
             "/classes/com.korail.mobile.common.code.do",
             build_common_code_form(
@@ -90,12 +111,9 @@ class KorailSessionClient:
         raw = extract_login_crypto_payload(response.raw)
         idx = _text(raw.get("idx"))
         key = _text(raw.get("key"))
-        # 참고용입니다. getPwdAESCphd() 의 유일한 사용처는 결제 금액 암호화입니다:
-        # analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:10991-10999
+        # 앱에서 pwdAESCphd 는 결제 금액 암호화에만 쓰입니다.
         pwd_aes_cphd = _text(raw.get("pwdAESCphd")).upper()
-        # 키 검증은 transform_login_password 에서 하며 평문으로 폴백하지 않습니다. 앱의 빈 키 재조회: LoginRepositoryImpl.java:1230-1236; 키
-        # 구성: AESCrypto.java:45-57. idx 는 필수가 아니며 빈 값은 폼에서 빠집니다(LoginRepositoryImpl.java:932-936,
-        # NetworkService.java:15342-15343).
+        # 키 검증은 transform_login_password 에서 하며 평문으로 폴백하지 않습니다. 빈 idx 는 폼에서 빠집니다.
         return LoginCryptoInfo(idx=idx, key=key, pwd_aes_cphd=pwd_aes_cphd)
 
     def login(
@@ -108,8 +126,7 @@ class KorailSessionClient:
         cust_id: str | None = None,
         etr_path: str | None = None,
     ) -> KorailSession:
-        """라우트: NetworkApi.java:458-460. 폼 순서는 LoginIn.java:57-80,141-164 를 따르며 거절 코드 처리는 _finish_login 에서
-        합니다."""
+        """폼 순서는 앱 DTO 선언을 따르며 거절 코드 처리는 _finish_login 에서 합니다."""
         return self._run_login(
             lambda: self._login(
                 member_no,
@@ -138,13 +155,12 @@ class KorailSessionClient:
         member_no: str,
         password: str,
         *,
-        input_flag: str | None,
-        check_valid_pw: str,
+        input_flag: KorailLoginInputFlag | None,
+        check_valid_pw: Literal["Y", "N"],
         cust_id: str | None,
         etr_path: str | None,
     ) -> KorailSession:
-        # 앱은 앱 시작 때 받아 둔 공통코드의 키를 쓰고 비었을 때만 다시 받습니다 (LoginRepositoryImpl.java:1229-1253). 여기서는 로그인마다 새로 받습니다 —
-        # 캐시한 키가 서버에서 바뀌면 비밀번호 오류로 보이고, 반복되면 계정이 잠깁니다.
+        # 앱과 달리 로그인마다 키를 새로 받습니다. 캐시한 키가 서버에서 바뀌면 비밀번호 오류로 보이고, 반복되면 계정이 잠깁니다.
         # 서비스 확인과 키 요청을 보내기 전에 입력을 검사합니다.
         if not isinstance(member_no, str):
             raise KorailProtocolError("KORAIL login member_no must be a str")
@@ -158,9 +174,7 @@ class KorailSessionClient:
         self.check_service()
         crypto_info = self.get_login_crypto_info()
         transformed = transform_login_password(password, crypto_info)
-        # CommonIn 뒤에 LoginIn 의 선언 순서대로 붙입니다(LoginIn.java:57-80,141-164). @FieldMap(NetworkApi.java:459-460)은
-        # null 값을 거절하므로 생략해야 합니다(ParameterHandler.java:276-293). null @Field를 생략하는
-        # 규칙(ParameterHandler.java:252-259)과 구별합니다.
+        # CommonIn 뒤에 LoginIn 선언 순서로 붙이며, @FieldMap 은 null 값을 거절하므로 없는 값은 뺍니다.
         form = {
             "txtInputFlg": resolved_input_flag,
             "txtMemberNo": member_no,
@@ -216,7 +230,7 @@ class KorailSessionClient:
                 code=response.h_msg_cd,
                 raw=response.raw,
             )
-        # 앱은 LoginOut.strMbCrdNo 를 읽습니다(LoginOut.java:62,79,113,116). 라이브 로그인 응답에 mbCrdNo 는 없었습니다.
+        # 앱은 strMbCrdNo 를 읽습니다. 실서버 로그인 응답에 mbCrdNo 는 없었습니다.
         member_card_no = _optional_scalar_string(response.raw, "strMbCrdNo") or None
         customer_no = _optional_scalar_string(response.raw, "strCustNo")
         customer_no = customer_no if customer_no and customer_no.strip() else None
@@ -236,7 +250,7 @@ class KorailSessionClient:
             if self.current is not None:
                 self.http.post_form(
                     "/classes/com.korail.mobile.login.Logout",
-                    {"timeStamp": int(time.time() * 1000)},
+                    {"timeStamp": _now_ms()},
                     raise_on_fail=False,
                 )
         finally:

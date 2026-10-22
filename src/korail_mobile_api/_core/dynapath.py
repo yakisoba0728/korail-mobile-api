@@ -2,7 +2,9 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""기본 SDK 2.0.1 진단 공급자와 명시적으로 선택하는 레거시 v1.0.3 생성기입니다."""
+"""기본 SDK 2.0.1 진단 공급자와 명시적으로 선택하는 레거시 v1.0.3 생성기입니다.
+
+v1 알고리즘의 근거와 골든 벡터는 tests/test_auth_transport.py 의 DynaPath 테스트에 있습니다."""
 
 from __future__ import annotations
 
@@ -17,16 +19,29 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from urllib.parse import quote_plus
 
-from ..constants import (
-    DYNAPATH_ALLOWLIST_PATHS,
-    DYNAPATH_HEADER_NAME,
-    KORAIL_DEFAULT_ANDROID_OS_RELEASE,
-    KORAIL_DEFAULT_DEVICE_NAME,
+from ..constants import KORAIL_DEFAULT_ANDROID_OS_RELEASE, KORAIL_DEFAULT_DEVICE_NAME
+
+# evidence: app 7.0.6 DynaPathInterceptor.java:34-35 (헤더 이름은 보호 문자열입니다)
+DYNAPATH_HEADER_NAME = "x-dynapath-m-token"
+KORAIL_LOGIN_PATH = "/classes/com.korail.mobile.login.Login"
+# 앱의 경로 목록은 보호 문자열 여섯 개이며 byte[] 길이 다중집합 {38,41,49,49,56,58}만 아래 경로와 맞습니다.
+# evidence: app 7.0.6 DynaPathInterceptor.java:40
+DYNAPATH_ALLOWLIST_PATHS = frozenset(
+    {
+        "/classes/com.korail.mobile.certification.TicketReservation",
+        "/classes/com.korail.mobile.nonMember.NonMemTicket",
+        "/classes/com.korail.mobile.seatMovie.ScheduleView",
+        "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial",
+        "/classes/com.korail.mobile.trn.prcFare.do",
+        KORAIL_LOGIN_PATH,
+    }
 )
+# DynaPath 를 끈 설정에서 요청 전에 거절하는 경로입니다. 다른 경로도 토큰이 없으면 서버가 거절할 수 있습니다.
+DYNAPATH_REQUIRED_PATHS = frozenset({KORAIL_LOGIN_PATH})
 
 DYNAPATH_BASE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 DYNAPATH_TABLE_INDEX = 1
-# 논스 알파벳과 4회 추출: a/b.java:138-149. SDK 의 평문 리터럴입니다.
+# evidence: app 7.0.6 a/b.java:138-149
 DYNAPATH_RANDOM_ALPHABET = string.ascii_lowercase + string.ascii_uppercase + string.digits
 DYNAPATH_DEFAULT_I8 = 161
 DYNAPATH_DEFAULT_I9 = 30
@@ -35,7 +50,8 @@ KORAIL_DYNAPATH_APP_ID = "com.korail.talk"
 KORAIL_DYNAPATH_OS_TYPE = "Android"
 KORAIL_DYNAPATH_SDK_VERSION = "v1.0.3"
 KORAIL_DYNAPATH_SIGNING_CERT_SHA256 = "38ff229cb34c7dda8e28220a2d750cceec28db661a36d95ad92d82f6d3c618f9"
-# b/e.java:55-71 은 서명 해시를 소문자 hex 32자로 절단합니다(b/d.java:20). SHA-256 상수: com/kakao/sdk/auth/Constants.java:28.
+# 서명 SHA-256 을 소문자 hex 32자로 자릅니다.
+# evidence: app 7.0.6 b/e.java:55-71, b/d.java:20, com/kakao/sdk/auth/Constants.java:28
 KORAIL_DYNAPATH_APP_SIGNATURE_HASH = KORAIL_DYNAPATH_SIGNING_CERT_SHA256[:32]
 KORAIL_DYNAPATH_AS_VALUE = f"[{KORAIL_DYNAPATH_APP_SIGNATURE_HASH}]"
 
@@ -135,6 +151,10 @@ class DynapathRequestContext:
     user_agent: str
     device_name: str
     os_version: str
+    #: 보낼 요청 본문 바이트입니다. 본문이 없는 요청은 ``b""``입니다.
+    body: bytes = b""
+    #: 공통 요청의 ``AppVersion`` 값입니다. 보내지 않는 설정이면 ``None``입니다.
+    app_version: str | None = None
 
 
 #: 요청 정보(``DynapathRequestContext``)를 받아 DynaPath 토큰 문자열을 돌려주는 함수의 타입입니다. ``None``을 돌려주면
@@ -196,17 +216,16 @@ class DynapathTokenSettings:
 
 
 def generate_dynapath_device_id() -> str:
-    """앱은 실제 android_id 를 읽습니다(a/a.java:15-20); 토큰 필드는 a/b.java:85 의 di 입니다."""
+    """토큰의 ``di`` 값입니다. 앱은 실제 android_id 를 읽습니다."""
     return uuid.uuid4().hex[:16]
 
 
 def build_default_token_settings() -> DynapathTokenSettings:
-    """앱의 it 는 초기화 시각(a/a.java:13-20, a/b.java:95, DynaPathMobileSDK.java:64), ts 는 토큰 생성
-    시각(DynaPathMobileSDK.java:43, a/b.java:98)으로 서로 다릅니다."""
+    """``it`` 는 SDK 초기화 시각이며 토큰마다 바뀌는 ``ts`` 와 다릅니다."""
     return DynapathTokenSettings(
         device_id=generate_dynapath_device_id(),
         as_value=KORAIL_DYNAPATH_AS_VALUE,
-        app_start_ts=str(_timestamp_ms()),
+        app_start_ts=str(_now_ms()),
         os_version=KORAIL_DEFAULT_ANDROID_OS_RELEASE,
         device_model=KORAIL_DEFAULT_DEVICE_NAME,
     )
@@ -321,7 +340,7 @@ def encode_normal_be(data: str, table: str, *, i8: int = 161, i9: int = 30, i10:
     return "".join(out)
 
 
-def _timestamp_ms() -> int:
+def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
@@ -344,9 +363,9 @@ def generate_dynapath_token(
     random_text: str | None = None,
     recent_intervals: Sequence[int] = (),
 ) -> str:
-    """토큰 하나를 만듭니다. recent_intervals 는 rt 값이며 비어 있으면 SDK 처럼 키를 뺍니다(a/b.java:100-108). SDK 의 generate() 는 만들기
+    """토큰 하나를 만듭니다. recent_intervals 는 rt 값이며 비어 있으면 SDK 처럼 키를 뺍니다. SDK 의 generate() 는 만들기
     직전에 이력을 추가하므로 앱 토큰에는 rt 가 늘 있습니다."""
-    ts = _timestamp_ms() if timestamp_ms is None else timestamp_ms
+    ts = _now_ms() if timestamp_ms is None else timestamp_ms
     rand = _random_text() if random_text is None else random_text
     fields = [
         ("ai", settings.app_id),
@@ -399,8 +418,6 @@ class DynapathTokenGenerator:
 
     SDK와 같이 빈 이력으로 시작합니다."""
 
-    # 근거: DynaPathMobileSDK.java:43-44, a/b.java:58-68. SDK 도 초기화 때 빈 이력으로 시작합니다(a/a.java:17).
-
     def __init__(
         self,
         settings: DynapathTokenSettings,
@@ -409,7 +426,7 @@ class DynapathTokenGenerator:
         random_text_provider: RandomTextProvider | None = None,
     ) -> None:
         self.settings = settings
-        self._timestamp_ms_provider = timestamp_ms_provider or _timestamp_ms
+        self._timestamp_ms_provider = timestamp_ms_provider or _now_ms
         self._random_text_provider = random_text_provider or _random_text
         self._lock = threading.Lock()
         self._last_ts = int(settings.app_start_ts)

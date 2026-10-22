@@ -82,7 +82,6 @@ class KorailConfig:
     version: str = KORAIL_API_VERSION
     key: str = KORAIL_APP_KEY
     timeout: float = KORAIL_TIMEOUT_SECONDS
-    # 운영 관측값이며 앱의 헤더 문자열은 보호돼 있어 해독하지 않습니다(NetworkModule.java:405-423).
     #: API 요청의 ``User-Agent`` 헤더입니다.
     user_agent: str = KORAIL_API_USER_AGENT
     dynapath: DynapathConfig = field(default_factory=DynapathConfig)
@@ -92,38 +91,29 @@ class KorailConfig:
     advertising_id: str = ""
     netfunnel_url: str = KORAIL_NETFUNNEL_URL
     netfunnel_timeout: float = KORAIL_NETFUNNEL_TIMEOUT_SECONDS
-    # 대기열 SDK 는 값을 넣지 않아 안드로이드 기본값(http.agent)이 나갑니다. 기본값은 표본 기기의 값입니다
-    # (constants.KORAIL_USER_AGENT); 기기를 바꾸면 constants.build_dalvik_user_agent 로 dynapath 기기값과 맞춥니다.
     #: 대기열 요청의 ``User-Agent`` 헤더입니다. 앱의 대기열 요청은 안드로이드 기본 ``User-Agent``(``Dalvik/2.1.0 (...)``)를
     #: 쓰므로 기본값도 이 형식입니다. DynaPath 기기값을 바꾸면 이 값의 안드로이드 버전·기기 모델도 같게 맞추세요.
     #: ``build_config_from_env()``로 만든 설정은 기본적으로 두 값에 같은 기기값을 씁니다.
     netfunnel_user_agent: str = KORAIL_USER_AGENT
-    # 7.0.6 SDK 기본 bypass 는 거짓(com/netfunnel/api/Property.java:8), 앱 설정은 KorailTalkApplication.java:361-389.
     #: 대기열을 거칠지 정합니다. 기본값은 ``True``입니다. ``False``이면 대기열 없이 모든 요청을 바로 보내므로 앱과 다르게
     #: 동작합니다.
     netfunnel_enabled: bool = True
-    # lang은 CommonIn.java:381의 필드이며 평문은 보호돼 None이면 생략합니다. 필드명 상수는
-    # com/kakao/sdk/common/Constants.java:27을 따릅니다.
     #: 요청의 언어 필드(``lang``)입니다. ``None``이면 보내지 않습니다. 앱이 보내는 값은 앱 내부 값이 공개돼 있지 않아
     #: 확인하지 못했습니다.
     lang: str | None = None
     #: 대기열에서 기다릴 누적 시간의 상한(초)입니다. ``None``이면 제한하지 않습니다. 상한을 넘으면 API 요청을 보내지 않고
     #: ``KorailNetFunnelError``를 발생시킵니다.
     netfunnel_wait_limit: float | None = None
-    # ``aid`` 리터럴은 7.0.6 에서 보호돼 있어 기본값은 길이·호출부 이름으로 고른 미검증 값입니다
-    # (netfunnel.KORAIL_NETFUNNEL_GATES).
     #: 관문별 대기열 식별값을 바꿉니다. 관문 이름(``inquiry``, ``peak_season_inquiry``, ``product_inquiry``, ``reserve``,
     #: ``pay``, ``reservation_view``)을 키로, 보낼 식별값을 값으로 받습니다. 기본 식별값은 앱 내부 값이 공개돼 있지 않아
     #: 확인하지 못했으므로 정확한 값을 알 때만 바꾸세요. 목록에 없는 관문 이름과 빈 문자열 값은 무시합니다.
     netfunnel_actions: Mapping[str, str] | None = None
 
-    # 필수 경로는 전송 전에 거절됩니다. 토큰 없는 조회의 차단 관측은 constants.DYNAPATH_REQUIRED_PATHS를 따릅니다.
     #: ``True``이면 DynaPath 토큰을 붙이지 않습니다. 이때 로그인 요청은 보내기 전에 ``KorailDynaPathRequiredError``로
     #: 거절되므로 로그인이 필요한 메서드를 쓸 수 없습니다. 켜진 ``DynapathConfig``와 함께 넘기면 ``ValueError``가 발생합니다.
     disable_dynapath: bool = False
     #: 공통 요청의 ``AppVersion`` 값입니다. 기존 ``Version``과 별개이며, ``None``이면 이전 SDK처럼 생략합니다.
     app_version: str | None = KORAIL_APP_VERSION
-    # 명시한 프록시는 httpx 환경변수 프록시(HTTPS_PROXY·ALL_PROXY·NO_PROXY)보다 우선합니다(_transport.build_transport).
     #: API 요청과 대기열 요청을 함께 보낼 프록시 URL입니다. ``http``, ``https``, ``socks5``, ``socks5h`` 주소를 받습니다.
     #: ``socks5``·``socks5h``는 ``korail-mobile-api[socks]`` 설치가, ``https``는 httpx 0.25.0 이상, ``socks5h``는 httpx
     #: 0.28.0 이상이 필요합니다. ``None``이면 지정하지 않으며, 이때는 httpx 기본 동작대로 ``HTTPS_PROXY`` 같은 환경변수를
@@ -259,7 +249,6 @@ def build_config_from_env() -> KorailConfig:
 
     필요한 환경변수가 없거나 빈 값이면 ``RuntimeError``가 발생합니다. ``KORAIL_DEVICE_WIDTH``, ``KORAIL_DEVICE_HEIGHT``,
     ``KORAIL_ANDROID_SDK_INT``가 정수가 아니거나 ``KORAIL_PROXY``가 올바른 프록시 URL이 아니면 ``ValueError``가 발생합니다."""
-    # 기기값은 토큰·대기열 UA에 공유하고 자격증명은 읽거나 저장하지 않습니다(a/a.java:15; a/b.java:85).
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
     device_model = _required_env("KORAIL_DYNAPATH_DEVICE_MODEL")

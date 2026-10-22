@@ -23,16 +23,19 @@ from ..._core.validation import (
 )
 from ..._core.wire import _device_version, _device_version_key
 from ...config import KorailConfig
-from ...constants import (
-    KORAIL_DISCOUNT_CARD_DISCOUNT_CODE,
-    KORAIL_DISCOUNT_CARD_MENU_ID,
-    KORAIL_MAX_DISCOUNT_CARD_SECTIONS,
-)
 from ...errors import KorailProtocolError
 from ..reservations.forms import _PASSENGER_ROWS, _in_reservation_order, build_reservation_form
 from ..tickets.forms import OriginalTicketReference
 from ..trains.models import TrainSummary
 from .models import CommuterInfoResponse, PassMenuData, ProductDetailResponse
+
+# N카드 구매 한 번의 구간 수 상한입니다. 앱의 상한과 같은지는 확인하지 못했습니다.
+KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
+# 발권 응답의 ResDiscount.N_CARD("443")와 별개입니다. 예약 성공은 실서버 미확인입니다.
+# evidence: app 7.0.8 ReqDiscount.N_CARD (복호화), DiscountHelper.java:818, TCReservationRequestHelper.java:284
+KORAIL_DISCOUNT_CARD_DISCOUNT_CODE = "153"
+# evidence: app 7.0.6 TicketReservationIn.java:43, ReservationMenuId.java:21-22
+KORAIL_DISCOUNT_CARD_MENU_ID = "A2"
 
 
 @dataclass(frozen=True)
