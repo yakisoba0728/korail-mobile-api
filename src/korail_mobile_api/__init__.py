@@ -22,6 +22,7 @@ from .dynapath import (
     DynapathTokenProvider,
     DynapathTokenSettings,
 )
+from .dynapath_v2 import build_dynapath_v2_diagnostic_header, dynapath_v2_diagnostic_token
 from .error_messages import get_error_message, resolve_error_message
 from .errors import (
     KorailAccountLockedError,
@@ -294,6 +295,8 @@ __all__ = [
     "DynapathRequestContext",
     "DynapathTokenProvider",
     "DynapathTokenSettings",
+    "build_dynapath_v2_diagnostic_header",
+    "dynapath_v2_diagnostic_token",
     "DelayDiscountTicket",
     "DelayDiscountTicketListResponse",
     "DeliveryRecipientResponse",

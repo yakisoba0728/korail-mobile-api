@@ -12,4 +12,8 @@
 
 ::: korail_mobile_api.dynapath.DynapathConfig
 
+::: korail_mobile_api.dynapath_v2.dynapath_v2_diagnostic_token
+
+::: korail_mobile_api.dynapath_v2.build_dynapath_v2_diagnostic_header
+
 ::: korail_mobile_api.live.build_config_from_env

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- DynaPath SDK 2.0.1이 native 라이브러리를 쓰지 못할 때 보내는 평문 진단 헤더를 선택형 공급자 `dynapath_v2_diagnostic_token`과 생성 함수 `build_dynapath_v2_diagnostic_header`로 추가합니다. `DynapathConfig(enabled=True, token_provider=dynapath_v2_diagnostic_token)`로 고를 때만 보호 경로에 요청과 무관한 고정값을 보내며, 기본 v1.0.3 생성기·요청 기본값·공개 메서드는 바꾸지 않습니다. 기기 등록·요청 서명·attestation이 아니며 `-8204`([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)) 해결이나 서버 수용을 뜻하지 않습니다. 상태값은 앱과 따로 대조하지 않았고 실서버로 확인하지 않았습니다.
+
 ## [2.6.1] - 2026-10-19
 
 - `PriceFareLeg.from_train()`으로 조회한 열차의 운임 입력을 만들고, `korail.trains.iter_search(..., max_pages=...)`로 직통 검색을 선택적으로 이어 읽습니다. 기존 한 페이지 검색·기본 필터는 유지하며, 이어보기는 요청 상한·복합 식별자 중복 제거·진전 없음 중단을 적용합니다.

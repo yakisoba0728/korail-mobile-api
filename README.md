@@ -238,6 +238,12 @@ SRT 앱용으로 만들었던 [srt-mobile-api](https://github.com/yakisoba0728/s
 KORAIL은 데이터센터·VPN IP 대역에서 오는 요청을 막습니다. Oracle Cloud나 Vercel 같은 곳에서 `KorailDynaPathError`(HTTP 403, `-8202` 등)가 나고, 같은 코드가 집 네트워크에서는 되는 사례가 보고됐습니다.
 라이브러리의 요청 형식 문제가 아니라 요청이 나가는 네트워크의 문제입니다. 2.4.0부터는 `KorailConfig(proxy="socks5://...")`로 KORAIL 요청만 본인이 관리하는 다른 네트워크로 보낼 수 있습니다. 자세한 내용은 [설정 가이드의 프록시](https://yaki.kr/korail-mobile-api/guide/configuration/#proxy)를 보세요.
 
+**`-8204` "최신 버전으로 업데이트" 오류가 나요.**
+2026년 10월 21일부터 로그인 없는 열차 조회도 `-8204`로 거절된다는 보고가 있습니다([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)). `AppVersion`만 바꿔서는 해결되지 않았습니다.
+앱 7.0.9부터 바뀐 DynaPath SDK 2.0.1이 원인으로 추정되지만 확인되지 않았고, 내장 토큰은 계속 이전 SDK 방식입니다.
+`main`에는 SDK 2.0.1이 native 라이브러리를 쓰지 못할 때 보내는 진단 헤더를 고르는 `dynapath_v2_diagnostic_token`이 있습니다(미배포).
+기기 등록·서명 토큰이 아니며 이 저장소는 실서버 수용을 확인하지 않았습니다. 사용법과 한계는 [설정 가이드](https://yaki.kr/korail-mobile-api/guide/configuration/#dynapath-v2-diagnostic)를 보세요.
+
 **비밀번호나 카드 번호는 어디에 저장되나요?**
 어디에도 저장하지 않습니다. KORAIL 서버로만 보내고 파일로 쓰지 않습니다.
 다만 응답 모델과 예외의 `.raw`에는 개인정보가 그대로 들어 있으니 로그에 그대로 찍지 않도록 조심하세요.

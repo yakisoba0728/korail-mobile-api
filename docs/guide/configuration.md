@@ -118,6 +118,28 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 `token_provider`는 토큰을 붙이는 경로의 요청마다 [`DynapathRequestContext`][korail_mobile_api.dynapath.DynapathRequestContext](`method`, `path`, `url`, `device`, `version`, `key`, `user_agent`, `device_name`, `os_version`)를 받아 토큰 문자열을 돌려주는 함수입니다.
 `None`을 돌려주면 헤더를 붙이지 않습니다. 함수가 예외를 발생시키면 요청을 보내지 않고 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
 
+### SDK 2.0.1 진단 헤더 (선택) {#dynapath-v2-diagnostic}
+
+정적 분석상 앱 7.0.9부터 쓰는 DynaPath SDK 2.0.1은 기기 키를 서버에 등록하고 보호 경로의 요청마다 서명합니다.
+라이브러리의 기본 생성기는 이전 SDK(v1.0.3) 방식이며 이 등록·서명은 구현하지 않았습니다.
+2026년 10월 21일부터 보고된 `-8204` 거절([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32))의 원인은 확인되지 않았습니다.
+
+대신 SDK가 native 라이브러리를 쓰지 못할 때 보내는 평문 진단 헤더를 공급자로 고를 수 있습니다. 기본 설정은 바뀌지 않습니다.
+
+```python
+from korail_mobile_api import DynapathConfig, KorailClient, KorailConfig, dynapath_v2_diagnostic_token
+
+config = KorailConfig(dynapath=DynapathConfig(enabled=True, token_provider=dynapath_v2_diagnostic_token))
+client = KorailClient(config)
+```
+
+- 보호 경로마다 같은 문자열 `2!v=2&es=165489088780120535&st=Android&sv=2.0.1&ai=korailplus`를 보냅니다. 요청 경로·본문에 서명하지 않고 기기 정보도 싣지 않습니다.
+- 기기 등록·무결성·attestation을 증명하는 값이 아닙니다. 서버가 이 헤더를 받아들일지, 앞으로도 받아들일지는 알 수 없습니다.
+- 관측한 기기 정보를 넣으려면 [`build_dynapath_v2_diagnostic_header`][korail_mobile_api.dynapath_v2.build_dynapath_v2_diagnostic_header]를 부르는 공급자를 직접 만드세요. 값은 바이트로 받으며 라이브러리가 추측하지 않습니다.
+- 사용자 공급자이므로 [`build_config_from_profile`][korail_mobile_api.device.build_config_from_profile]과 함께 쓰면 `ValueError`가 발생합니다.
+
+상태값은 앱과 따로 대조하지 않았고, 이 헤더로 실서버에 요청해 확인하지 않았습니다.
+
 ### 끄기
 
 `disable_dynapath=True`로 끕니다. 켜진 `DynapathConfig`를 함께 넘기면 `ValueError`가 발생합니다.
