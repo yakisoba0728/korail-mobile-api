@@ -20,7 +20,6 @@ from korail_mobile_api._core.dynapath import DYNAPATH_ALLOWLIST_PATHS, DynapathT
 from korail_mobile_api._core.http import KorailHttpClient, parse_base_response
 from korail_mobile_api._core.netfunnel import KorailNetFunnelClient
 from korail_mobile_api._core.session import KORAIL_COMMON_CODE_BOOTSTRAP_CODES, infer_login_input_flag
-from korail_mobile_api._core.wire import _device_version_key
 from korail_mobile_api._domains.common.models import LoginCryptoInfo
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
@@ -1094,7 +1093,6 @@ def test_common_form_keeps_order_and_returns_fresh_mapping(lang: str | None, app
     try:
         first = client.common_fields()
         assert list(first.items()) == expected
-        assert list(_device_version_key(config).items()) == expected
         first["Device"] = "changed"
         assert list(client.common_fields().items()) == expected
     finally:

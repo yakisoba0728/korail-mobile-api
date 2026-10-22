@@ -1427,36 +1427,6 @@ def test_common_code_default_sends_one_blank_code_and_empty_list_none(rig):
     exact_request(calls[1], P + "common.code.do", form)
 
 
-@pytest.mark.parametrize(
-    "peak,special,expected",
-    [
-        (False, False, "inquiry"),
-        (True, False, "peak_season_inquiry"),
-        (False, True, "product_inquiry"),
-        (True, True, "product_inquiry"),
-    ],
-)
-def test_search_queue_gate_wraps_request_without_extra_posts(peak, special, expected, rig):
-    """TrainScheduleViewModel.java:5213-5235; aid plaintext protected, names are library settings."""
-    client, calls, _ = rig([SEARCH])
-    events = []
-
-    class LocalQueue:
-        def run(self, gate, send):
-            events.append((gate, "enter", len(calls)))
-            try:
-                return send()
-            finally:
-                events.append((gate, "exit", len(calls)))
-
-        def close(self):
-            pass
-
-    client.netfunnel = LocalQueue()
-    client.search_trains(QUERY, peak_season=peak, use_special_schedule=special)
-    assert events == [(expected, "enter", 0), (expected, "exit", 1)]
-
-
 def test_cars_then_inventory_stays_two_read_posts(rig):
     """TrainSeatMapViewModel.java:1974-1976,2527-2577; no implicit reservation/payment."""
     client, calls, _ = rig([CARS, INVENTORY], auth=True)

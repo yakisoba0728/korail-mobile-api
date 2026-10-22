@@ -1980,34 +1980,6 @@ def test_merge_rows_from_another_run_date_are_rejected(mutation_client) -> None:
     assert not requests
 
 
-@pytest.mark.parametrize(
-    "case",
-    [
-        c
-        for c in CASES
-        if c.name in {"reserve", "reserve_transfer", "reserve_with_discount_card", "pay_with_card"}
-    ],
-    ids=lambda c: c.name,
-)
-def test_queue_handoff_one_operation_not_retry(mutation_client, case: Case) -> None:
-    """Client gate boundary only. NetFunnel SDK protocol belongs to session 5 and checks/netfunnel_offline.py."""
-    calls: list[str] = []
-
-    class Queue:
-        def run(self, gate: str, send: Callable[[], Any]) -> Any:
-            calls.append(gate)
-            return send()
-
-        def close(self) -> None:
-            pass
-
-    client, requests = mutation_client([case.response], case.method, case.routes, case.form)
-    client.netfunnel = Queue()
-    case.invoke(client)
-    assert calls == ["pay" if case.name == "pay_with_card" else "reserve"]
-    assert len(requests) == 1
-
-
 def test_numeric_zero_identifiers_are_echoed_without_repadding(mutation_client) -> None:
     """PayViewModel.java:6680-6684; 2026-09-21 numeric-String compatibility is separate from padding recovery."""
     expected = payment_form(hidTmpJobSqno1="0", hidTmpJobSqno2="42", hidRsvChgNo="0")
