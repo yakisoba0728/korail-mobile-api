@@ -65,24 +65,21 @@ API 요청의 `User-Agent`와 대기열 요청의 `User-Agent`는 서로 다른 
 
 ### 요청 버전 {#request-version}
 
-오류 사전의 7.0.10 갱신과 요청 버전은 별개입니다. 2.6.2도 요청 기본값 `app_version="7.0.8"`·`version="250601003"`을 바꾸지 않습니다.
+오류 사전의 7.0.10 갱신과 요청 버전은 별개입니다. 2.6.2와 3.0도 요청 기본값 `app_version="7.0.8"`·`version="250601003"`을 바꾸지 않습니다.
 
 !!! warning "2026-10-23 현재 상태"
     2026-10-21부터 익명 열차 조회를 포함한 모든 요청이 `-8204`("원활한 예매 및 결제 서비스를 위해 최신 버전으로 업데이트해 주세요")로 실패한다는 보고가 있습니다([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)).
     `2!` 기본 헤더 도입 전 `main`에서 기본값과 `app_version="7.0.10"`만 바꾼 설정(API `Version`은 기본값) 모두 실패했습니다.
     기록된 실서버 성공은 2026-10-23 `AppVersion=7.0.10`·API `Version=250722001`·기본 `2!` 헤더 조합의 병합 전 작업 트리 관측 1회뿐입니다([기록](../verification-7010.md#diagnostic-20261023)).
-    2.6.2의 기본 조합(`2!`·7.0.8·250601003)은 실서버에서 시도하지 않았습니다.
+    2.6.2와 3.0의 기본 조합(`2!`·7.0.8·250601003)은 실서버에서 시도하지 않았습니다. 3.0 코드로는 실서버에 요청하지 않았습니다.
 
 두 값을 함께 바꿔 시도할 수 있지만 동작을 보장하지 않습니다. `app_version`은 API `Version`을 바꾸지 않으므로 각각 지정합니다.
 
 ```python
 from korail_mobile_api import KorailClient, KorailConfig
 
-client = KorailClient(KorailConfig(app_version="7.0.10", version="250722001"))
-try:
+with KorailClient(KorailConfig(app_version="7.0.10", version="250722001")) as client:
     status = client.get_service_status()
-finally:
-    client.close()
 ```
 
 [`build_config_from_env`](#from-env)를 쓴다면 `KORAIL_APP_VERSION`·`KORAIL_API_VERSION` 환경변수로 같은 값을 넣을 수 있습니다.

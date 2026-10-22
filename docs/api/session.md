@@ -191,7 +191,7 @@ KorailClient.close() -> None
 
 닫은 클라이언트로 요청을 보내는 메서드를 호출하면 요청을 보내지 않고 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
 닫은 클라이언트를 다시 여는 메서드는 없으므로 새 [`KorailClient`][korail_mobile_api.KorailClient]를 만드세요.
-`with` 문은 지원하지 않으므로 `try`/`finally`로 닫습니다.
+`with KorailClient() as client:`로 쓰면 블록이 끝날 때 `close`를 부릅니다. 이때도 서버 로그아웃은 하지 않습니다.
 
 **매개변수**
 
@@ -221,6 +221,9 @@ try:
     calendar = client.get_train_calendar()
 finally:
     client.close()
+
+with KorailClient() as client:  # 위와 같습니다.
+    calendar = client.get_train_calendar()
 ```
 
 ## `get_service_status`
