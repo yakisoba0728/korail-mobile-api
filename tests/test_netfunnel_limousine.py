@@ -595,7 +595,7 @@ def test_all_public_methods_have_expected_queue_exchanges() -> None:
     """The public smoke suite executes every exchange; pin its gated set without private call-graph checks."""
     from test_public_api_smoke import F8_CASE_DATA
 
-    assert len(F8_CASE_DATA) == 85
+    assert len(F8_CASE_DATA) == 83
     assert {
         name
         for name, case in F8_CASE_DATA.items()

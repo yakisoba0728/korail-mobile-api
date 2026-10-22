@@ -5,7 +5,7 @@
 
 **정기권·패스**는 조회만 합니다. [`get_pass_menu`](#get_pass_menu)로 메뉴 항목을 읽고, 항목의 `pass_data`([`PassMenuData`][korail_mobile_api.PassMenuData])에 든 종류·기간·연령 코드로 사용 가능일([`get_pass_availability`](#get_pass_availability)), 탈 수 있는 열차([`get_pass_schedule`](#get_pass_schedule)), 예매 조건([`get_commuter_info`](#get_commuter_info))을 조회합니다. 정기권·패스를 구매하는 메서드는 없습니다.
 
-**N카드**는 사용 내역과 이용 가능 열차 조회, 결제 전 구매, 기간 연장, N카드 예약을 제공합니다. N카드 결제는 지원하지 않습니다. [`register_discount_card`](#register_discount_card)는 결제 전 구매까지만 만들고, 그 구매를 결제하거나 취소하는 메서드는 없습니다. 7.0.8에서 스케줄 조회는 서버 오류 `EAZ000028`까지 확인했고, 보유 N카드가 없어 정상 조회와 다른 N카드 메서드는 확인하지 못했습니다.
+**N카드**는 사용 내역과 이용 가능 열차 조회, 기간 연장, N카드 예약을 제공합니다. N카드 구매·결제는 지원하지 않습니다(결제 전 구매를 만들던 `register_discount_card`는 3.0에서 제거했습니다). 7.0.8에서 스케줄 조회는 서버 오류 `EAZ000028`까지 확인했고, 보유 N카드가 없어 정상 조회와 다른 N카드 메서드는 확인하지 못했습니다.
 
 **여행상품**은 검색·예약·결제를 지원하지 않습니다. 다른 경로로 만든 여행상품 예약을 목록([`list_product_reservations`](#list_product_reservations))과 상세([`get_product_detail`](#get_product_detail))로 조회하고, [`cancel_product_reservation`](#cancel_product_reservation)으로 취소합니다. [`get_trip_menu`](#get_trip_menu)는 여행상품 메뉴 화면의 항목을 읽습니다.
 
@@ -398,7 +398,7 @@ KorailClient.get_discount_card_schedule(
 
 **반환값**
 
-[`DiscountCardScheduleResponse`][korail_mobile_api.DiscountCardScheduleResponse] — `trains`에 열차가 [`DiscountCardScheduleTrain`][korail_mobile_api.DiscountCardScheduleTrain] 목록으로 들어 있습니다. `following_page_exists`는 채우지 않습니다.
+[`DiscountCardScheduleResponse`][korail_mobile_api.DiscountCardScheduleResponse] — `trains`에 열차가 [`DiscountCardScheduleTrain`][korail_mobile_api.DiscountCardScheduleTrain] 목록으로 들어 있습니다. 이 응답에는 다음 페이지 신호가 없습니다.
 
 **예외**
 
@@ -436,84 +436,17 @@ for train in result.trains:
 
 ## `register_discount_card`
 
-결제 전 N카드 구매를 만듭니다.
-
-```python
-KorailClient.register_discount_card(
-    request: DiscountCardPurchaseRequest,
-) -> DiscountCardPurchaseResponse
-```
-
-조회가 아니라 실제 구매 요청이며, 서버에 결제 전 N카드 구매가 만들어집니다. 실서버에서 확인하지 못한 메서드입니다.
-
-구매 정보는 [`DiscountCardPurchaseRequest`][korail_mobile_api.DiscountCardPurchaseRequest]로 만듭니다.
-`card_kind_management_no`(상품 관리번호), `customer_no`(고객번호), `validity_start_date`(유효기간 시작일), `usable_trip_count`(사용 가능 횟수)는 모두 비어 있으면 안 됩니다. `validity_start_date`와 `usable_trip_count`는 기본값이 빈 문자열이지만, 비워 두면 요청을 보내지 않고 예외를 발생시킵니다.
-`validity_start_date`의 형식은 라이브러리가 검사하지 않으며, 서버가 받는 형식은 확인하지 못했습니다.
-`customer_no`에는 로그인할 때 받은 [`KorailSession`][korail_mobile_api.KorailSession]의 `customer_no`를 넣습니다.
-적용 구간(`sections`)은 [`DiscountCardSectionRequest`][korail_mobile_api.DiscountCardSectionRequest]로 1~3개를 넣고, 2인용 N카드는 `additional_users`에 추가 사용자([`DiscountCardAdditionalUser`][korail_mobile_api.DiscountCardAdditionalUser])를 한 명까지 넣습니다.
-적용 구간 하나는 운행일(`run_date`), 열차 번호(`train_no`), 출발역 코드(`departure_station_code`), 도착역 코드(`arrival_station_code`)를 받고, 여정 유형 코드(`journey_type_code`)는 기본값이 `"11"`입니다.
-
-응답의 일괄 결제 대상 번호와 금액은 앱에서 결제 단계로 이어지지만, 라이브러리에는 이 구매를 결제하거나 취소하는 메서드가 없습니다. [`cancel_unpaid_hold`](reservations.md#cancel_unpaid_hold)는 홀드([`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse])만 받으므로 이 구매에 쓸 수 없습니다.
-
-**매개변수**
-
-| 이름 | 타입 | 기본값 | 설명 |
-|---|---|---|---|
-| `request` | [`DiscountCardPurchaseRequest`][korail_mobile_api.DiscountCardPurchaseRequest] | 필수 | 구매할 N카드 상품, 사용자, 적용 구간입니다. |
-
-**반환값**
-
-[`DiscountCardPurchaseResponse`][korail_mobile_api.DiscountCardPurchaseResponse] — 결제 전 구매 결과입니다. 결제할 금액(`received_amount`), 유효기간(`validity_start_date`, `validity_end_date`), 사용 가능 횟수(`usable_trip_count`), 일괄 결제 대상 번호(`lump_settlement_target_no`), 서버가 등록한 상품 관리번호(`registered_card_kind_management_no`) 등을 담습니다.
-
-**예외**
-
-| 예외 | 발생 조건 |
-|---|---|
-| [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `request`가 `DiscountCardPurchaseRequest`가 아닐 때, 위 네 필드 중 하나가 비어 있을 때, `sections`가 없거나 3개를 넘을 때, 구간이나 추가 사용자의 값이 비어 있을 때, 추가 사용자가 2명 이상일 때 |
-
-**정보**
-
-| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
-|:-:|:-:|:-:|:-:|
-| 필요 | - | 예 | 미실행 |
-
-!!! warning "실제로 처리됩니다"
-    이 메서드를 호출하면 서버에 결제 전 N카드 구매가 실제로 만들어지며, 라이브러리로는 취소할 수 없습니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
-
-**예제**
-
-```python
-from datetime import datetime, timedelta, timezone
-
-from korail_mobile_api import DiscountCardPurchaseRequest, DiscountCardSectionRequest
-
-departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
-
-# session은 client.login()이 반환한 KorailSession, train은 search_trains() 결과의 열차입니다.
-section = DiscountCardSectionRequest(
-    train.run_date, train.train_no, train.departure_station_code, train.arrival_station_code
-)
-request = DiscountCardPurchaseRequest(
-    card_kind_management_no=input("N카드 상품 관리번호: "),
-    customer_no=session.customer_no,
-    validity_start_date=departure_date,  # 서버가 받는 형식은 확인하지 못했습니다
-    usable_trip_count=input("사용 가능 횟수: "),
-    sections=(section,),
-)
-purchase = client.register_discount_card(request)
-print(purchase.received_amount, purchase.validity_end_date)
-```
+3.0에서 제거했습니다. 실서버에서 확인하지 못했고 라이브러리로 결제·취소할 수 없는 구매만 만들었기 때문입니다. `DiscountCardPurchaseRequest`, `DiscountCardSectionRequest`, `DiscountCardAdditionalUser`, `DiscountCardPurchaseResponse`도 함께 제거했습니다. 대신 쓸 메서드는 없으며 [3.0 이전 안내](../migration-3.0.md#removed)를 참고하세요.
 
 ## `extend_discount_card`
 
 N카드의 유효기간을 실제로 연장합니다.
 
 ```python
-KorailClient.extend_discount_card(ticket: DiscountCardTicket) -> BaseKorailResponse
+KorailClient.extend_discount_card(ticket: OriginalTicketReference) -> BaseKorailResponse
 ```
 
-연장할 N카드 승차권(원표)의 반환 식별자 네 값(판매 창구번호, 판매일, 일련번호, 반환 비밀번호)을 [`DiscountCardTicket`][korail_mobile_api.DiscountCardTicket]에 넣어 보냅니다. 판매일에 `YYYYMMDD`와 `MMDD` 중 어느 형식을 넣어야 하는지는 확인하지 못했습니다. 두 판매일 필드의 차이는 [승차권 식별자 이어 쓰기](account.md#ticket-identifiers)를 참고하세요. 실서버에서 확인하지 못한 메서드입니다.
+연장할 N카드 승차권(원표)의 반환 식별자 네 값(판매 창구번호, 판매일, 일련번호, 반환 비밀번호)을 [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]에 넣어 보냅니다. 3.0 전에는 같은 네 값을 `DiscountCardTicket`에 넣었고 요청 바이트는 같습니다. 판매일에 `YYYYMMDD`와 `MMDD` 중 어느 형식을 넣어야 하는지는 확인하지 못했습니다. 두 판매일 필드의 차이는 [승차권 식별자 이어 쓰기](account.md#ticket-identifiers)를 참고하세요. 실서버에서 확인하지 못한 메서드입니다.
 
 승차권 상세([`get_refund_ticket_detail`](payments.md#get_refund_ticket_detail))의 `discount_card`([`DiscountCardOnTicket`][korail_mobile_api.DiscountCardOnTicket])에는 기간 연장 가능 여부 플래그(`term_extension_possible_flag`)가 있습니다. 어떤 값이 연장 가능을 뜻하는지는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 
@@ -521,7 +454,7 @@ KorailClient.extend_discount_card(ticket: DiscountCardTicket) -> BaseKorailRespo
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `ticket` | [`DiscountCardTicket`][korail_mobile_api.DiscountCardTicket] | 필수 | 연장할 N카드 승차권의 반환 식별자입니다. |
+| `ticket` | [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference] | 필수 | 연장할 N카드 승차권의 반환 식별자입니다. |
 
 **반환값**
 
@@ -532,7 +465,7 @@ KorailClient.extend_discount_card(ticket: DiscountCardTicket) -> BaseKorailRespo
 | 예외 | 발생 조건 |
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`이 `DiscountCardTicket`이 아니거나 네 값 중 하나가 비어 있을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`이 `OriginalTicketReference`가 아닐 때. 네 값 중 하나가 비어 있으면 `OriginalTicketReference`를 만들 때 거절합니다. |
 
 **정보**
 
@@ -546,16 +479,16 @@ KorailClient.extend_discount_card(ticket: DiscountCardTicket) -> BaseKorailRespo
 **예제**
 
 ```python
-from korail_mobile_api import DiscountCardTicket
+from korail_mobile_api import OriginalTicketReference
 
 tickets = client.list_tickets()
 card_ticket = tickets.reservations[0].tickets[0]  # 기간을 연장할 N카드 승차권
 result = client.extend_discount_card(
-    DiscountCardTicket(
-        card_ticket.sale_window_no,
-        card_ticket.sale_date,  # YYYYMMDD. MMDD(return_sale_date)가 맞는지는 확인하지 못했습니다
-        card_ticket.sale_sequence,
-        card_ticket.return_password,
+    OriginalTicketReference(
+        sale_window_no=card_ticket.sale_window_no,
+        sale_date=card_ticket.sale_date,  # YYYYMMDD. MMDD(return_sale_date)가 맞는지는 확인하지 못했습니다
+        sale_sequence=card_ticket.sale_sequence,
+        return_password=card_ticket.return_password,
     )
 )
 print(result.str_result, result.h_msg_cd)

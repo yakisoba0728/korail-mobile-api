@@ -17,10 +17,6 @@ import korail_mobile_api.client as client_module
 from korail_mobile_api import (
     CardPayment,
     CartAddRequest,
-    DiscountCardAdditionalUser,
-    DiscountCardPurchaseRequest,
-    DiscountCardSectionRequest,
-    DiscountCardTicket,
     DynapathConfig,
     KorailPassengerCounts,
     KorailSeatAssignment,
@@ -411,46 +407,6 @@ def execution_form() -> dict[str, Any]:
     }
 
 
-def purchase_request() -> DiscountCardPurchaseRequest:
-    return DiscountCardPurchaseRequest(
-        "SYNTH-N-KIND",
-        "SYNTH-CUSTOMER-NO",
-        "20991230",
-        "10",
-        (
-            DiscountCardSectionRequest("20991230", "90001", "9001", "9002"),
-            DiscountCardSectionRequest("20991231", "90002", "9002", "9003", "14"),
-        ),
-        (DiscountCardAdditionalUser("SYNTH-SECOND-NO", "SYNTH-SECOND-NAME", "00000000000"),),
-    )
-
-
-def purchase_form() -> dict[str, Any]:
-    """NCardInfoIn.java:29-39; NCardjrny.java:55. 검증 못 함: protected names/values remain unverified."""
-    return {
-        **COMMON,
-        "dcntCrdKndMgNo": "SYNTH-N-KIND",
-        "custMgNo": "SYNTH-CUSTOMER-NO",
-        "vlidTrmStDt": "20991230",
-        "usePsbTno": "10",
-        "jrnyCnt": "2",
-        "jrnyTpCd_1": "11",
-        "runDt_1": "20991230",
-        "trnNo_1": "90001",
-        "dptRsStnCd_1": "9001",
-        "arvRsStnCd_1": "9002",
-        "jrnyTpCd_2": "14",
-        "runDt_2": "20991231",
-        "trnNo_2": "90002",
-        "dptRsStnCd_2": "9002",
-        "arvRsStnCd_2": "9003",
-        "apdUsrCnt": "1",
-        "custMgNo_1": "SYNTH-SECOND-NO",
-        "apdCustName_1": "SYNTH-SECOND-NAME",
-        "apdCustTeln_1": "00000000000",
-    }
-
-
 def recalc_request(**changes: Any) -> PriceRecalculationRequest:
     return PriceRecalculationRequest(
         PNR,
@@ -529,18 +485,6 @@ def cases() -> list[Case]:
     }
     nreserve = {**reservation_form(), "txtMenuId": "A2", "txtDiscKndCd1": "153", "txtCardNo_1": "SYNTH-N-CARD"}
     cancel = {**COMMON, "txtPnrNo": PNR, "txtJrnySqno": "0007", "txtJrnyCnt": "0001", "hidRsvChgNo": "009"}
-    nraw = {
-        **BASE,
-        "lumpStlTgtNo": "SYNTH-LUMP",
-        "dcntCrdStlTgtNo": "SYNTH-N-TARGET",
-        "dcntCrdKndMgNo": "SYNTH-SERVER-KIND",
-        "rcvdAmt": "1200",
-        "stxAmt": "100",
-        "taxtSplAmt": "1100",
-        "usePsbTno": "10",
-        "vlidTrmStDt": "20991230",
-        "vlidTrmClsDt": "20991231",
-    }
     return [
         # ReservationOut.java:49,400-409,444-448: deadline date/time, h_tot_fare (meaning unknown) and the displayed
         # h_tot_prc; PayViewModel.java:11297-11307,11314-11318 sums h_tot_rcvd_amt and shows h_tot_prc.
@@ -703,34 +647,11 @@ def cases() -> list[Case]:
             "parse_cart_add_response",
             {},
         ),
-        # NCardInfoOut.java:25-38: response keys are the Kotlin property names (serializer names are protected);
-        # dcntCrdKndMgNo (NCardInfoOut.java:30) is separate from dcntCrdStlTgtNo. NetworkApi.java:336-337: the Info
-        # route creates a purchase; NCardInfoOut.java:32-33 lump target and amount feed PayViewModel.java:6628.
-        Case(
-            "register_discount_card",
-            lambda c: c.register_discount_card(purchase_request()),
-            "POST",
-            ("research.dcntCrdInfo.do",),
-            purchase_form(),
-            nraw,
-            "parse_discount_card_purchase_response",
-            {
-                "lump_settlement_target_no": "SYNTH-LUMP",
-                "registered_card_kind_management_no": "SYNTH-SERVER-KIND",
-                "discount_card_settlement_target_no": "SYNTH-N-TARGET",
-                "received_amount": "1200",
-                "stx_amount": "100",
-                "taxt_supply_amount": "1100",
-                "usable_trip_count": "10",
-                "validity_start_date": "20991230",
-                "validity_end_date": "20991231",
-            },
-        ),
         # NetworkApi.java:518-520 (POST despite the name); keys from NCardExtensionIn.java:31-34 property names.
         Case(
             "extend_discount_card",
             lambda c: c.extend_discount_card(
-                DiscountCardTicket(
+                OriginalTicketReference(
                     "SYNTH-ORIGINAL-WINDOW", "20991230", "SYNTH-ORIGINAL-SEQ", "SYNTH-RETURN-PWD"
                 )
             ),
@@ -1588,56 +1509,18 @@ RECALC_ROUTE = "certification.PriceReCalculation"
 CART_FORM = {**COMMON, "hidPnrNo": PNR}
 
 
-@pytest.mark.parametrize("cart_result", ["SUCC", "FAIL"])
-def test_recalculation_can_add_the_pnr_to_the_cart_like_the_app(mutation_client, cart_result: str) -> None:
-    """PayViewModel.java:14428-14436: after a successful recalculation a logged-in app adds the PNR to the cart
-    and keeps the recalculated amount even if that fails (executeAddCart only alerts)."""
-    cart = {**BASE, "strResult": cart_result, "h_msg_cd": "SYNTH-CART"}
+def test_recalculation_sends_one_request_and_the_caller_adds_the_cart(mutation_client) -> None:
+    """PayViewModel.java:14428-14436: after a successful recalculation a logged-in app adds the PNR to the cart.
+    3.0 removed recalculate_price(add_to_cart=); the caller sends that second request with add_to_cart."""
+    cart = {**BASE, "h_msg_cd": "SYNTH-CART"}
     client, requests = mutation_client(
         [hold_raw(), cart], "POST", (RECALC_ROUTE, "cart.addCartList"), [recalc_form(), CART_FORM]
     )
-    result = client.recalculate_price(recalc_request(), add_to_cart=True)
-    assert result.received_amount == "1200"
-    assert result.cart_addition is not None
-    assert (result.cart_addition.str_result, result.cart_addition.h_msg_cd) == (cart_result, "SYNTH-CART")
+    recalculated = client.recalculate_price(recalc_request())
+    assert recalculated.received_amount == "1200" and len(requests) == 1
+    assert recalculated.pnr_no is not None
+    assert client.add_to_cart(CartAddRequest(recalculated.pnr_no)).h_msg_cd == "SYNTH-CART"
     assert len(requests) == 2
-
-
-@pytest.mark.parametrize(
-    "cart_reply, expected",
-    [
-        (httpx.ReadTimeout("synthetic cart timeout"), "KorailTransportError"),
-        ({**BASE, "strResult": "FAIL", "h_msg_cd": "P058", "h_msg_txt": "SYNTH"}, "KorailSessionExpiredError"),
-        ("not json", "KorailProtocolError"),
-    ],
-)
-def test_recalculated_hold_survives_a_failed_cart_step(scripted_client_factory, cart_reply, expected) -> None:
-    """2.6.2: the cart step's exception used to discard the hold the server had already recalculated."""
-    config = KorailConfig(base_url="https://offline.invalid", netfunnel_enabled=False, disable_dynapath=True)
-    reply = httpx.Response(200, text=cart_reply) if isinstance(cart_reply, str) else cart_reply
-    client, requests, _ = scripted_client_factory(
-        [hold_raw(), reply], config=config, session=KorailSession(jsessionid="SYNTH-SESSION")
-    )
-    result = client.recalculate_price(recalc_request(), add_to_cart=True)
-    assert result.received_amount == "1200" and result.cart_addition is None
-    assert type(result.cart_addition_error).__name__ == expected
-    assert len(requests) == 2
-
-
-@pytest.mark.parametrize("failed", [False, True], ids=["default-no-cart", "failed-no-cart"])
-def test_recalculation_adds_nothing_to_the_cart_by_default_or_after_a_failure(mutation_client, failed) -> None:
-    raw = (
-        {**hold_raw(), "strResult": "FAIL", "h_msg_cd": "ERR930202", "h_msg_txt": "SYNTH"}
-        if failed
-        else hold_raw()
-    )
-    client, requests = mutation_client([raw], "POST", (RECALC_ROUTE,), recalc_form())
-    if failed:
-        with pytest.raises(KorailApiError):
-            client.recalculate_price(recalc_request(), add_to_cart=True)
-    else:
-        assert client.recalculate_price(recalc_request()).cart_addition is None
-    assert len(requests) == 1
 
 
 def test_recalculation_rows_come_from_the_first_journey_seats_like_the_app() -> None:
@@ -1891,12 +1774,12 @@ def test_merge_first_and_follow_up_holds_stay_payable(mutation_client) -> None:
     assert hold().payable is True
 
 
-@pytest.mark.parametrize("job_type", [Job.STANDBY, Job.IMMEDIATE, Job.SEAT_DESIGNATED])
-def test_merge_reservation_refuses_other_job_types(mutation_client, job_type: Job) -> None:
-    """2.6.2: other job types were sent with the merge standing flag and came back as payable holds."""
+def test_merge_reservation_takes_no_job_type(mutation_client) -> None:
+    """2.6.2: other job types were sent with the merge standing flag and came back as payable holds.
+    3.0 removed the parameter; the merge follow-up is always MERGE_STANDING."""
     client, requests = mutation_client([], "POST", (), {})
-    with pytest.raises(KorailProtocolError, match="MERGE_STANDING"):
-        client.reserve_merge(train(), merge_rows(), job_type=job_type)
+    with pytest.raises(TypeError, match="job_type"):
+        client.reserve_merge(train(), merge_rows(), job_type=Job.STANDBY)  # type: ignore[call-arg]
     assert not requests
 
 

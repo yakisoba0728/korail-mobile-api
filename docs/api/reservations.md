@@ -190,7 +190,6 @@ KorailClient.reserve_merge(
     *,
     passengers: KorailPassengerCounts | None = None,
     seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
-    job_type: KorailReservationJobType = KorailReservationJobType.MERGE_STANDING,
     seat_attribute_code: str | None = None,
 ) -> ReservationHoldResponse
 ```
@@ -204,7 +203,7 @@ KorailClient.reserve_merge(
 
 첫 홀드, 병합 조회, 첫 홀드 취소는 이 메서드가 대신 보내지 않습니다. 첫 홀드는 호출자가 취소해야 하며, 후속 홀드는 첫 홀드와 다른 PNR일 수 있습니다.
 
-라이브러리는 첫 홀드 요청을 보관하지 않습니다. `standing_hold_train`, `passengers`, `seat_class`, `job_type`, `seat_attribute_code`로 첫 홀드와 같은 요청을 다시 만든 뒤 입석 여부와 중간역 값만 바꿔 보냅니다.
+라이브러리는 첫 홀드 요청을 보관하지 않습니다. `standing_hold_train`, `passengers`, `seat_class`, `seat_attribute_code`와 예약 종류 `MERGE_STANDING`으로 첫 홀드와 같은 요청을 다시 만든 뒤 입석 여부와 중간역 값만 바꿔 보냅니다.
 따라서 첫 홀드를 만들 때와 같은 값을 넘기세요. 중간역은 `merge_rows` 첫 행의 도착역이고, 입석 여부는 병합 행의 예약 코드로 정합니다.
 이 메서드는 대기열을 거치지 않습니다.
 
@@ -216,7 +215,6 @@ KorailClient.reserve_merge(
 | `merge_rows` | `Sequence[`[`TrainScheduleItem`][korail_mobile_api.TrainScheduleItem]`]` | 필수 | [`get_merge_seat_options`](trains.md#get_merge_seat_options)가 반환한 `trains`입니다. 모든 행의 열차 번호가 `standing_hold_train`과 같아야 하고, 행에 운행일이 있으면 운행일도 같아야 합니다. 첫 행에는 도착역 코드와 도착역 순서 값이 있어야 합니다. |
 | `passengers` | [`KorailPassengerCounts`][korail_mobile_api.KorailPassengerCounts] \| `None` | `None` | 첫 홀드와 같은 승객 구성입니다. `None`이면 어른 1명입니다. `teenager > 0`이면 요청 전에 `KorailProtocolError`로 거절합니다. |
 | `seat_class` | [`KorailSeatClass`][korail_mobile_api.KorailSeatClass] | `KorailSeatClass.GENERAL` | 첫 홀드와 같은 객실 등급입니다. |
-| `job_type` | [`KorailReservationJobType`][korail_mobile_api.KorailReservationJobType] | `KorailReservationJobType.MERGE_STANDING` | 첫 홀드와 같은 예약 종류입니다. 2.6.2부터 `MERGE_STANDING`만 받으며 다른 값은 요청 전에 거절합니다. 이전에는 `STANDBY`·`IMMEDIATE`도 그대로 보내 결제 가능한 홀드가 반환될 수 있었습니다. |
 | `seat_attribute_code` | `str` \| `None` | `None` | 첫 홀드와 같은 좌석 속성 코드입니다. `None`이면 [`reserve`](#reserve)와 같은 규칙으로 정합니다. |
 
 **반환값**
@@ -228,7 +226,7 @@ KorailClient.reserve_merge(
 | 예외 | 발생 조건 |
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `merge_rows`가 비었거나 [`TrainScheduleItem`][korail_mobile_api.TrainScheduleItem]이 아닌 값이 있을 때. 행의 열차 번호나 운행일이 `standing_hold_train`과 다를 때. 첫 행에 중간역 값이 없을 때. `job_type`이 `MERGE_STANDING`이 아닐 때(2.6.2부터). 열차가 병합 대상이 아닐 때. 그 밖의 [`reserve`](#reserve)와 같은 요청 전 검사에 실패했을 때. 응답의 좌석별 정산액 합계와 총 정산액이 다를 때처럼 응답을 읽지 못했을 때도 발생하며, 이때 홀드는 이미 만들어졌을 수 있습니다. |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `merge_rows`가 비었거나 [`TrainScheduleItem`][korail_mobile_api.TrainScheduleItem]이 아닌 값이 있을 때. 행의 열차 번호나 운행일이 `standing_hold_train`과 다를 때. 첫 행에 중간역 값이 없을 때. 열차가 병합 대상이 아닐 때. 그 밖의 [`reserve`](#reserve)와 같은 요청 전 검사에 실패했을 때. 응답의 좌석별 정산액 합계와 총 정산액이 다를 때처럼 응답을 읽지 못했을 때도 발생하며, 이때 홀드는 이미 만들어졌을 수 있습니다. |
 | [`KorailSoldOutError`][korail_mobile_api.KorailSoldOutError] | 서버가 매진으로 응답했을 때 |
 | [`KorailReservationRefusedError`][korail_mobile_api.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인(`ERR299943`) 등의 이유로 예약을 거절했을 때 |
 

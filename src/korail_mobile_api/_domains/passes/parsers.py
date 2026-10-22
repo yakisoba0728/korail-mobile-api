@@ -26,7 +26,6 @@ from .models import (
     CommuterInfoResponse,
     CommuterKindMenuResponse,
     CommuterPassengerOption,
-    DiscountCardPurchaseResponse,
     DiscountCardScheduleResponse,
     DiscountCardScheduleTrain,
     DiscountCardUsage,
@@ -278,12 +277,6 @@ def parse_product_detail_response(raw: Mapping[str, object]) -> ProductDetailRes
         detail_raw=main,
         **_response_fields(raw),
     )
-
-
-@_preserve_read_raw
-def parse_discount_card_purchase_response(raw: Mapping[str, object]) -> DiscountCardPurchaseResponse:
-    data = _response_mapping(raw)
-    return wire_model(DiscountCardPurchaseResponse, data, "discount card purchase", **_response_fields(data))
 
 
 @_preserve_read_raw

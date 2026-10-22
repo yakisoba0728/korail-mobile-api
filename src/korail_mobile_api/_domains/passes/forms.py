@@ -28,60 +28,12 @@ from ..tickets.forms import OriginalTicketReference
 from ..trains.models import TrainSummary
 from .models import CommuterInfoResponse, PassMenuData, ProductDetailResponse
 
-# N카드 구매 한 번의 구간 수 상한입니다. 앱의 상한과 같은지는 확인하지 못했습니다.
-KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
 # 발권 응답의 ResDiscount.N_CARD("443")와 별개입니다. 예약 성공은 실서버 미확인입니다.
 # evidence: app 7.0.8 ReqDiscount.N_CARD (복호화), DiscountHelper.java:818, TCReservationRequestHelper.java:284
 KORAIL_DISCOUNT_CARD_DISCOUNT_CODE = "153"
 # 미확인: 좌석배정 메뉴 값을 재사용합니다. 앱은 SEAT_ASSIGN 과 N_CARD 를 따로 선언하며 두 값은 보호돼 있습니다.
 # evidence: app 7.0.6 TicketReservationIn.java:43, ReservationMenuId.java:21-22
 KORAIL_DISCOUNT_CARD_MENU_ID = "A2"
-
-
-@dataclass(frozen=True)
-class DiscountCardSectionRequest:
-    """구매할 N카드의 적용 구간을 구성합니다.
-
-    요청에는 구간마다 1부터 매긴 번호를 붙여 보냅니다."""
-
-    run_date: str
-    train_no: str
-    departure_station_code: str
-    arrival_station_code: str
-    journey_type_code: str = "11"
-
-
-@dataclass(frozen=True)
-class DiscountCardAdditionalUser:
-    """2인용 N카드의 추가 사용자 정보를 구성합니다.
-
-    요청 키 이름은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다."""
-
-    customer_no: str
-    name: str
-    phone: str
-
-
-@dataclass(frozen=True)
-class DiscountCardPurchaseRequest:
-    """N카드 구매에 필요한 구간·사용자·상품 정보를 구성합니다."""
-
-    card_kind_management_no: str
-    customer_no: str
-    validity_start_date: str = ""
-    usable_trip_count: str = ""
-    sections: tuple[DiscountCardSectionRequest, ...] = ()
-    additional_users: tuple[DiscountCardAdditionalUser, ...] = ()
-
-
-@dataclass(frozen=True)
-class DiscountCardTicket:
-    """N카드 기간연장에 필요한 원표의 반환 식별자를 구성합니다."""
-
-    sale_window_no: str
-    sale_date: str
-    sale_sequence: str
-    return_password: str
 
 
 @dataclass(frozen=True)
@@ -425,78 +377,13 @@ def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
     return {"dcntCrdNo": _required_text(card_no, "card_no")}
 
 
-def build_discount_card_purchase_form(
-    config: KorailConfig,
-    request: DiscountCardPurchaseRequest,
-) -> dict[str, str]:
-    if not isinstance(request, DiscountCardPurchaseRequest):
-        raise KorailInvalidInputError(
-            "KORAIL discount card purchase requires an exact DiscountCardPurchaseRequest"
-        )
-    form = _device_version_key(config)
-    form.update(
-        {
-            wire: _required_mutation_text(getattr(request, attr), field=attr)
-            for wire, attr in (
-                ("dcntCrdKndMgNo", "card_kind_management_no"),
-                ("custMgNo", "customer_no"),
-                ("vlidTrmStDt", "validity_start_date"),
-                ("usePsbTno", "usable_trip_count"),
-            )
-        }
-    )
-    sections = tuple(request.sections)
-    if not sections or len(sections) > KORAIL_MAX_DISCOUNT_CARD_SECTIONS:
-        raise KorailInvalidInputError(
-            f"KORAIL discount card purchase needs 1 to {KORAIL_MAX_DISCOUNT_CARD_SECTIONS} sections"
-        )
-    form["jrnyCnt"] = str(len(sections))
-    for index, section in enumerate(sections, start=1):
-        if not isinstance(section, DiscountCardSectionRequest):
-            raise KorailInvalidInputError(
-                "KORAIL discount card purchase requires exact DiscountCardSectionRequest values"
-            )
-        for wire, attr in (
-            ("jrnyTpCd", "journey_type_code"),
-            ("runDt", "run_date"),
-            ("trnNo", "train_no"),
-            ("dptRsStnCd", "departure_station_code"),
-            ("arvRsStnCd", "arrival_station_code"),
-        ):
-            form[f"{wire}_{index}"] = _required_mutation_text(
-                getattr(section, attr),
-                field=attr,
-            )
-    users = tuple(request.additional_users)
-    # 앱 DTO 는 부가사용자 _1 키 한 묶음만 선언합니다.
-    if len(users) > 1:
-        raise KorailInvalidInputError("KORAIL discount card purchase takes at most 1 additional user")
-    if users:
-        form["apdUsrCnt"] = str(len(users))
-        for index, user in enumerate(users, start=1):
-            if not isinstance(user, DiscountCardAdditionalUser):
-                raise KorailInvalidInputError(
-                    "KORAIL discount card purchase requires exact DiscountCardAdditionalUser values"
-                )
-            for wire, attr in (
-                ("custMgNo", "customer_no"),
-                ("apdCustName", "name"),
-                ("apdCustTeln", "phone"),
-            ):
-                form[f"{wire}_{index}"] = _required_mutation_text(
-                    getattr(user, attr),
-                    field=f"additional user {attr}",
-                )
-    return form
-
-
 def build_discount_card_extension_query(
     config: KorailConfig,
-    ticket: DiscountCardTicket,
+    ticket: OriginalTicketReference,
 ) -> dict[str, str]:
     """이름과 달리 POST 로 보냅니다. 전송 키는 앱 DTO 의 속성명에서 추정했습니다."""
-    if not isinstance(ticket, DiscountCardTicket):
-        raise KorailInvalidInputError("KORAIL discount card extension requires an exact DiscountCardTicket")
+    if not isinstance(ticket, OriginalTicketReference):
+        raise KorailInvalidInputError("KORAIL discount card extension requires an OriginalTicketReference")
     query = _device_version_key(config)
     query.update(
         {

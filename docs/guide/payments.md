@@ -94,22 +94,18 @@ PNR이 다르거나 창구번호·여정·좌석이 누락되거나, 금액이 �
 
 재계산 결과는 새 [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse]입니다. 결제는 원래 홀드가 아니라 이 반환값으로 합니다.
 
-`add_to_cart=True`를 넘기면 재계산이 성공한 뒤 같은 PNR을 장바구니에 추가합니다.
-장바구니 추가가 실패 응답이어도 예외는 나지 않고 결과가 반환값의 `cart_addition`에 남습니다.
-재계산 자체가 실패하면 예외가 발생하고 장바구니 요청은 보내지 않습니다.
-2.6.2부터 장바구니 단계에서 라이브러리 예외(전송 오류, 응답 파싱 실패, 세션 만료)가 나도 이미 서버에 반영된 재계산 홀드를 반환합니다.
-이때 `cart_addition`은 `None`이고 그 예외는 새 필드 `cart_addition_error`에 들어 있습니다. 이전에는 예외가 그대로 전파돼 재계산된 홀드를 받을 수 없었습니다.
-장바구니 추가가 필요하면 결과를 확인한 뒤 [`add_to_cart`](../api/reservations.md#add_to_cart)를 직접 호출하세요.
+앱은 재계산이 성공하면 같은 PNR을 장바구니에 추가합니다. 같은 순서가 필요하면 재계산 결과를 확인한 뒤 [`add_to_cart`](../api/reservations.md#add_to_cart)를 직접 호출하세요.
+장바구니 요청이 실패해도 재계산은 이미 서버에 반영돼 있으므로 `recalculated`로 결제합니다.
+3.0에서 `recalculate_price(..., add_to_cart=True)`와 `cart_addition`·`cart_addition_error`(2.6.2에서 추가)를 제거했습니다.
 
 ```python
-from korail_mobile_api import PriceRecalculationRequest
+from korail_mobile_api import CartAddRequest, PriceRecalculationRequest
 
 request = PriceRecalculationRequest.for_hold(hold, [input("요청할 할인 코드: ")])
-recalculated = client.recalculate_price(request, add_to_cart=True)
+recalculated = client.recalculate_price(request)
 print(hold.received_amount, "->", recalculated.received_amount)
-cart = recalculated.cart_addition
-if cart is not None and cart.str_result != "SUCC":
-    print("장바구니 추가 실패:", cart.h_msg_cd, cart.h_msg_txt)
+cart = client.add_to_cart(CartAddRequest(recalculated.pnr_no))  # 선택: 앱처럼 장바구니에 담습니다
+print(cart.str_result, cart.h_msg_cd)
 
 hold = recalculated  # 결제는 재계산된 홀드로 합니다
 ```

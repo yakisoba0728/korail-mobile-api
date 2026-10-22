@@ -1,9 +1,9 @@
 # API 레퍼런스
 
-`KorailClient`의 공개 메서드 85개를 주제별로 나눠 설명합니다. 모든 메서드는 동기식입니다. 상태 표는 [7.0.8 재검증](../verification-708.md)을 기준으로 하며, 이후 추가한 `get_reservation_hold`의 상세 조회는 [2026-09-29 추가 검사](../status.md)에서 확인했습니다. 본문에 적힌 이전 실서버 사례는 [7.0.6 시기 기록](../status.md)과 구별해 읽으세요.
+`KorailClient`의 공개 메서드 83개를 주제별로 나눠 설명합니다. 모든 메서드는 동기식입니다. 상태 표는 [7.0.8 재검증](../verification-708.md)을 기준으로 하며, 이후 추가한 `get_reservation_hold`의 상세 조회는 [2026-09-29 추가 검사](../status.md)에서 확인했습니다. 본문에 적힌 이전 실서버 사례는 [7.0.6 시기 기록](../status.md)과 구별해 읽으세요.
 
 [7.0.10 정적 검토](../verification-7010.md)는 별도 범위이며 아래 `7.0.8 확인` 표를 대체하지 않습니다.
-85개 행의 검토는 전체 wire 계약·모든 분기·실서버 호환을 보장하지 않습니다.
+그 검토의 85개 행(3.0 전 메서드 수)은 전체 wire 계약·모든 분기·실서버 호환을 보장하지 않습니다.
 
 ## 클라이언트
 
@@ -55,7 +55,6 @@
 | [`close`](session.md#close) | HTTP 연결 풀과 대기열 연결 풀을 닫습니다. | 필요 없음 | 아니요 | 해당 없음 |
 | [`get_service_status`](session.md#get_service_status) | 예매 서비스가 열려 있는지 확인합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_app_data`](session.md#get_app_data) | 앱 메인 화면이 쓰는 캐시 파일(버전 정보, 공지, 안내 문구)을 받아 옵니다. | 필요 없음 | 아니요 | 응답 파싱 |
-| [`get_notice`](session.md#get_notice) | 앱 메인 캐시에 들어 있는 공지를 읽습니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_common_codes`](session.md#get_common_codes) | 공통 코드 이름으로 서버의 앱 설정값을 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_uuid`](session.md#get_uuid) | 서버가 발급하는 단말 검증값을 받아 옵니다. | 필요 없음 | 아니요 | 응답 파싱 |
 | [`get_station_list_version`](session.md#get_station_list_version) | 역 데이터의 판본과 수록 역 수를 조회합니다. | 필요 없음 | 아니요 | 응답 파싱 |
@@ -164,7 +163,6 @@
 | [`get_trip_menu`](passes.md#get_trip_menu) | 여행상품 메뉴 화면에 그릴 항목과 그 안의 문구 묶음을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`list_discount_card_usages`](passes.md#list_discount_card_usages) | N카드 한 장을 이미 사용한 여행 내역을 조회합니다. | 필요 | 아니요 | 미실행 |
 | [`get_discount_card_schedule`](passes.md#get_discount_card_schedule) | N카드로 아직 탈 수 있는 열차를 한 구간에 대해 조회합니다. | 필요 | 아니요 | 서버 거절 |
-| [`register_discount_card`](passes.md#register_discount_card) | 결제 전 N카드 구매를 만듭니다. | 필요 | 예 | 미실행 |
 | [`extend_discount_card`](passes.md#extend_discount_card) | N카드의 유효기간을 실제로 연장합니다. | 필요 | 예 | 미실행 |
 | [`reserve_with_discount_card`](passes.md#reserve_with_discount_card) | N카드로 좌석을 홀드합니다. | 필요 | 예 | 미실행 |
 | [`list_product_reservations`](passes.md#list_product_reservations) | 로그인 계정이 예약한 여행상품 목록 한 페이지를 조회합니다. | 필요 | 아니요 | 응답 파싱 |

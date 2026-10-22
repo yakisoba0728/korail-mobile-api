@@ -43,16 +43,6 @@
 
 ::: korail_mobile_api.PaidTicket
 
-::: korail_mobile_api.DiscountCardSectionRequest
-
-::: korail_mobile_api.DiscountCardAdditionalUser
-
-::: korail_mobile_api.DiscountCardPurchaseRequest
-
-::: korail_mobile_api.DiscountCardTicket
-
-::: korail_mobile_api.DiscountCardPurchaseResponse
-
 ::: korail_mobile_api.PriceRecalculationRow
 
 ::: korail_mobile_api.PriceRecalculationRequest

@@ -96,8 +96,6 @@ if payment.str_result != "SUCC":
 ```python
 KorailClient.recalculate_price(
     request: PriceRecalculationRequest,
-    *,
-    add_to_cart: bool = False,
 ) -> ReservationHoldResponse
 ```
 
@@ -107,30 +105,23 @@ PNR과 승객별 할인 행을 보내고, 서버가 다시 계산한 홀드를 �
 요청할 할인 코드는 좌석 수와 같은 개수로 넘겨야 합니다. 2.6.2부터 `for_hold()`는 `payable=False`인 예약대기 홀드를 `KorailProtocolError`로 거절합니다.
 7.0.8에서는 실제 미결제 홀드로 요청했지만 할인 코드 `000`은 `WZZ000001`, 변경 없는 요청은 `ERR930202`로 거절됐습니다. 이 버전의 정상 재계산은 아직 확인하지 못했습니다.
 
-`add_to_cart=True`이면 재계산이 성공한 뒤에만 같은 PNR을 장바구니에 추가합니다([`add_to_cart`](reservations.md#add_to_cart)와 같은 요청입니다).
-장바구니 추가가 실패 응답이어도 예외를 발생시키지 않고, 그 결과를 반환값의 `cart_addition`에 담습니다.
-재계산이 실패하면 예외가 발생하며 장바구니 요청은 보내지 않습니다.
-장바구니 요청에서 전송 오류, 응답 파싱 실패, 세션 만료 같은 라이브러리 예외가 나도 재계산은 이미 서버에서 처리된 상태입니다.
-2.6.2부터는 이때 예외를 전파하지 않고 재계산된 홀드를 반환하며, `cart_addition`은 `None`, 그 예외는 `cart_addition_error`에 담습니다. 이전에는 예외가 전파돼 재계산된 홀드를 잃었습니다.
+요청은 하나만 보냅니다. 앱처럼 재계산 뒤 같은 PNR을 장바구니에 담으려면 재계산이 성공한 뒤 [`add_to_cart`](reservations.md#add_to_cart)를 따로 호출하세요.
+3.0에서 `add_to_cart=` 인자와 그 결과를 담던 `cart_addition`·`cart_addition_error`(2.6.2에서 추가)를 제거했습니다.
 
 **매개변수**
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
 | `request` | [`PriceRecalculationRequest`][korail_mobile_api.PriceRecalculationRequest] | 필수 | 재계산할 PNR과 승객별 할인 행([`PriceRecalculationRow`][korail_mobile_api.PriceRecalculationRow])입니다. 행은 1~9개입니다. |
-| `add_to_cart` | `bool` | `False` | `True`이면 재계산이 성공한 뒤 같은 PNR을 장바구니에 추가합니다. |
 
 **반환값**
 
 [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse] — 재계산된 홀드입니다. 바뀐 결제 금액은 `received_amount`에 들어 있습니다.
-`add_to_cart=True`이면 `cart_addition`에 장바구니 추가 결과([`CartAddResponse`][korail_mobile_api.CartAddResponse])가 들어 있고, 아니면 `None`입니다.
-2.6.2부터 장바구니 단계가 라이브러리 예외로 끝나면 `cart_addition`은 `None`이고 `cart_addition_error`에 그 예외가 들어 있습니다. 그 밖에는 `cart_addition_error`가 `None`입니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `add_to_cart`가 `bool`이 아닐 때. 로그인 여부보다 먼저 검사합니다. |
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `request`가 [`PriceRecalculationRequest`][korail_mobile_api.PriceRecalculationRequest]가 아니거나, `pnr_no`가 비었거나, 행이 없거나 9개를 넘을 때 |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 행이 [`PriceRecalculationRow`][korail_mobile_api.PriceRecalculationRow]가 아니거나, 행의 필드가 문자열이 아니거나, `passenger_type_code`·`room_class_code`·`discount_kind_code`가 비었을 때 |
@@ -143,7 +134,7 @@ PNR과 승객별 할인 행을 보내고, 서버가 다시 계산한 홀드를 �
 | 필요 | - | 예 | 서버 거절 |
 
 !!! warning "실제로 처리됩니다"
-    이 메서드를 호출하면 서버에 있는 홀드의 할인과 결제 금액이 바뀌고, `add_to_cart=True`이면 장바구니에도 추가됩니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
+    이 메서드를 호출하면 서버에 있는 홀드의 할인과 결제 금액이 바뀝니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
 
 **예제**
 

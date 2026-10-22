@@ -10,7 +10,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from ..._core.parsing import optional_int, strict_str, wire
-from ...errors import KorailApiError
 from ..common.models import BaseKorailResponse
 
 
@@ -364,13 +363,6 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: 결제할 수 있는 홀드인지 나타냅니다. 예약대기(``STANDBY``)로 만든 홀드는 ``False``이며, ``pay_with_card``는 이런 홀드를
     #: 요청 전에 거절합니다.
     payable: bool = True
-    #: ``recalculate_price(..., add_to_cart=True)``로 받은 결과에만 장바구니 추가 결과가 들어갑니다. 장바구니 추가가
-    #: 실패해도 예외 없이 이 필드에 담기므로 ``str_result``를 확인하세요. 그 밖에는 ``None``입니다.
-    cart_addition: CartAddResponse | None = None
-    # 재계산은 이미 서버에 반영됐으므로 장바구니 단계의 예외로 결과를 잃지 않습니다.
-    #: ``add_to_cart=True``에서 장바구니 요청이 라이브러리 예외로 끝났다면 그 예외입니다. 이때 ``cart_addition``은
-    #: ``None``이며 장바구니에 추가됐는지는 알 수 없습니다. 그 밖에는 ``None``입니다.
-    cart_addition_error: KorailApiError | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)

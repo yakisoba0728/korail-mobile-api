@@ -82,7 +82,6 @@ from ._domains.common.models import (
     BaseKorailResponse,
     CrewRequestListResponse,
     KorailSession,
-    NoticeResponse,
     ServiceStatusResponse,
     StationDataResponse,
     StationInfoResponse,
@@ -101,14 +100,11 @@ from ._domains.common.parsers import (
 )
 from ._domains.passes.forms import (
     CommuterInfoRequest,
-    DiscountCardPurchaseRequest,
     DiscountCardScheduleRequest,
-    DiscountCardTicket,
     PassScheduleRequest,
     build_commuter_info_form,
     build_commuter_kind_menu_query,
     build_discount_card_extension_query,
-    build_discount_card_purchase_form,
     build_discount_card_reservation_form,
     build_discount_card_schedule_query,
     build_discount_card_usage_query,
@@ -123,7 +119,6 @@ from ._domains.passes.forms import (
 from ._domains.passes.models import (
     CommuterInfoResponse,
     CommuterKindMenuResponse,
-    DiscountCardPurchaseResponse,
     DiscountCardScheduleResponse,
     DiscountCardUsageListResponse,
     PassAvailabilityResponse,
@@ -137,7 +132,6 @@ from ._domains.passes.models import (
 from ._domains.passes.parsers import (
     parse_commuter_info_response,
     parse_commuter_kind_menu_response,
-    parse_discount_card_purchase_response,
     parse_discount_card_schedule_response,
     parse_discount_card_usage_response,
     parse_pass_availability_response,
@@ -316,7 +310,6 @@ from .constants import KorailLoginInputFlag, KorailReservationJobType, KorailRoo
 from .errors import (
     KorailApiError,
     KorailAuthError,
-    KorailInvalidInputError,
     KorailNoDirectTrainError,
     KorailProtocolError,
     KorailSessionExpiredError,
@@ -1272,19 +1265,6 @@ class KorailClient:
             require_envelope=False,
         )
 
-    def get_notice(
-        self,
-        timestamp_ms: int | None = None,
-    ) -> NoticeResponse:
-        """앱 메인 캐시의 중첩 ``notice`` 를 읽습니다."""
-        app_data = self.get_app_data(timestamp_ms)
-        return app_data.notice or NoticeResponse(
-            h_msg_cd=app_data.h_msg_cd,
-            h_msg_txt=app_data.h_msg_txt,
-            str_result=app_data.str_result,
-            raw=app_data.raw,
-        )
-
     def get_uuid(self) -> UuidResponse:
         """서버가 발급하는 단말 검증값 하나를 받아 옵니다."""
         return self._post_read(
@@ -1398,15 +1378,13 @@ class KorailClient:
         self,
         query: TrainSearchQuery,
         *,
-        continuation: TrainSearchContinuation | None = None,
         use_special_schedule: bool = False,
         peak_season: bool = False,
     ) -> TrainSearchResult | TransferSearchResult:
-        """직통 조회가 KorailNoDirectTrainError(WRD000061)이면 같은 조건으로 환승 첫 페이지를 조회합니다."""
+        """직통 첫 페이지 조회가 KorailNoDirectTrainError(WRD000061)이면 같은 조건으로 환승 첫 페이지를 조회합니다."""
         try:
             return self.search_trains(
                 query,
-                continuation=continuation,
                 use_special_schedule=use_special_schedule,
                 peak_season=peak_season,
             )
@@ -1656,7 +1634,6 @@ class KorailClient:
         *,
         passengers: KorailPassengerCounts | None = None,
         seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
-        job_type: KorailReservationJobType = KorailReservationJobType.MERGE_STANDING,
         seat_attribute_code: str | None = None,
     ) -> ReservationHoldResponse:
         """병합예약의 후속 요청으로 실제 미결제 예약을 만듭니다.
@@ -1670,7 +1647,6 @@ class KorailClient:
             merge_rows,
             passengers=passengers,
             seat_class=seat_class,
-            job_type=job_type,
             seat_attribute_code=seat_attribute_code,
         )
         return self._mutation(
@@ -1806,25 +1782,9 @@ class KorailClient:
         form = build_cart_add_form(self.config, request)
         return self._mutation(route, form, parser=parse_cart_add_response)
 
-    def register_discount_card(
-        self,
-        request: DiscountCardPurchaseRequest,
-    ) -> DiscountCardPurchaseResponse:
-        """N카드 미결제 구매를 만듭니다.
-
-        서버 상태를 바꾸므로 실패해도 다시 보내지 마십시오(실서버 검증 못 함)."""
-        self._require_session("discount card purchase requires")
-        route = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
-        form = build_discount_card_purchase_form(self.config, request)
-        return self._mutation(
-            route,
-            form,
-            parser=parse_discount_card_purchase_response,
-        )
-
     def extend_discount_card(
         self,
-        ticket: DiscountCardTicket,
+        ticket: OriginalTicketReference,
     ) -> BaseKorailResponse:
         """N카드의 유효기간을 실제로 연장합니다.
 
@@ -1862,32 +1822,15 @@ class KorailClient:
     def recalculate_price(
         self,
         request: PriceRecalculationRequest,
-        *,
-        add_to_cart: bool = False,
     ) -> ReservationHoldResponse:
         """홀드의 할인 조합을 재계산합니다.
 
-        재계산된 홀드는 서버에 반영되므로 실패해도 다시 보내지 마십시오. add_to_cart=True 의 장바구니 실패는 결과에 남습니다."""
-        if not isinstance(add_to_cart, bool):
-            raise KorailInvalidInputError("add_to_cart must be a bool")
+        재계산된 홀드는 서버에 반영되므로 실패해도 다시 보내지 마십시오. 장바구니 추가는 add_to_cart 를 따로 부르십시오."""
         self._require_session("price recalculation requires")
         route = "/classes/com.korail.mobile.certification.PriceReCalculation"
         form = build_price_recalculation_form(self.config, request)
-        hold = self._mutation(
+        return self._mutation(
             route,
             form,
             parser=parse_reservation_hold_response,
         )
-        if not add_to_cart:
-            return hold
-        try:
-            cart = self._mutation(
-                "/classes/com.korail.mobile.cart.addCartList",
-                build_cart_add_form(self.config, CartAddRequest(request.pnr_no)),
-                parser=parse_cart_add_response,
-                raise_on_fail=False,
-            )
-        except KorailApiError as exc:
-            # 재계산된 홀드는 서버에 이미 반영됐으므로 돌려주고, 장바구니 실패는 결과에 남깁니다.
-            return replace(hold, cart_addition_error=exc)
-        return replace(hold, cart_addition=cart)

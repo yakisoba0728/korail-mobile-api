@@ -391,11 +391,8 @@ class DiscountCardScheduleTrain:
 
 @dataclass(frozen=True)
 class DiscountCardScheduleResponse(BaseKorailResponse):
-    """N카드로 이용 가능한 열차 목록을 담습니다."""
+    """N카드로 이용 가능한 열차 목록을 담습니다. 이 응답에는 다음 페이지 신호가 없습니다."""
 
-    # 이 라우트의 응답 DTO 는 trnScdlList 만 선언해 페이지 신호가 없으므로 채우지 않습니다.
-    #: 다음 페이지 여부입니다. 라이브러리가 값을 채우지 않으므로 항상 ``None``입니다.
-    following_page_exists: str | None = None
     trains: tuple[DiscountCardScheduleTrain, ...] = ()
 
 
@@ -436,23 +433,6 @@ class CommuterInfoResponse(BaseKorailResponse):
     #: 선택할 수 있는 최대 인원(``avlPrnbTo``)입니다. 키가 없거나 ``null``이면 ``0``, 정수로 읽을 수 없는 값이면 ``None``입니다.
     available_passenger_count_to: int | None = 0
     passenger_options: tuple[CommuterPassengerOption, ...] = ()
-
-
-@dataclass(frozen=True)
-class DiscountCardPurchaseResponse(BaseKorailResponse):
-    """N카드 구매의 결제 전 예약 결과를 담습니다."""
-
-    # 전송 키는 serializer 이름이 보호돼 있어 앱 DTO 의 Kotlin 속성명에서 추정했습니다.
-    lump_settlement_target_no: str | None = wire("lumpStlTgtNo")
-    discount_card_settlement_target_no: str | None = wire("dcntCrdStlTgtNo")
-    received_amount: str | None = wire("rcvdAmt")
-    stx_amount: str | None = wire("stxAmt")
-    taxt_supply_amount: str | None = wire("taxtSplAmt")
-    usable_trip_count: str | None = wire("usePsbTno")
-    validity_start_date: str | None = wire("vlidTrmStDt")
-    validity_end_date: str | None = wire("vlidTrmClsDt")
-    #: 응답에 담긴 카드 종류 관리번호입니다. 요청한 값은 ``DiscountCardPurchaseRequest.card_kind_management_no``에 있습니다.
-    registered_card_kind_management_no: str | None = wire("dcntCrdKndMgNo")
 
 
 @dataclass(frozen=True)

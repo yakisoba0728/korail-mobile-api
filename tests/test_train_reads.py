@@ -426,17 +426,9 @@ CASES = [
             "version.new_version": "9",
             "version.store_url": "https://example.invalid/store",
             "notice.post_title": "SYNTH_TITLE",
+            "notice.board_id": "1",
+            "notice.post_content": "SYNTH_BODY",
         },
-        False,
-    ),
-    (
-        "get_notice",
-        (),
-        {},
-        "/file/CACHE/prdMobilePlusMain.cache",
-        {**COMMON, "timeStamp": "1700000000000", "srtCheckYn": "Y"},
-        APP,
-        {"board_id": "1", "post_content": "SYNTH_BODY"},
         False,
     ),
     (
@@ -606,7 +598,7 @@ OPTIONAL = [
     ("list_stations", "stns.stn.0.latitude", "stations.0.latitude"),
     ("list_maas_stations", "stns.stn.0.longitude", "stations.0.longitude"),
     ("get_app_data", "version.NEWDVERSION", "version.new_version"),
-    ("get_notice", "notice.PtwtTtl", "post_title"),
+    ("get_app_data", "notice.PtwtTtl", "notice.post_title"),
     ("list_maas_menus", "menuList.0.addSrvDvCd", "items.0.additional_service_code"),
     ("list_maas_services", "addSrvList.0.reqQnty", "details.0.request_quantity"),
 ]
@@ -982,22 +974,16 @@ def test_station_names_come_from_the_parsed_station_list(rig):
     assert len(calls) == 2
 
 
-def test_direct_no_results_falls_back_once_and_resets_continuation(rig):
+def test_direct_no_results_falls_back_once_to_the_first_transfer_page(rig):
     """TrainScheduleViewModel.smali:35513-35566 confirms dialog, not plaintext WRD000061 (protected).
     The app's filter switch is TrainScheduleViewModel.java:3216-3219,11051-11079 (request field TrainScheduleIn.java:95).
     Library WRD000061 policy is fixed; user confirmation/filter reset are not emulated.
     """
     failure = {"strResult": "FAIL", "h_msg_cd": "WRD000061", "h_msg_txt": "SYNTH_NO_DIRECT"}
     client, calls, _ = rig([failure, TRANSFER])
-    result = client.search_trains_with_transfer_fallback(
-        QUERY, continuation=TrainSearchContinuation("S", "T", "U")
-    )
+    result = client.search_trains_with_transfer_fallback(QUERY)
     assert isinstance(result, TransferSearchResult)
-    exact_request(
-        calls[0],
-        P + "seatMovie.ScheduleView",
-        {**SEARCH_FORM, "qryStNo": "S", "qryStTrnNo": "T", "qryStTrnNo2": "U"},
-    )
+    exact_request(calls[0], P + "seatMovie.ScheduleView", SEARCH_FORM)
     exact_request(calls[1], P + "seatMovie.ScheduleView", {**SEARCH_FORM, "radJobId": "2"})
 
 
@@ -1211,8 +1197,7 @@ def test_notice_missing_and_optional_lists_empty(rig):
     """MobilePlusMainOut.java:57-77; MobilePlusMainNotice.java:52; RunDateOut.java:55-62; optional list
     defaults."""
     client, _, _ = rig([{}, ENVELOPE, ENVELOPE, ENVELOPE])
-    notice = client.get_notice()
-    assert notice.post_title is None and notice.raw == {}
+    assert client.get_app_data().notice is None
     assert client.get_train_calendar().days == ()
     assert client.get_train_schedule(DATE, "7").stops == ()
     assert client.get_fare_quote(FARE_REQUEST).fares == ()
@@ -1261,7 +1246,7 @@ def test_travel_search_is_record_only_and_keeps_the_dto_order(rig):
 
 
 def test_all_public_methods_have_contract_cases():
-    assert len(CASES) == len(BY_NAME) == 22
+    assert len(CASES) == len(BY_NAME) == 21
     assert len(DEFAULTED_FIELDS) == 18
 
 

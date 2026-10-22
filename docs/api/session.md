@@ -316,44 +316,7 @@ if app_data.notice is not None:
 
 ## `get_notice`
 
-앱 메인 캐시에 들어 있는 공지를 읽습니다.
-
-```python
-KorailClient.get_notice(timestamp_ms: int | None = None) -> NoticeResponse
-```
-
-[`get_app_data`](#get_app_data)와 같은 요청을 보내고, 그 안의 공지만 돌려줍니다.
-공지가 없으면 예외 대신 공지 필드가 모두 `None`인 응답을 반환합니다.
-어느 경우든 봉투 필드와 `raw`는 캐시 응답 전체의 값입니다.
-
-**매개변수**
-
-| 이름 | 타입 | 기본값 | 설명 |
-|---|---|---|---|
-| `timestamp_ms` | `int` \| `None` | `None` | 요청의 `timeStamp` 값(밀리초 단위 epoch)입니다. `None`이면 호출 시각을 씁니다. 넘긴 값은 검사하지 않습니다. |
-
-**반환값**
-
-[`NoticeResponse`][korail_mobile_api.NoticeResponse] — `board_id`, `post_sequence`, `post_title`, `post_content`를 담습니다. 값이 없으면 `None`입니다.
-
-**예외**
-
-이 메서드에만 해당하는 예외는 없습니다. 공통 예외는 [API 레퍼런스 개요](index.md#공통-예외)를 참고하세요.
-
-**정보**
-
-| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
-|:-:|:-:|:-:|:-:|
-| 필요 없음 | - | 아니요 | 응답 파싱 |
-
-**예제**
-
-```python
-notice = client.get_notice()
-if notice.post_title is not None:
-    print(notice.post_title)
-    print(notice.post_content)
-```
+3.0에서 제거했습니다. 같은 요청을 보내는 [`get_app_data`](#get_app_data)의 `notice`([`NoticeResponse`][korail_mobile_api.NoticeResponse])를 쓰세요. 공지가 없으면 `notice`는 `None`입니다(이전 `get_notice`는 필드가 모두 `None`인 응답을 돌려줬습니다).
 
 <a id="get_common_code"></a>
 

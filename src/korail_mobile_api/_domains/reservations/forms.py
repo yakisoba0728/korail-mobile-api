@@ -353,13 +353,9 @@ def build_merge_reservation_form(
     *,
     passengers: KorailPassengerCounts | None = None,
     seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
-    job_type: KorailReservationJobType = KorailReservationJobType.MERGE_STANDING,
     seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
-    """첫 홀드 폼에서 입석 플래그와 중간역 세 필드만 바꿉니다."""
-    # 다른 작업 유형은 입석 플래그를 덮어써 예약대기·입석 홀드를 결제 가능한 결과로 만들었습니다.
-    if job_type != KorailReservationJobType.MERGE_STANDING:
-        raise KorailInvalidInputError("KORAIL merge reservation only supports job_type MERGE_STANDING")
+    """첫 홀드 폼에서 입석 플래그와 중간역 세 필드만 바꿉니다. 작업 유형은 항상 MERGE_STANDING 입니다."""
     rows = tuple(merge_rows) if not isinstance(merge_rows, (str, bytes)) else ()
     if not rows or not all(isinstance(row, TrainScheduleItem) for row in rows):
         raise KorailInvalidInputError("KORAIL 병합 reservation requires the research.mergeSeatsC.do rows")
@@ -390,7 +386,8 @@ def build_merge_reservation_form(
         standing_hold_train,
         passengers=passengers,
         seat_class=seat_class,
-        job_type=job_type,
+        # 다른 작업 유형은 입석 플래그를 덮어써 예약대기·입석 홀드를 결제 가능한 결과로 만들었습니다.
+        job_type=KorailReservationJobType.MERGE_STANDING,
         seat_attribute_code=seat_attribute_code,
     )
     form["txtStndFlg"] = "Y" if any(_standing_only(row) for row in (first, last)) else "N"

@@ -112,7 +112,7 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 `ERR299943`은 지원하지 않는 예약 할인으로 `KorailReservationRefusedError`에 속하며,
 회원 자격 코드 `WRC000419`·`WRC800030`은 `KorailNotEntitledError`로 유지합니다.
 병합은 첫 홀드→병합 조회→첫 홀드 취소→후속 홀드 순서이며 첫 홀드는 호출자가 취소해야 합니다.
-`reserve_merge`는 `job_type=MERGE_STANDING`(기본값)만 받고 다른 값은 요청 전에 `KorailProtocolError`로 거절합니다.
+`reserve_merge`는 작업 유형 인자 없이 항상 `MERGE_STANDING`으로 보냅니다(3.0에서 `job_type=` 제거).
 이전에는 `STANDBY`·`IMMEDIATE`도 그대로 보내 결제 가능한 홀드가 반환될 수 있었습니다.
 `cancel_unpaid_hold`는 기본적으로 가능 여부 확인 후 실제 취소합니다.
 예약 응답의 파싱 실패 때 PNR은 예외 `raw`에 남지만 `get_reservation_hold`도 같은 파서로 실패할 수 있습니다.
@@ -153,9 +153,7 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 
 재계산의 승객별 여섯 목록은 동일 인덱스를 유지하도록 빈 문자열도 보존합니다.
 `for_hold`는 첫 여정의 좌석 정보를 복사하며 요청 할인 수가 좌석 수와 같아야 합니다. `payable=False`(예약대기) 홀드는 `KorailProtocolError`로 거절합니다.
-`add_to_cart=True`는 재계산 성공 후 장바구니에 추가하고 FAIL 응답을 `cart_addition`에 남깁니다.
-장바구니 단계의 라이브러리 예외(전송·파싱·세션 만료)는 전파하지 않고, 이미 적용된 재계산 홀드를 `cart_addition=None`과
-`cart_addition_error=<예외>`로 반환합니다. 장바구니 요청은 자동으로 다시 보내지 않습니다.
+`recalculate_price`는 재계산 요청 하나만 보냅니다. 앱처럼 장바구니에 담으려면 호출자가 재계산 성공 뒤 `add_to_cart`를 따로 부릅니다.
 
 간편 검색의 `continuation`에는 첫 페이지의 `depart_after`가 필요하며(없으면 `ValueError`) 이어보기를 지난 시각으로 거절하지 않습니다.
 간편 검색은 역 목록을 받기 전에 승객 구성을 검사하고, 역 목록은 한 번만 받아 간편 API와 클라이언트가 공유합니다.

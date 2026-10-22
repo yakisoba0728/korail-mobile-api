@@ -200,7 +200,7 @@ finally:
     client.close()
 ```
 
-환승 결과의 다음 페이지는 이 메서드가 아니라 [`search_transfer_trains`](../api/trains.md#search_transfer_trains)로 조회합니다. 이 메서드에 넘긴 `continuation`은 직통 조회에만 쓰입니다.
+이 메서드는 첫 페이지만 조회합니다. 다음 페이지는 결과 종류에 맞춰 [`search_trains`](../api/trains.md#search_trains)나 [`search_transfer_trains`](../api/trains.md#search_transfer_trains)로 조회합니다.
 
 ## 성수기와 특가 상품 조회 {#peak-season}
 

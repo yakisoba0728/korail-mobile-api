@@ -38,8 +38,6 @@ CARD: api.CardPayment = F8["pay_with_card"]["card"]
 TICKET: api.OriginalTicketReference = F8["get_refund_fee"]["ticket"]
 DETAIL: api.RefundTicketDetailResponse = F8["register_self_checkin"]["detail"]
 EXECUTION: api.StationRefundExecutionRequest = F8["refund_station_ticket"]["request"]
-PURCHASE: api.DiscountCardPurchaseRequest = F8["register_discount_card"]["request"]
-USER = api.DiscountCardAdditionalUser("SYNTHETIC-CUSTOMER", "SYNTHETIC-NAME", "SYNTHETIC-PHONE")
 RECALC: api.PriceRecalculationRequest = F8["recalculate_price"]["request"]
 FARE_LEG: api.PriceFareLeg = F8["get_fare_quote"]["request"].legs[0]
 QUERY: api.TrainSearchQuery = F8["search_trains"]["query"]
@@ -119,10 +117,6 @@ def _station_refund(c: api.KorailClient, **verification: Any) -> object:
             response, customer_phone="00000000000", customer_name="SYNTHETIC-NAME"
         )
     )
-
-
-def _purchase(c: api.KorailClient, **changes: Any) -> object:
-    return c.register_discount_card(replace(PURCHASE, **changes))
 
 
 def _recalc(c: api.KorailClient, row: dict[str, Any] | None = None, **changes: Any) -> object:
@@ -223,7 +217,6 @@ ROWS = [
     Row("merge-row-other-train", lambda c: _merge(c, {"train_no": "90002"}), "every merge row must"),
     Row("merge-first-row-no-middle", lambda c: _merge(c, {"arrival_run_order": None}), "first merge row lacks"),
     # The D1 fix may reword this rejection; type and zero sends must hold.
-    Row("merge-seat-designated-job", lambda c: _merge(c, {}, job_type=Job.SEAT_DESIGNATED)),
     Row("n-card-reserve-blank-card", lambda c: c.reserve_with_discount_card(TRAIN, card_no=" "), "card_no"),
     # The convenience facade keeps its own TypeError/ValueError guards.
     Row(
@@ -340,15 +333,7 @@ ROWS = [
         INVALID,
     ),
     # Discount cards, recalculation, cart, products, delivered tickets and self check-in.
-    Row("n-card-purchase-type", lambda c: c.register_discount_card({}), "exact DiscountCardPurchaseRequest"),
-    Row("n-card-no-sections", lambda c: _purchase(c, sections=()), "needs 1 to"),
-    Row("n-card-section-type", lambda c: _purchase(c, sections=("x",)), "exact DiscountCardSectionRequest"),
-    Row("n-card-two-users", lambda c: _purchase(c, additional_users=(USER, USER)), "at most 1 additional user"),
-    Row(
-        "n-card-user-type", lambda c: _purchase(c, additional_users=("x",)), "exact DiscountCardAdditionalUser"
-    ),
-    Row("n-card-extend-type", lambda c: c.extend_discount_card({}), "exact DiscountCardTicket"),
-    Row("recalc-cart-flag-text", lambda c: c.recalculate_price(RECALC, add_to_cart="Y"), "add_to_cart must"),
+    Row("n-card-extend-type", lambda c: c.extend_discount_card({}), "OriginalTicketReference"),
     Row("recalc-type", lambda c: c.recalculate_price({}), "exact PriceRecalculationRequest"),
     Row("recalc-no-rows", lambda c: _recalc(c, rows=()), "needs 1 to"),
     Row("recalc-row-type", lambda c: _recalc(c, rows=("x",)), "exact PriceRecalculationRow"),
@@ -639,23 +624,13 @@ FIXES = [
         "free-seat-car-run-date-none",
         lambda c: c.get_free_seat_cars(replace(F8["get_free_seat_cars"]["request"], run_date=None)),
     ),
-    # D1: only MERGE_STANDING belongs to a merge follow-up; a standby hold is not recalculated.
-    Row(
-        "merge-standby-job",
-        lambda c: c.reserve_merge(
-            replace(MERGE_TRAIN, wait_reservation_flag=KORAIL_STANDBY_WAIT_FLAG),
-            MERGE_ROWS,
-            job_type=Job.STANDBY,
-        ),
-    ),
-    Row("merge-immediate-job", lambda c: _merge(c, {}, job_type=Job.IMMEDIATE)),
+    # D1: a standby hold is not recalculated (3.0 removed reserve_merge(job_type=); it is always MERGE_STANDING).
     Row(
         "recalc-standby-hold",
         lambda c: c.recalculate_price(
             api.PriceRecalculationRequest.for_hold(replace(SEATED_HOLD, payable=False), ["000"])
         ),
     ),
-    Row("recalc-add-to-cart-type", lambda c: c.recalculate_price(RECALC, add_to_cart="Y"), "add_to_cart"),
     # D9: login sends the service check and crypto key request before rejecting the password.
     Row("login-password-none", lambda c: c.login("0000000000", None), logged_in=False),
     Row("login-password-not-text", lambda c: c.login("0000000000", 123), logged_in=False),

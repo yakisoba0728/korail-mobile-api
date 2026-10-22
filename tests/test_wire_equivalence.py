@@ -78,7 +78,7 @@ RENAMED = {
     "get_self_checkin_info": "get_self_checkin",
 }
 # 3.0 removed these methods; their pinned requests stay as a record and are not run.
-REMOVED: frozenset[str] = frozenset()
+REMOVED = frozenset({"get_notice", "register_discount_card"})
 # Pin scenario names (v2.6.1 method names).
 VARIANT_METHODS = (
     "login",

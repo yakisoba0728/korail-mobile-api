@@ -148,7 +148,6 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
         "list_stations": {},
         "get_common_codes": {"code": ["synthetic.code"]},
         "get_app_data": {"timestamp_ms": 1},
-        "get_notice": {"timestamp_ms": 1},
         "get_uuid": {},
         "get_service_status": {"timestamp_ms": 1},
         "list_maas_menus": {},
@@ -298,20 +297,7 @@ def _f8_arguments(method_name: str | None = None) -> dict[str, dict[str, Any]]:
             )
         },
         "add_to_cart": {"request": api.CartAddRequest("SYNTHETIC-PNR")},
-        "register_discount_card": {
-            "request": api.DiscountCardPurchaseRequest(
-                "SYNTHETIC-KIND",
-                "SYNTHETIC-CUSTOMER",
-                F8_DATE,
-                "1",
-                (api.DiscountCardSectionRequest(F8_DATE, "90001", "9901", "9903"),),
-            )
-        },
-        "extend_discount_card": {
-            "ticket": api.DiscountCardTicket(
-                ticket.sale_window_no, ticket.sale_date, ticket.sale_sequence, ticket.return_password
-            )
-        },
+        "extend_discount_card": {"ticket": ticket},
         "recalculate_price": {
             "request": api.PriceRecalculationRequest(
                 "SYNTHETIC-PNR", (api.PriceRecalculationRow("1", "1", "000"),)
@@ -355,7 +341,6 @@ F8_CASE_DATA: dict[str, Any] = json.loads(r"""
   "list_stations": {"return_type":"StationDataResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.common.stationdata","host":"api.example.invalid","query":{},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","stns":{"stn":[{"stn_cd":"9901","stn_nm":"출발시험역"}]},"f8_marker":"list_stations"}}]},
   "get_common_codes": {"return_type":"BaseKorailResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.common.code.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"code":["synthetic.code"],"deviceWidth":["1440"],"deviceHeight":["3120"],"OSVersion":["37"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_app_data": {"return_type":"AppDataResponse","exchanges":[{"method":"POST","path":"/file/CACHE/prdMobilePlusMain.cache","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["1"],"srtCheckYn":["Y"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "get_notice": {"return_type":"NoticeResponse","exchanges":[{"method":"POST","path":"/file/CACHE/prdMobilePlusMain.cache","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["1"],"srtCheckYn":["Y"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "get_uuid": {"return_type":"UuidResponse","exchanges":[{"method":"POST","path":"/ebizcross/getUUID.do","host":"api.example.invalid","query":{},"form":{},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","mutMrkVrfCd":"SYNTHETIC-UUID","f8_marker":"get_uuid"}}]},
   "get_service_status": {"return_type":"ServiceStatusResponse","exchanges":[{"method":"POST","path":"/file/CACHE/MobileService.cache","host":"api.example.invalid","query":{},"form":{"timeStamp":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "list_maas_menus": {"return_type":"MaasMenuListResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.copt.gdMenuLt.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"timeStamp":["<DYNAMIC>"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
@@ -406,7 +391,6 @@ F8_CASE_DATA: dict[str, Any] = json.loads(r"""
   "check_station_ticket_refund": {"return_type":"StationRefundVerificationResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.refunds.verifyOnlineRefunds","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"strName":["SYNTHETIC-NAME"],"retNo1":["00000"],"retNo2":["00000000"],"retNo3":["0000000"],"retNo4":["00000"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","orgtkinfo_list":[{"pnr_no":"SYNTHETIC-PNR","ogtk_sale_dt":"0102","ogtk_sale_wct_no":"SYNTHETIC-WINDOW","ogtk_sale_sqno":"1","ogtk_ret_pwd":"SYNTHETIC-RETURN","tk_knd_cd":"1","ret_dv_cd":"1","ret_rsn_cd":"1"}],"rcvd_amt":"1000","ret_fee":"0","ret_amt":"1000","f8_marker":"check_station_ticket_refund"}}]},
   "refund_station_ticket": {"return_type":"StationRefundExecutionResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.refunds.executeOnlineRefunds","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"pnrNo":["SYNTHETIC-PNR"],"ogtkSaleDt":["20990102"],"ogtkSaleWctNo":["SYNTHETIC-WINDOW"],"ogtkSaleSqno":["1"],"ogtkRetPwd":["SYNTHETIC-RETURN"],"retDvCd":["1"],"retRsnCd":["1"],"tkKndCd":["1"],"custTeln":["00000000000"],"retAmt":["1000"],"retFee":["0"],"acepCustNm":["SYNTHETIC-NAME"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "add_to_cart": {"return_type":"CartAddResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.cart.addCartList","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"hidPnrNo":["SYNTHETIC-PNR"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
-  "register_discount_card": {"return_type":"DiscountCardPurchaseResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.research.dcntCrdInfo.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dcntCrdKndMgNo":["SYNTHETIC-KIND"],"custMgNo":["SYNTHETIC-CUSTOMER"],"vlidTrmStDt":["20990102"],"usePsbTno":["1"],"jrnyCnt":["1"],"jrnyTpCd_1":["11"],"runDt_1":["20990102"],"trnNo_1":["90001"],"dptRsStnCd_1":["9901"],"arvRsStnCd_1":["9903"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "extend_discount_card": {"return_type":"BaseKorailResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.reservation.dcntCrdExtn.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"saleWctNo":["SYNTHETIC-WINDOW"],"saleDd":["20990102"],"saleSqno":["1"],"tkRetPwd":["SYNTHETIC-RETURN"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic"}}]},
   "recalculate_price": {"return_type":"ReservationHoldResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.certification.PriceReCalculation","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"hidPnrNo":["SYNTHETIC-PNR"],"txtJobId":["1101"],"txtPsgGridcnt":["1"],"psg_tp_dv_cd":["1"],"hidDcntKndCd":[""],"dcnt_knd_cd1":["000"],"hidDscpNo":[""],"psrm_cl_cd":["1"],"hidFmlyNo":[""]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","h_pnr_no":"SYNTHETIC-PNR","h_jrny_cnt":"1","h_wct_no":"SYNTHETIC-WINDOW","h_tmp_job_sqno1":"1","h_tmp_job_sqno2":"2","h_tot_prc":"1000","h_rcvd_amt":"1000","f8_marker":"recalculate_price"}}]},
   "list_airport_bus_schedules": {"return_type":"LimousineScheduleResponse","exchanges":[{"method":"POST","path":"/classes/com.korail.mobile.lmu.scdlQry.do","host":"api.example.invalid","query":{},"form":{"Device":["AD"],"Version":["250601003"],"AppVersion":["7.0.8"],"Key":["SYNTHETIC-APP-KEY"],"dptDt":["20990102"],"dptRsStnCd":["9901"],"arvRsStnCd":["9903"],"trnGpCd":["800"],"psrmClCd":["1"],"dptTm":["090000"],"trnNo":["90001"],"seatAttCd":["015"],"rsvSaleDvCd":["1"]},"response":{"strResult":"SUCC","h_msg_cd":"IRZ000001","h_msg_txt":"synthetic","trainList":[{"trnNo":"90001","dptDt":"20990102","runDt":"20990102","dptRsStnCd":"9901","arvRsStnCd":"9903"}],"f8_marker":"list_airport_bus_schedules"}}]},
@@ -537,7 +521,7 @@ def test_f8_public_method_inventory() -> None:
         for name, method in inspect.getmembers(api.KorailClient, inspect.isfunction)
         if not name.startswith("_")
     }
-    assert len(actual) == 85
+    assert len(actual) == 83
     assert actual == F8_CASE_DATA.keys() == _f8_arguments().keys()
     assert len(api.__all__) == len(set(api.__all__))
     for name in api.__all__:

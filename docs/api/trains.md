@@ -157,26 +157,24 @@ for itinerary in result.itineraries:
 KorailClient.search_trains_with_transfer_fallback(
     query: TrainSearchQuery,
     *,
-    continuation: TrainSearchContinuation | None = None,
     use_special_schedule: bool = False,
     peak_season: bool = False,
 ) -> TrainSearchResult | TransferSearchResult
 ```
 
-먼저 [`search_trains`](#search_trains)를 호출합니다.
+먼저 [`search_trains`](#search_trains)로 직통 첫 페이지를 조회합니다.
 [`KorailNoDirectTrainError`][korail_mobile_api.KorailNoDirectTrainError](결과 코드 `WRD000061`)가 발생했을 때만 같은 `query`, `use_special_schedule`, `peak_season`으로 [`search_transfer_trains`](#search_transfer_trains)를 한 번 호출해 첫 페이지를 반환합니다.
 다른 오류는 그대로 발생하며, 예외 없이 빈 결과가 온 경우에도 환승 조회로 넘어가지 않습니다.
 앱은 환승 조회 전에 확인 창을 띄우고 열차 종류 선택을 바꾸지만, 이 메서드는 그런 단계 없이 바로 조회합니다.
 
 반환 타입이 둘 중 하나이므로 `isinstance`로 구분하세요.
-환승 결과의 다음 페이지는 [`search_transfer_trains`](#search_transfer_trains)에 `continuation`을 넘겨 조회합니다. 이 메서드에 넘긴 `continuation`은 직통 조회에만 쓰입니다.
+두 결과 모두 다음 페이지는 [`search_trains`](#search_trains)나 [`search_transfer_trains`](#search_transfer_trains)에 `continuation`을 넘겨 조회합니다. 3.0에서 이 메서드의 `continuation` 인자를 제거했습니다.
 
 **매개변수**
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
 | `query` | [`TrainSearchQuery`][korail_mobile_api.TrainSearchQuery] | 필수 | 조회 조건입니다. 직통 조회와 환승 조회에 같은 값을 씁니다. |
-| `continuation` | [`TrainSearchContinuation`][korail_mobile_api.TrainSearchContinuation] \| `None` | `None` | 직통 조회에만 넘깁니다. 환승 조회로 넘어가면 쓰지 않고 첫 페이지를 조회합니다. |
 | `use_special_schedule` | `bool` | `False` | `True`이면 두 조회 모두 특가 상품 조회 경로로 보내고 `product_inquiry` 관문을 거칩니다. |
 | `peak_season` | `bool` | `False` | `True`이면 두 조회 모두 `peak_season_inquiry` 관문을 거칩니다. `use_special_schedule=True`이면 이 값과 관계없이 `product_inquiry` 관문을 거칩니다. |
 
