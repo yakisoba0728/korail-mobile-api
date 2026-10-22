@@ -122,7 +122,8 @@ KorailClient.get_pass_schedule(request: PassScheduleRequest) -> PassScheduleResp
 `selected_train_code`에는 열차 그룹 코드를 넣습니다. [`search_trains`](trains.md#search_trains)가 [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery]의 `train_group_code`(기본값 `"109"`)를 싣는 요청 필드와 같은 필드입니다.
 `departure_station_name`과 `arrival_station_name`에는 역 코드가 아니라 역 이름을 넣습니다.
 `transfer_type_code`와 `weekend_use_flag`의 뜻과 허용 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
-날짜는 `YYYYMMDD`, 시각은 `HHMMSS` 형식으로 넣습니다. 라이브러리는 이 요청의 값을 검사하지 않습니다. 빈 문자열인 필드는 요청에서 빠집니다.
+날짜는 `YYYYMMDD`, 시각은 `HHMMSS` 형식으로 넣습니다. 라이브러리는 이 요청 값의 형식을 검사하지 않습니다. 빈 문자열인 필드는 요청에서 빠집니다.
+2.6.2부터 `None`인 필드는 요청 전에 `KorailProtocolError`로 거절합니다. 이전에는 `txtSelPage=`처럼 빈 값으로 보냈습니다.
 
 서버가 결과 코드 `WRG000000`(조회 결과 없음)으로 실패를 알리면 예외를 발생시키지 않고, 열차가 없는 응답(`str_result`는 `"FAIL"`)을 반환합니다. 이 응답이 정기권 보유 여부를 뜻하는 것은 아닙니다.
 
@@ -373,12 +374,15 @@ KorailClient.get_discount_card_schedule(
 조회 조건은 [`DiscountCardScheduleRequest`][korail_mobile_api.read_payloads.DiscountCardScheduleRequest]로 만듭니다. 7.0.8에서 알려진 상품 코드로 요청하자 서버가 `EAZ000028`을 반환했습니다. 보유 N카드가 없어 정상 열차 목록은 확인하지 못했습니다.
 
 필수 필드는 N카드 상품 관리번호(`card_kind_management_no`), 출발·도착역 이름, 출발일(`YYYYMMDD`)입니다.
-`for_card()`로 만들면 상품 관리번호에서 카드 종류 코드(`card_kind_code`)를 정합니다. 라이브러리가 아는 일부 상품은 `"B2N"`, 나머지는 `"MMM"`이며, 이 구분이 앱과 같은지는 확인하지 못했습니다.
+`for_card()`로 만들면 상품 관리번호에서 카드 종류 코드(`card_kind_code`)를 정합니다. `B2N18120402`·`B2N18120403`만 `"B2N"`, 나머지는 `"MMM"`입니다.
+이 구분은 저장소의 이전 정적 근거와 맞지 않습니다. 7.0.6 분석에서 앱의 분기는 `B2N19060502`·`B2N19060503`·`B2N19061002`·`B2N19061003` 네 상품을 따로 다뤘고, 위 두 상품은 그 분기에 없었습니다.
+앱의 두 반환값은 보호돼 있어 `"B2N"`·`"MMM"` 자체도 이전 앱 버전의 값입니다. 실서버에서 어느 쪽이 맞는지는 확인하지 못했으므로, 카드 종류 코드를 알면 `card_kind_code`로 직접 넘기세요.
 출발 시각(`departure_time`, 기본값 `"000000"`), 열차 그룹 코드(`train_group_code`, 기본값 `"109"`), 직통·환승 구분(`direct_transfer_division_code`, 기본값 `"1"`)은 `for_card()`가 받지 않습니다.
 바꾸려면 `dataclasses.replace(request, departure_time="090000")`처럼 만들어진 요청을 복사하세요.
 생성자를 직접 쓰면 `card_kind_code`가 상품 관리번호와 관계없이 기본값 `"MMM"`이 되므로, 필요하면 직접 넣으세요.
 
-`usable_trip_count`에는 카드에 남은 사용 가능 횟수를 넣으세요. 빈 문자열(기본값)이면 이 필드를 보내지 않습니다. 앱이 이 값을 비워 둘 때 쓰는 기본값은 공개돼 있지 않아 확인하지 못했습니다.
+`usable_trip_count`에는 카드에 남은 사용 가능 횟수를 넣으세요. 빈 문자열(기본값)이면 이 필드를 보내지 않습니다.
+7.0.6 시기(2026-09-21) 실서버는 이 필드를 생략한 요청을 `WRR000100`(`usePsbTno` 입력값 오류)으로 거절했으므로 사실상 필요한 값입니다. 라이브러리에는 남은 횟수를 조회하는 메서드가 없습니다.
 `usage_period_days`와 `page_no`는 `None`(기본값)이면 보내지 않습니다.
 
 **매개변수**
@@ -569,7 +573,9 @@ KorailClient.reserve_with_discount_card(
 `train`은 열차 조회 결과의 [`TrainSummary`][korail_mobile_api.models.TrainSummary]를 그대로 넘깁니다. 라이브러리는 일반실 예약 코드(`general_reservation_code`)가 `"11"`인 열차만 받습니다.
 요청에는 N카드 할인 코드로 `"153"`, 메뉴 ID로 `"A2"`를 넣습니다.
 할인 코드 `"153"`은 7.0.8의 `ReqDiscount.N_CARD` 복호화로 확인한 값이며,
-발권 응답의 `ResDiscount.N_CARD` 값 `"443"`과 구분합니다. 이 예약 흐름의 실서버 성공은 미확인입니다.
+발권 응답의 `ResDiscount.N_CARD` 값 `"443"`과 구분합니다.
+메뉴 ID `"A2"`는 확인한 값이 아닙니다. 좌석배정 메뉴의 값을 재사용한 것이며, 앱은 좌석배정(`SEAT_ASSIGN`)과 N카드(`N_CARD`) 메뉴 ID를 따로 선언하고 두 값은 보호돼 있습니다.
+이 예약 흐름의 실서버 성공은 미확인입니다.
 반환값은 [`reserve`](reservations.md#reserve)와 같은 홀드 모델입니다.
 
 **매개변수**

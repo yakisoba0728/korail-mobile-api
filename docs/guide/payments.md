@@ -62,7 +62,8 @@ print("결제 기한:", hold.payment_deadline_date, hold.payment_deadline_time)
 PNR을 이미 알고 있으면 목록 조회 없이 `get_reservation_hold(pnr_no)`만 호출하면 됩니다.
 목록의 마지막 열차가 최근 예약이라는 보장은 없고, 환승 예약은 같은 PNR이 여러 행에 나올 수 있으므로
 결제할 예약번호를 직접 선택하세요. 금액을 확인한 뒤 아래 [카드 결제](#card-payment)의
-`client.pay_with_card(hold, card)`로 결제합니다. 기존 N카드 할인을 그대로 결제할 때는 재계산할 필요가 없습니다.
+`client.pay_with_card(hold, card)`로 결제합니다.
+N카드로 만든 예약의 결제는 확인하지 않았습니다. 결제 폼에는 N카드 번호나 할인 코드를 싣지 않으며, 재계산이 필요한지와 결제가 성공하는지 모두 근거가 없습니다.
 
 이 기능은 상세 응답의 실제 창구번호와 모든 여정의 좌석별 정산액을 사용합니다.
 PNR이 다르거나 창구번호·여정·좌석이 누락되거나, 금액이 잘못됐거나 총액과 좌석 합이 다르면
@@ -89,12 +90,16 @@ PNR이 다르거나 창구번호·여정·좌석이 누락되거나, 금액이 �
 - `for_hold(hold, requested_discount_codes)`는 성공한 홀드의 첫 여정 좌석마다 한 행을 만들고, 좌석의 승객 유형·객실·현재 할인 코드·증빙 번호를 복사합니다.
 - `requested_discount_codes`는 좌석마다 새로 요청할 할인 코드를 좌석 순서대로 담은 목록입니다. 빈 문자열도 그 좌석의 자리를 지키도록 그대로 보냅니다.
 - 코드 개수가 첫 여정 좌석 수와 다르면 `KorailProtocolError`가 발생하며, 메시지에 좌석 수가 들어 있습니다.
+- 2.6.2부터 `payable`이 `False`인 홀드(예약대기)는 `KorailProtocolError`로 거절합니다. 예약대기 홀드는 카드로 결제하지 않습니다.
 
 재계산 결과는 새 [`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse]입니다. 결제는 원래 홀드가 아니라 이 반환값으로 합니다.
 
 `add_to_cart=True`를 넘기면 재계산이 성공한 뒤 같은 PNR을 장바구니에 추가합니다.
 장바구니 추가가 실패 응답이어도 예외는 나지 않고 결과가 반환값의 `cart_addition`에 남습니다.
 재계산 자체가 실패하면 예외가 발생하고 장바구니 요청은 보내지 않습니다.
+2.6.2부터 장바구니 단계에서 라이브러리 예외(전송 오류, 응답 파싱 실패, 세션 만료)가 나도 이미 서버에 반영된 재계산 홀드를 반환합니다.
+이때 `cart_addition`은 `None`이고 그 예외는 새 필드 `cart_addition_error`에 들어 있습니다. 이전에는 예외가 그대로 전파돼 재계산된 홀드를 받을 수 없었습니다.
+장바구니 추가가 필요하면 결과를 확인한 뒤 [`add_to_cart`](../api/reservations.md#add_to_cart)를 직접 호출하세요.
 
 ```python
 from korail_mobile_api import PriceRecalculationRequest

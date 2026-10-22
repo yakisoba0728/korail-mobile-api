@@ -55,7 +55,8 @@ KorailClient.get_ticket_list(
 
 `mode`가 `"1"`이면 현재 승차권을, `"2"`이면 구매 이력을 돌려줍니다. 앱 내부 값이 공개돼 있지 않아 이 대응은 실서버 응답을 보고 정했습니다.
 라이브러리는 `mode`, 날짜, 페이지 번호를 고치지 않고 그대로 보내며, 빈 문자열인 날짜는 보내지 않습니다.
-7.0.8 실서버에서 구매 이력(`mode="2"`)을 3개월을 넘는 범위로 요청하면 `WRT100101`(3개월 단위 조회 안내)을 받았습니다. 날짜 범위를 2026-07-01~2026-09-28로 좁히자 이력이 조회됐습니다. 이 코드를 이력 없음으로 해석하지 마세요.
+2026-09-28 7.0.8 실서버에서 승차일 범위 없이 구매 이력(`mode="2"`)을 요청하자 `WRT100101`(3개월 단위 조회 안내)을 받았습니다. 이 요청에는 날짜 필드가 없었습니다. 2026-07-01~2026-09-28 범위를 함께 보내자 이력이 조회됐습니다.
+구매 이력은 3개월 이내의 `boarding_date_from`·`boarding_date_to`를 함께 넘기세요. 정확한 기간 경계는 확인하지 못했습니다. 이 코드를 이력 없음으로 해석하지 마세요.
 [`KorailConfig`][korail_mobile_api.config.KorailConfig]의 `advertising_id`를 설정했으면 그 값도 함께 보냅니다.
 
 예약 행에서 `tickets`를 뺀 나머지 필드는 응답에 없을 수 있으며, 없으면 `None`입니다.
@@ -89,13 +90,20 @@ KorailClient.get_ticket_list(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 tickets = client.get_ticket_list()
 for reservation in tickets.reservations:
     for ticket in reservation.tickets:
         for train in ticket.trains:
             print(ticket.pnr_no, train.train_no, train.departure_date, train.departure_time)
 
-history = client.get_ticket_list(2, mode="2")
+today = datetime.now(timezone(timedelta(hours=9))).date()
+history = client.get_ticket_list(
+    mode="2",
+    boarding_date_from=(today - timedelta(days=89)).strftime("%Y%m%d"),
+    boarding_date_to=today.strftime("%Y%m%d"),
+)
 print(history.total_count)
 ```
 
@@ -151,7 +159,15 @@ KorailClient.get_ticket_receipt(
 **예제**
 
 ```python
-ticket = client.get_ticket_list(mode="2").reservations[0].tickets[0]
+from datetime import datetime, timedelta, timezone
+
+today = datetime.now(timezone(timedelta(hours=9))).date()
+history = client.get_ticket_list(
+    mode="2",
+    boarding_date_from=(today - timedelta(days=89)).strftime("%Y%m%d"),
+    boarding_date_to=today.strftime("%Y%m%d"),
+)
+ticket = history.reservations[0].tickets[0]
 receipt = client.get_ticket_receipt(
     sale_date=ticket.return_sale_date,
     window_no=ticket.sale_window_no,
@@ -665,7 +681,7 @@ KorailClient.get_delay_certificate(
 ```
 
 지연된 승차권만 대상입니다. 지연되지 않은 승차권은 서버가 실패(결과 코드 `WRT400456`)로 응답하므로 [`KorailAppError`][korail_mobile_api.errors.KorailAppError]가 발생합니다. `ticket`의 `sale_date`에는 승차권의 `return_sale_date`(`MMDD`)를 넣습니다.
-지난 승차권은 [`get_ticket_list`](#get_ticket_list)를 `mode="2"`로 호출해 찾습니다.
+지난 승차권은 [`get_ticket_list`](#get_ticket_list)를 `mode="2"`와 3개월 이내의 승차일 범위로 호출해 찾습니다.
 
 앱은 `delay_arrival_flag`가 특정 값인 행만 화면에 보여 줍니다. 그 값은 공개돼 있지 않아 확인하지 못했으므로, 라이브러리는 행을 거르지 않고 모두 돌려줍니다.
 `run_date`는 응답에 없을 수 있으며 없으면 `None`입니다. 운행일은 `run_day`에도 들어 있습니다.
@@ -696,9 +712,17 @@ KorailClient.get_delay_certificate(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import OriginalTicketReference
 
-ticket = client.get_ticket_list(mode="2").reservations[0].tickets[0]
+today = datetime.now(timezone(timedelta(hours=9))).date()
+history = client.get_ticket_list(
+    mode="2",
+    boarding_date_from=(today - timedelta(days=89)).strftime("%Y%m%d"),
+    boarding_date_to=today.strftime("%Y%m%d"),
+)
+ticket = history.reservations[0].tickets[0]
 reference = OriginalTicketReference(
     sale_window_no=ticket.sale_window_no,
     sale_date=ticket.return_sale_date,

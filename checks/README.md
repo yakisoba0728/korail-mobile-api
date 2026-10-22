@@ -19,7 +19,7 @@ PYTHONPATH=src python3 checks/netfunnel_offline.py
 
 ```sh
 python3 checks/build_error_catalog.py /path/to/assets/error_json.json \
-  --app-version 7.0.8 --output src/korail_mobile_api/error_messages.json
+  --app-version 7.0.10 --output src/korail_mobile_api/error_messages.json
 ```
 
 재생성 후 `tests/test_error_messages.py`와 `tests/test_packaging.py`로 코드·언어·원문 보존 및 배포 파일 포함을 확인합니다.
