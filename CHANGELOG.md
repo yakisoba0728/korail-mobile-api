@@ -1,20 +1,57 @@
 # 변경 이력
 
-## [Unreleased]
+## [3.0.0] - Unreleased
 
-- 3.0 구조 개편 1단계(순수 이동): 공개 import 경로는 패키지 루트(`korail_mobile_api`)뿐입니다. 구현은 `_core/`(HTTP·세션·대기열·DynaPath·공통 파싱·검증)와 `_domains/<도메인>/{models,forms,parsers}.py`로 옮기고, `read_payloads`·`read_parsers`의 재노출과 `__module__` 재작성을 없앴습니다. `device.py`·`live.py`는 `config.py`에, `error_messages.py`는 `errors.py`에 합쳤습니다. 루트가 내보내는 이름·시그니처와 요청 바이트는 같습니다. `korail_mobile_api.models`·`korail_mobile_api.read_payloads`·`korail_mobile_api.device` 같은 이전 모듈 경로와 그 경로를 가리키는 pickle(응답 모델, `KorailDeviceProfile`, `KorailConfig` 안의 `DynapathConfig` 등)은 더 이상 열리지 않는 의도된 3.0 변경입니다. 대기열 로거 이름(`korail_mobile_api.netfunnel`, `korail_mobile_api.netfunnel_safety`)은 유지합니다. 옛 `models.py` 모델의 주석은 이제 지연 평가 문자열이며 `typing.get_type_hints` 결과는 같습니다. 문서의 타입 앵커는 `korail_mobile_api.<이름>`입니다.
-- 미지원 호출 기록 `_maas_unsupported`·`_social_login_unsupported`·`_travel_search_unsupported`와 그 호출만 쓰던 빌더·파서·모델(부가서비스 취소 수수료·장바구니 상태·미결제 해제, 여행상품 검색)은 `tests/records/`로 옮겨 wheel에 넣지 않습니다. sdist에는 테스트와 함께 들어갑니다.
-- 3.0 핵심 정리: `KorailInvalidInputError`(`KorailProtocolError`이자 `ValueError`)를 추가했습니다. 모든 예외에 `request_sent`가 생겨, 요청을 전송 계층에 넘긴 뒤 전송·응답 해석에 실패하면 `True`이고 상태 변경 메서드에서는 "서버가 처리했을 수 있다"는 note도 붙습니다. 요청 전에 거절한 예외는 `None`입니다. `KorailTransportError.status_code`는 2xx가 아닌 HTTP 상태를 담습니다. `KorailClient`를 `with` 문으로 쓸 수 있습니다(블록이 끝나면 `close`). `DynapathRequestContext`에 보낼 본문 바이트(`body`)와 `app_version`이 들어갑니다. DynaPath 헤더는 `DynapathConfig.allowlist_paths`만으로 정하며, 기본 목록에서 요청 바이트는 같습니다. 예외 pickle은 생성자를 거치지 않는 형식으로 바뀌었고 2.x가 만든 pickle도 읽습니다.
-- 승차권·계정 요청 전 검사: `list_tickets`(2.x `get_ticket_list`)의 `boarding_date_from`·`boarding_date_to`는 빈 문자열이나 ASCII 숫자 8자리 문자열만 받고, 이전에 `2026-07-01`로 보내던 `date` 객체 등은 요청 전에 `KorailInvalidInputError`로 거절합니다. `get_ticket_receipt`의 `txt_index`가 빈 문자열·공백뿐이면 조용히 빼지 않고 `get_refund_ticket_detail`처럼 거절합니다. 이 도메인 폼이 직접 거절하는 입력은 `KorailInvalidInputError`이며 올바른 입력의 요청 바이트는 같습니다.
-- 요청 전 입력 검사는 모두 `KorailInvalidInputError`(`KorailProtocolError`이자 `ValueError`)입니다. 입력 모델·폼 검사, 로그인 입력, 간편 API의 `ValueError`, `refund`의 수수료 응답 검사가 해당하며 메시지는 같습니다. 간편 API에서 인자 타입이 틀리면 계속 `TypeError`입니다.
-- 만들 때 거절: `PassScheduleRequest`(`None`·비문자열 필드), `CardPayment`(카드 형식, `card_type`은 `str`), `PaidTicket`(필수 식별자 다섯), `FreeSeatCarRequest`·`MergeSeatsInquiryRequest`(열차 식별값), `AirportBusScheduleQuery`·`AirportBusSeatInventoryQuery`(필수 식별값), `PriceFareQuoteRequest`(`goods_no` 일관성). 올바른 입력의 요청 바이트는 같습니다.
-- 요청 전 검사 추가: `get_train_schedule`·`list_seat_cars`·`get_seat_inventory`는 비었거나 `None`인 열차 번호·운행일·역 코드·운행 순서를, `get_common_codes`는 `bytes`·비문자열 항목을(이전에는 바이트마다 `code`로 전송), 열차 검색은 문자열이 아닌 출발·도착역을(이전 `AttributeError`) 거절합니다. `get_refund_ticket_detail`의 `txt_index`는 `get_ticket_receipt`와 같은 규칙·메시지입니다. 카드 결제에 홀드가 아닌 값(이전 `AttributeError`), 환불 수수료 금액에 정수(이전 `TypeError`)를 넘겨도 요청 전에 거절합니다.
-- 미결제 홀드 취소는 검사한 여정 수를 그대로 보냅니다(이전에는 `" 1"`을 공백째 보냄). 공항버스 예약은 9자리를 넘는 잔여석 수를 알 수 없는 값으로 봅니다(이전에는 매우 긴 숫자에서 `ValueError`). 쓰이지 않던 `CartItem.usage_window`를 지웠습니다.
-- 3.0 메서드 이름: `KorailClient` 메서드 38개의 이름을 바꿨고 별칭은 두지 않습니다(예: `get_reservation_history` → `list_reservations`, `get_ticket_list` → `list_tickets`, `get_refund_commission` → `get_refund_fee`, `get_limousine_schedules` → `list_airport_bus_schedules`). 간편 API는 `reservations.find` → `reservations.get`, `tickets.refund_fee` → `tickets.refund_quote`입니다. 전체 표는 문서 「3.0으로 옮기기」(`docs/migration-3.0.md`)에 있고, API 문서의 옛 메서드 앵커는 새 절로 이어집니다. 요청 바이트는 같습니다.
-- 3.0 제거: `get_notice`(`get_app_data().notice` 사용), `register_discount_card`와 `DiscountCardPurchaseRequest`·`DiscountCardSectionRequest`·`DiscountCardAdditionalUser`·`DiscountCardPurchaseResponse`, `DiscountCardTicket`(`extend_discount_card`는 같은 바이트로 `OriginalTicketReference`를 받음), `reserve_merge(job_type=)`(항상 `MERGE_STANDING`), `recalculate_price(add_to_cart=)`와 2.6.2에서 추가한 `ReservationHoldResponse.cart_addition`·`cart_addition_error`(`add_to_cart`를 따로 호출), `search_trains_with_transfer_fallback(continuation=)`, 항상 `None`이던 `DiscountCardScheduleResponse.following_page_exists`. 공개 메서드는 83개입니다.
-- 3.0 추가(요청 바이트 같음): `HoldReference(*, pnr_no, journey_count, journey_sequence=None, change_no=None)`, `ReservationHoldResponse.reference`, PNR·여정 수만 요구하는 `HoldReference.from_raw(raw)`, `cancel_unpaid_hold`의 `HoldReference` 입력. `OriginalTicketReference.from_ticket`(원표 반환일 사용), `FreeSeatCarRequest.from_train`, `MergeSeatsInquiryRequest.from_train`. 간편 API `tickets.all(page_no, *, mode, boarding_date_from, boarding_date_to)`, `tickets.detail`, `Korail.login`의 `KorailClient.login` 키워드 옵션.
-- 3.0 모델·속성 이름: `Limousine*` 공개 클래스 7개는 `AirportBus*`(예: `LimousineSchedule` → `AirportBusSchedule`), `TrainSearchQuery.departure_station_code`·`arrival_station_code`는 `departure_station`·`arrival_station`, `TrainSearchMetadata.product_no`는 `goods_no`입니다. 같은 전송 키를 읽는 응답 필드는 한 이름을 써서 24개 모델의 46개 필드 이름이 바뀌었습니다(예: `TrainScheduleStop.planned_departure_time` → `departure_time`, `ProductReservation.payment_deadline` → `settlement_deadline`, `AirportBusSchedule.service_code` → `train_group_code`). 별칭은 없고 전체 표는 「3.0으로 옮기기」에 있습니다. 읽는 값과 요청 바이트는 같습니다.
-- 3.0 dataclass: 공개 입력·응답 모델과 설정 dataclass는 모두 `frozen=True, kw_only=True`라 키워드 인자로만 만듭니다. `raw`는 선언한 모델의 마지막 필드이며 `repr()`에 나오지 않습니다(비교 제외는 같음). `KorailSession.jsessionid`, 입력 모델의 반환 비밀번호·이름·전화번호·생년월일·고객번호, `DynapathTokenSettings.device_id`, `KorailConfig.advertising_id`도 `repr()`에서 숨깁니다. 속성 값·`raw`·`asdict`·pickle은 가리지 않습니다.
+2.x와 호환되지 않는 변경을 한 번에 모은 판입니다. 옛 이름의 별칭은 없습니다. 바뀐 이름·인자·import 경로의 전체 표와 고치는 방법은 [3.0으로 옮기기](https://yaki.kr/korail-mobile-api/migration-3.0/)에 있습니다.
+
+### 추가
+
+- `KorailInvalidInputError`: 요청 전 입력 검사의 거절입니다. `KorailProtocolError`이자 `ValueError`라 기존 `except`도 잡습니다.
+- 모든 라이브러리 예외의 `request_sent`: 요청을 전송 계층에 넘긴 뒤 전송·응답 해석에 실패하면 `True`, 요청 전에 거절했으면 `None`입니다. 상태를 바꾸는 메서드에서는 서버가 처리했을 수 있다는 note도 붙습니다.
+- `KorailTransportError.status_code`: 2xx가 아닌 HTTP 응답의 상태 코드입니다. 네트워크 단계 실패는 `None`입니다.
+- `KorailClient`의 `with` 문 지원: 블록이 끝나면 `close`만 부르고 서버 로그아웃은 하지 않습니다.
+- `HoldReference(*, pnr_no, journey_count, journey_sequence=None, change_no=None)`와 `ReservationHoldResponse.reference`, PNR·여정 수만 요구하는 `HoldReference.from_raw(raw)`. `cancel_unpaid_hold`가 홀드 대신 받으며 같은 값이면 같은 요청을 보냅니다.
+- 조회 결과를 옮기는 팩토리: `OriginalTicketReference.from_ticket`(원표 반환일을 판매일로 사용), `FreeSeatCarRequest.from_train`, `MergeSeatsInquiryRequest.from_train`, `AirportBusSeatInventoryQuery.from_schedule`.
+- 간편 API: `korail.tickets.all(page_no, *, mode, boarding_date_from, boarding_date_to)`, `korail.tickets.detail`, `KorailClient.login`과 같은 키워드 옵션을 받는 `Korail.login`.
+- `DynapathRequestContext`의 `body`(보낼 본문 바이트)와 `app_version`.
+
+### 변경
+
+- 공개 import 경로는 패키지 루트(`korail_mobile_api`)뿐입니다. 구현은 내부 패키지 `_core/`와 `_domains/<도메인>/{models,forms,parsers}.py`로 옮겼고, `device.py`·`live.py`는 `config.py`에, `error_messages.py`는 `errors.py`에 합쳤습니다. `korail_mobile_api.models`·`read_payloads`·`device` 같은 2.x 하위 모듈은 없습니다. 대기열 로거 이름 `korail_mobile_api.netfunnel`·`korail_mobile_api.netfunnel_safety`는 그대로입니다.
+- `KorailClient` 메서드 38개의 이름을 바꿨습니다. 목록은 `list_`, 한 건은 `get_`, 읽기 전용 가능 여부 확인은 `check_`로 시작합니다(예: `get_reservation_history` → `list_reservations`, `get_ticket_list` → `list_tickets`, `get_refund_commission` → `get_refund_fee`, `get_limousine_schedules` → `list_airport_bus_schedules`). 간편 API는 `reservations.find` → `reservations.get`, `tickets.refund_fee` → `tickets.refund_quote`입니다. API 문서의 옛 메서드 앵커는 새 절로 이어집니다.
+- 모델 이름: 공개 `Limousine*` 클래스 7개는 `AirportBus*`, `TrainSearchQuery.departure_station_code`·`arrival_station_code`는 `departure_station`·`arrival_station`입니다. 같은 전송 키를 읽는 응답 필드는 한 이름을 써서 응답 모델 25개의 필드 47개 이름이 바뀌었습니다(예: `TrainSearchMetadata.product_no` → `goods_no`, `TrainScheduleStop.planned_departure_time` → `departure_time`, `ProductReservation.payment_deadline` → `settlement_deadline`).
+- 공개 입력·응답 모델과 설정 dataclass는 모두 `frozen=True, kw_only=True`라 키워드 인자로만 만듭니다. `raw`는 선언한 모델의 마지막 필드이며 `repr()`에 나오지 않습니다(비교 제외는 같음). `KorailSession.jsessionid`, 입력 모델의 반환 비밀번호·이름·전화번호·생년월일·고객번호, `DynapathTokenSettings.device_id`, `KorailConfig.advertising_id`도 `repr()`에서 숨깁니다.
+- 2.x에서 pickle한 응답·입력 모델, `KorailConfig`(안의 `DynapathConfig` 포함), `KorailDeviceProfile`은 읽을 수 없습니다. 예외 pickle은 생성자를 거치지 않는 형식으로 바뀌었고 2.x가 만든 pickle도 읽습니다.
+- 요청 전 입력 거절은 `KorailInvalidInputError`입니다. 입력 모델·폼 검사, 로그인 입력, `refund`의 수수료 응답 검사, 간편 API가 직접 내던 `ValueError`가 해당하며 메시지는 같습니다. 간편 API에서 인자 타입이 틀리면 계속 `TypeError`입니다.
+- 만들 때 거절하는 입력 모델: `PassScheduleRequest`(`None`·비문자열 필드), `CardPayment`(카드 형식, `card_type`은 `str`), `PaidTicket`(필수 식별자 다섯), `FreeSeatCarRequest`·`MergeSeatsInquiryRequest`(열차 식별값), `AirportBusScheduleQuery`·`AirportBusSeatInventoryQuery`(필수 식별값), `PriceFareQuoteRequest`(`goods_no` 일관성). 올바른 입력의 요청 바이트는 같습니다.
+- 요청 전 검사 추가: `get_train_schedule`·`list_seat_cars`·`get_seat_inventory`는 비었거나 `None`인 열차 번호·운행일·역 코드·운행 순서를, `list_tickets`의 `boarding_date_from`·`boarding_date_to`는 빈 문자열이나 ASCII 숫자 8자리가 아닌 값을 거절합니다.
+- DynaPath 헤더는 `DynapathConfig.allowlist_paths`만으로 정합니다. 기본 목록에서 요청 바이트는 같습니다.
+
+### 제거
+
+- `get_notice`: `get_app_data().notice`를 쓰세요. 공지가 없으면 `None`이며 요청은 같습니다.
+- `register_discount_card`와 `DiscountCardPurchaseRequest`·`DiscountCardSectionRequest`·`DiscountCardAdditionalUser`·`DiscountCardPurchaseResponse`. 실서버에서 확인하지 못했고 라이브러리로 결제·취소할 수 없는 구매만 만들었습니다.
+- `DiscountCardTicket`: `extend_discount_card`는 같은 네 값을 `OriginalTicketReference`로 받고 같은 요청을 보냅니다.
+- `reserve_merge(job_type=)`(항상 `MERGE_STANDING`), `recalculate_price(add_to_cart=)`와 2.6.2의 `ReservationHoldResponse.cart_addition`·`cart_addition_error`(재계산 뒤 `add_to_cart`를 따로 호출), `search_trains_with_transfer_fallback(continuation=)`.
+- 항상 `None`이던 `DiscountCardScheduleResponse.following_page_exists`, 쓰이지 않던 `CartItem.usage_window`. 공개 메서드는 85개에서 83개입니다.
+- 미지원 호출 기록 `_maas_unsupported`·`_social_login_unsupported`·`_travel_search_unsupported`와 그 호출만 쓰던 빌더·파서·모델은 `tests/records/`로 옮겨 wheel에 넣지 않습니다. sdist에는 테스트와 함께 들어갑니다.
+
+### 수정
+
+- `cancel_unpaid_hold`는 검사한 여정 수를 그대로 보냅니다. 이전에는 `" 1"`을 공백째 보냈습니다.
+- `get_common_codes`는 `bytes`와 문자열이 아닌 항목을 거절합니다. 이전에는 바이트마다 `code`로 보냈습니다.
+- `list_tickets`는 `date` 객체 같은 값을 거절합니다. 이전에는 `2026-07-01` 형태로 보냈습니다.
+- `get_ticket_receipt`의 빈 `txt_index`는 조용히 빼지 않고 `get_refund_ticket_detail`과 같은 규칙·메시지로 거절합니다.
+- 문자열이 아닌 출발·도착역, 카드 결제의 홀드가 아닌 값, 환불 수수료 금액의 정수가 `AttributeError`·`TypeError` 대신 요청 전 `KorailInvalidInputError`입니다.
+- 공항버스 예약은 9자리를 넘는 잔여석 수를 알 수 없는 값으로 봅니다. 이전에는 매우 긴 숫자에서 `ValueError`가 났습니다.
+
+### 안전·검증 한계
+
+- 3.0.0은 배포 전이며 실서버에서 검증하지 않았습니다. 모든 변경은 합성 응답과 소켓 차단 환경에서만 검사했고 새 실서버 요청은 하지 않았습니다.
+- 이름과 인자만 바뀐 메서드는 같은 입력에서 2.6.1과 같은 요청(본문·헤더·순서·횟수)을 보냅니다. 이는 SDK에서 캡처한 요청과의 비교(`tests/test_wire_equivalence.py`)이며 앱이나 서버의 근거가 아닙니다. 요청 전에 새로 거절하는 입력과 위 수정 항목은 예외입니다.
+- 기본 요청 버전(`AppVersion=7.0.8`·API `Version=250601003`)은 그대로입니다. 2026-10-21부터 보고된 `-8204`(GitHub #32) 상황과 기록된 관측 범위는 [실서버 확인 현황](https://yaki.kr/korail-mobile-api/status/)에 있습니다.
+- `repr()`에서 숨기는 것은 출력뿐입니다. 속성 값, `raw`, `dataclasses.asdict()`, pickle은 가리지 않습니다.
+- `request_sent`가 `True`인 상태 변경 실패는 서버에서 처리됐을 수 있습니다. 라이브러리는 다시 보내지 않으며, 호출자가 상태를 확인한 뒤에 정해야 합니다.
 
 ## [2.6.2] - 2026-10-23
 
