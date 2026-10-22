@@ -75,7 +75,7 @@ def parse_delay_discount_ticket_response(raw: Mapping[str, object]) -> DelayDisc
     items = wire_models(
         DelayDiscountTicket, _nested_rows(raw, "disc_infos", "disc_info"), "delay discount ticket"
     )
-    # 페이지 필드는 DTO 밖 서버 추가 블록 main_info 에서 읽습니다. 관측은 할인권 없는 계정의 0 값뿐입니다.
+    # 페이지 필드는 응답 최상위가 아니라 main_info 블록에 있습니다.
     return wire_model(
         DelayDiscountTicketListResponse,
         _optional_mapping(raw, "main_info") or {},
@@ -157,7 +157,6 @@ def parse_trip_change_date_response(raw: Mapping[str, object]) -> TripChangeDate
 
 @_preserve_read_raw
 def parse_ticket_list_response(raw: Mapping[str, object]) -> TicketListResponse:
-    """승차권 목록의 pnr_list를 읽습니다(MyTicketListOut.java:82). 이 관측을 모든 응답에 일반화하지 않습니다."""
     _validate_envelope(raw)
     reservations = []
     for reservation in _rows(raw, "pnr_list"):
@@ -230,8 +229,6 @@ def parse_ticket_receipt_response(raw: Mapping[str, object]) -> TicketReceiptRes
 
 @_preserve_read_raw
 def parse_self_seat_change_info_response(raw: Mapping[str, object]) -> SelfSeatChangeInfoResponse:
-    """DTO: SeatAvailabilityOut.java:28-42, ChgStnInfo.java:21-35, ChgRsnInfo.java:21-24. 라우트:
-    NetworkApi.java:806-808."""
     _validate_strict_read_envelope(raw)
     return wire_model(
         SelfSeatChangeInfoResponse,
@@ -245,8 +242,7 @@ def parse_self_seat_change_info_response(raw: Mapping[str, object]) -> SelfSeatC
 
 @_preserve_read_raw
 def parse_original_ticket_inquiry_response(raw: Mapping[str, object]) -> OriginalTicketInquiryResponse:
-    """원표의 OrgTk→JrnyInfo→SeatInfo는 대리수령의 Jrny/Seat와 다른 모델입니다(OgTicketInquiryOut.java:27; OrgTk.java:38;
-    JrnyInfo.java:58)."""
+    """원표→여정→좌석 행은 대리수령 내역의 여정·좌석과 다른 앱 타입이라 모델을 따로 둡니다."""
     _validate_strict_read_envelope(raw)
     tickets = []
     for ticket in _rows(raw, "orgTkList"):

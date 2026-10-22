@@ -24,7 +24,7 @@ def build_ticket_list_form(
     boarding_date_from: str,
     boarding_date_to: str,
 ) -> dict[str, str]:
-    """목록 종류·날짜·쪽번호를 보정하지 않으며 mode 의미는 관측값입니다(MyTicketListIn.java:62; 호출 리터럴 보호됨)."""
+    """목록 종류·날짜·쪽번호를 보정하지 않습니다. mode 의 의미는 앱 리터럴이 보호돼 실서버 관측으로 정했습니다."""
     if not isinstance(mode, str) or not mode:
         raise KorailInvalidInputError("ticket list mode must be a non-empty string")
     if type(page_no) is not int:
@@ -32,7 +32,6 @@ def build_ticket_list_form(
     for name, value in (("boarding_date_from", boarding_date_from), ("boarding_date_to", boarding_date_to)):
         if not (value == "" or _is_ascii_digits(value, frozenset({8}))):
             raise KorailInvalidInputError(f"{name} must be empty or exactly 8 ASCII digits")
-    # 키 순서는 MyTicketListIn 합성 생성자(MyTicketListIn.java:62)의 선언 순서입니다.
     return {
         "txtIndex": mode,
         "h_abrd_dt_from": boarding_date_from,
@@ -57,8 +56,6 @@ class MileageHistoryRequest:
     기본값은 KTX 마일리지 원장(``"1"``), 전체 증감(``"0"``), 1페이지입니다. ``start_date``와 ``end_date``는 ``YYYYMMDD``
     형식이어야 하고 시작일이 종료일보다 늦으면 안 됩니다. 이 검사는 요청을 보내기 전에 합니다."""
 
-    # 앱 근거: NetworkApi.java:274.
-
     start_date: str
     end_date: str
     ledger: KorailMileageLedger = "1"
@@ -82,8 +79,7 @@ def build_mileage_history_form(
         "qryDvVal": request.movement,
         "qryStDt": start_date,
         "qryClsDt": end_date,
-        # 앱은 보호된 상수를 씁니다(MileageHistoryViewModelKt.java:11).
-        "pgPrCnt": "20",
+        "pgPrCnt": "20",  # evidence: app 7.0.6 MileageHistoryViewModelKt.java:11 (값은 보호돼 관측값을 씁니다)
         "nowPgNo": _int_text(request.page_no, "page_no"),
     }
 
@@ -95,8 +91,6 @@ class OriginalTicketReference:
     네 필드 모두 비어 있지 않은 문자열이어야 하며, 아니면 ``KorailProtocolError``가 발생합니다. ``sale_date``의 형식은
     메서드마다 다릅니다. 수령자·대리수령 조회 두 메서드는 승차권의 ``sale_date``(``YYYYMMDD``)를 받고, 그 밖의 메서드는
     ``return_sale_date``(``MMDD``)를 받습니다. 메서드 사이에 값을 섞어 쓰지 마세요."""
-
-    # 반환 경로는 MMDD, 수령자·PBP 경로는 YYYYMMDD 를 사용합니다(실서버 관측).
 
     sale_window_no: str
     sale_date: str
@@ -138,7 +132,6 @@ def build_original_ticket_inquiry_form(
     *,
     ticket_count: int | None = None,
 ) -> tuple[tuple[str, str | int], ...]:
-    """앱 근거: NetworkApi.java:235. 키 접두사·순서: ChangeOrtkInfo.java:52. 보호 리터럴은 미확인입니다."""
     references = _ticket_reference_tuple(tickets)
     if ticket_count is None:
         count = len(references)
@@ -156,7 +149,6 @@ def build_original_ticket_inquiry_form(
     return tuple(rows)
 
 
-# 라이브 기록에 따른 값입니다. PsrmType.java:19-29 의 리터럴은 보호돼 있습니다.
 #: 자율 좌석 변경 조회의 객실 등급 문자열입니다. 알려진 값은 ``"1"``(일반실), ``"2"``(특실)이며 다른 서버 코드도 그대로 받습니다.
 KorailSelfSeatChangeRoomClassCode: TypeAlias = str
 
@@ -168,9 +160,6 @@ class SelfSeatChangeInfoRequest:
     앱처럼 승차권의 운행일·열차 번호·출발역·도착역을 그대로 넣습니다. ``room_class_code``가 ``None``이면 객실 등급을 보내지
     않습니다. ``run_date``는 8자리 숫자, ``train_no``는 5자리 이하 숫자여야 하고 역 코드는 비어 있으면 안 되며, 아니면
     ``KorailProtocolError``가 발생합니다."""
-
-    # 앱 근거: NetworkApi.java:806-808; SeatAvailabilityIn.java:26-30,55. 앱은 승차권의 식별자를 복사하고 객실 값이 null 이
-    # 아닐 때 요청합니다(SelfSeatChangeOptionViewModel.java:342-344).
 
     run_date: str
     train_no: str
@@ -186,7 +175,7 @@ class SelfSeatChangeInfoRequest:
             "departure_station_code",
         )
         _required_text(self.arrival_station_code, "arrival_station_code")
-        # 객실 코드는 허용목록으로 거르지 않습니다: 앱 DTO 는 String 이고 코드 리터럴은 보호돼 있습니다(PsrmType.java:19-29).
+        # 객실 코드는 허용목록으로 거르지 않습니다: 앱 DTO 는 String 이고 코드 리터럴은 보호돼 있습니다.
         if self.room_class_code is not None:
             _required_text(self.room_class_code, "room_class_code")
 
@@ -206,9 +195,7 @@ def build_self_seat_change_info_form(
 
 
 def build_delay_certificate_form(ticket: OriginalTicketReference) -> dict[str, str]:
-    """앱은 승차권 상세의 h_orgtk_wct_no·h_orgtk_ret_sale_dt·h_orgtk_sale_sqno·h_orgtk_ret_pwd 를
-    넣습니다(DelayCertificateViewModel.java:94; DelayCertificateIn.java:52). sale_date 에는 return_sale_date 를
-    쓰십시오."""
+    """앱처럼 원표 반환 식별자를 보냅니다. sale_date 에는 return_sale_date(MMDD)를 쓰십시오."""
     reference = _exact_original_ticket_reference(ticket)
     return {
         "ogtkSaleWctNo": reference.sale_window_no,
@@ -219,8 +206,7 @@ def build_delay_certificate_form(ticket: OriginalTicketReference) -> dict[str, s
 
 
 def build_delay_return_receipt_form(ticket: OriginalTicketReference) -> dict[str, str]:
-    """값의 출처는 지연확인증과 같습니다(DelayReturnReceiptViewModel.java:88; TicketReceiptRouteKt.java:309-313;
-    DelayReturnReceiptIn.java:52)."""
+    """값은 지연확인증과 같은 원표 반환 식별자입니다."""
     reference = _exact_original_ticket_reference(ticket)
     return {
         "saleWctNo": reference.sale_window_no,
@@ -233,7 +219,7 @@ def build_delay_return_receipt_form(ticket: OriginalTicketReference) -> dict[str
 def build_delay_discount_ticket_form(
     departure_date_to: str,
 ) -> dict[str, str]:
-    # dptDtTo 속성의 전송 키는 명시적 h_page_no(DelayDiscountViewIn.java:50,77). 관측: 날짜·1·다른 후보 키·키 생략 모두 같은 빈 SUCC.
+    # 앱 DTO 의 dptDtTo 는 h_page_no 키로 직렬화됩니다. 실서버는 날짜·1·키 생략 모두 같은 빈 SUCC 를 돌려줬습니다.
     return {"h_page_no": _ascii_digits(departure_date_to, "departure_date_to", lengths=frozenset({8}))}
 
 
@@ -250,28 +236,26 @@ def build_discount_coupon_form(
 def build_multi_child_discount_target_form(
     departure_date: str,
 ) -> dict[str, str]:
-    # 검증한 입력을 그대로 보냅니다. strftime 의 %Y 는 glibc 에서 1000년 미만을 0 으로 채우지 않습니다.
+    # 검증한 입력을 그대로 보냅니다(strftime 의 %Y 는 glibc 에서 1000년 미만을 0 으로 채우지 않습니다).
     _calendar_date(departure_date, "departure_date")
     return {"dptDt": departure_date}
 
 
 def build_korail_point_summary_form() -> dict[str, str]:
-    """앱 근거: NetworkApi.java:515."""
-    return {"point_dv_cd": "0"}
+    return {"point_dv_cd": "0"}  # evidence: app 7.0.6 NetworkApi.java:515
 
 
 def build_customer_trip_info_form(customer_no: str) -> dict[str, str]:
-    # 앱의 두 값은 보호돼 있습니다(HomeViewModel.java:4335).
     return {
         "custMgNo": _required_text(customer_no, "customer_no"),
+        # evidence: app 7.0.6 HomeViewModel.java:4335 (두 값은 보호돼 관측값을 씁니다)
         "medDvCd": "03",
         "regSqno": "0",
     }
 
 
 def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
-    # 달력 검증은 앱에 없는 라이브러리 검사입니다(앱은 날짜 선택기 값만 보냅니다). 라이브: 20260230·20261340 은 SUCC/API.I00000 에 tripChgDates 없이
-    # 돌아왔고, 정상 날짜는 변경 가능일이 없어도 빈 tripChgDates 를 실었습니다(20250101·20991231 등).
+    # 앱에 없는 달력 검사입니다: 실서버는 없는 날짜(20260230)에 tripChgDates 없이 SUCC 를 돌려줬습니다.
     _calendar_date(departure_date, "departure_date")
     return {"tripChgDate": departure_date}
 

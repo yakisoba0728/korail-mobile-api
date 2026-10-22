@@ -116,6 +116,8 @@ def test_unknown_response_codes_remain_strings() -> None:
 
 @pytest.mark.parametrize("room_class_code", ["1", "2", "FUTURE", None])
 def test_self_seat_change_preserves_room_codes(room_class_code: str | None) -> None:
+    """SeatAvailabilityIn.java:26-30,55: String, no allowlist (PsrmType.java:19-29 literals are protected);
+    SelfSeatChangeOptionViewModel.java:342-344: psrmClCd only when the room value is not null."""
     request = api.SelfSeatChangeInfoRequest("20261007", "00001", "TEST-A", "TEST-B", room_class_code)
     form = build_self_seat_change_info_form(request)
     if room_class_code is None:

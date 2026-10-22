@@ -20,8 +20,6 @@ class TicketListTrain:
 
     호차 번호(``car_no``)처럼 서버가 정수로 보내는 값도 문자열로 담습니다."""
 
-    # 앱 근거: TicketListTrainInfo.java:72. 라이브 이력 139행: 21개 키가 모두 있었고 h_srcar_no 는 String 선언과 달리 모두 JSON
-    # 정수였습니다(문자열로 받습니다).
     journey_sequence: str | None = wire("h_jrny_sqno")
     run_date: str | None = wire("h_run_dt")
     train_no: str | None = wire("h_trn_no")
@@ -57,25 +55,19 @@ class TicketListTicket:
     sale_sequence: str | None = wire("h_orgtk_sale_sqno")
     return_password: str | None = wire("h_orgtk_ret_pwd")
     ticket_status_code: str | None = wire("h_tk_stt_cd")
-    # 한 계정 관측에서 131행 모두에 있었습니다.
     #: 승차권 종류 코드(``h_tk_knd_cd``)입니다. 예약 행이 아니라 승차권 행의 값을 읽습니다.
     ticket_kind_code: str | None = wire("h_tk_knd_cd")
     ticket_kind_name: str | None = wire("h_tk_knd_nm")
     train_info: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
-    # h_tk_sqno 선언: MyTicketListOutTicket.java:92. 다른 조건에서도 필수인지는 검증 못 함입니다.
     ticket_sequence: str | None = wire("h_tk_sqno")
     #: 승차권 상태 이름(``h_tk_stt_nm``)입니다. 서버가 보낸 이름을 그대로 담으며 ``ticket_status_code``를 따로 번역하지 않습니다.
     ticket_status_name: str | None = wire("h_tk_stt_nm")
-    # 앱 버튼 조건은 상세 플래그와 사용 여부 검사입니다(NormalTicketSectionKt.java:951, TicketHelper.java:3173-3199). 비교 리터럴은
-    # 보호돼 있습니다.
     #: 반환 가능 여부 플래그(``h_ret_psb_flg``)입니다. 앱은 승차권 상세의 플래그와 사용 여부도 함께 확인하므로 이 값만으로 환불할 수
     #: 있는지 판단할 수 없습니다. 앱이 비교하는 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
     return_possible_flag: str | None = wire("h_ret_psb_flg")
     use_transaction_no: str | None = wire("h_use_tno")
     notify_use_transaction_no: str | None = wire("h_noty_use_tno")
-    # 실서버 검증 못 함. 앱은 목록 값을 상세에 주입합니다(MyTicketBaseViewModel.java:769, MyTicketDetailViewModel.java:1521). 상세
-    # 40응답에는 두 후보 키가 없었습니다.
     #: 대리수령 대상 여부 플래그(``h_pbp_acep_tgt_flg``)입니다. 승차권 상세 응답에는 이 값이 보통 없으므로, 앱처럼 환불하려면 이 값을
     #: ``refund``의 ``pbp_acceptance_target_flag``로 넘기세요.
     pbp_acceptance_target_flag: str | None = wire("h_pbp_acep_tgt_flg")
@@ -89,10 +81,8 @@ class TicketListReservation:
     ``tickets`` 외의 필드는 추정한 응답 키로 읽습니다. 실제 키 이름은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다. 키가
     다르면 해당 필드는 ``None``입니다."""
 
-    # MyTicketListOutReservation 의 명시적 키는 ticket_list 이며 나머지는 보호된 serializer 대신 속성명으로 읽는 추정입니다.
     tickets: tuple[TicketListTicket, ...] = ()
-    # 선택 스칼라의 전송 키는 속성명에 따른 추정입니다. mode=2 의 예약 128행은 ticket_list 외 키가 없었습니다. 다른 응답의 필드
-    # 부재까지 보장하지 않습니다.
+    # mode=2 실서버 예약 행에는 ticket_list 외 키가 없었습니다.
     #: 출발 일시(``hDptDtTm``)입니다. 응답에 없으면 ``None``입니다.
     departure_datetime: str | None = wire("hDptDtTm")
     ticket_kind_code: str | None = wire("hTkKndCd")
@@ -108,11 +98,8 @@ class TicketListReservation:
     is_wheelchair_member: bool | None = wire("isWheelchairMember", optional_bool, default=None)
     is_rail_police_enabled: bool | None = wire("isRailPoliceEnabled", optional_bool, default=None)
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
-    # 선택값의 타입이 어긋나면 해당 값만 비웁니다. addSrvInfo(MyTicketListOutReservation.java:39)는 MaaS 의 AddSrvItem 과 같은 타입이라 모델을
-    # 공유합니다(MaasDetailOut.java:27, AddSrvItem.java:28-49).
+    # addSrvInfo 는 MaaS 상세와 같은 앱 타입이라 모델을 공유합니다.
     additional_service: MaasServiceDetail | None = None
-    # ticketKind 는 보호된 enum 이름을 매핑하지 않고 문자열로 둡니다 (MyTicketListOutReservation.java:52,59;
-    # TicketDefine.java:1078-1131).
     #: 승차권 종류(``ticketKind``)입니다. 서버가 보낸 문자열을 그대로 담으며, 값의 의미는 앱 내부 값이 공개돼 있지 않아 확인하지
     #: 못했습니다.
     ticket_kind: str | None = wire("ticketKind")
@@ -149,7 +136,7 @@ class DelayDiscountTicket:
 
     사용 가능 기한(``h_use_psb_dt``)은 읽지 않습니다. 응답에 있으면 ``raw``에서 확인하세요."""
 
-    # 앱 근거: DelayCoupon.java:32-55. h_use_psb_dt(사용 가능 기한)는 전 디컴파일에 0건이라 읽지 않습니다.
+    # h_use_psb_dt 는 앱 디컴파일 어디에도 없는 키라 읽지 않습니다.
     fare: str | None = wire("h_dlay_fare")
     original_sale_date: str | None = wire("h_orgtk_ret_sale_dt")
     window_no: str | None = wire("h_orgtk_wct_no")
@@ -183,8 +170,7 @@ class DelayDiscountTicketListResponse(BaseKorailResponse):
     페이지 정보(``current_page``, ``total_pages``, ``total_count``, ``row_count``, ``last_page_flag``)는 응답의 ``main_info``
     블록에서 읽습니다. 블록이 없으면 모두 ``None``입니다."""
 
-    # main_info는 DTO 밖 서버 추가 블록입니다(DelayDiscountViewOut.java:24,51). 날짜 입력 8종에서 12키를 확인했지만 할인권 없는
-    # 응답뿐이었습니다.
+    # main_info 는 앱 DTO 밖의 서버 추가 블록이며 할인권 없는 응답에서만 관측했습니다.
     items: tuple[DelayDiscountTicket, ...] = ()
     current_page: str | None = wire("h_page_no")
     total_pages: str | None = wire("h_tot_page_cnt")
@@ -201,7 +187,6 @@ class DiscountCoupon:
     start_date: str | None = wire("h_fdcert_mg_st_dt")
     expiration_date: str | None = wire("h_fdcert_mg_cls_dt")
     discount_kind_code: str | None = wire("h_dscp_knd_cd")
-    # CouponOutInfo.java:63.
     #: 할인율·할인액 구분 코드(``h_disc_rt_amt_dv_cd``)입니다. 코드 값의 의미를 확인하지 못했습니다.
     discount_rate_amount_division_code: str | None = wire("h_disc_rt_amt_dv_cd")
     weekday_fare_discount: str | None = wire("h_inwk_fare_disc_rt_amt")
@@ -245,8 +230,6 @@ class ReceiptCashPayment:
 
     인증 도메인 인식번호와 현금영수증 승인번호도 가리지 않고 서버가 보낸 값 그대로 담습니다."""
 
-    # 앱 근거: ReceiptInfo.java:37. String 4개·int 금액 1개이며 전송 키는 CashReceiptInfo.java:26-35,52 의 명시적 @SerialName
-    # 입니다.
     #: 승인 방법 이름(``h_apv_mtd_nm``)입니다.
     approval_method_name: str = wire("h_apv_mtd_nm", required_str)
     authentication_domain_recognition_no: str = wire("h_athn_dmn_rcgn_no", required_str)
@@ -305,7 +288,6 @@ class KorailPointSummaryResponse(BaseKorailResponse):
     개(``naver_linked_flag``, ``kakao_linked_flag``, ``google_linked_flag``, ``apple_linked_flag``)가 각각 어느 서비스에
     대응하는지도 확인하지 못했으므로, 필드 이름의 서비스 대응을 확정된 것으로 보지 마세요."""
 
-    # 앱 근거: MyXPointViewOut.java:27-74. 별칭 없는 키는 속성명에 따른 추정입니다.
     korail_point: str | None = wire("h_korail_point")
     #: 서버가 알려 준 할인쿠폰 개수(``h_disc_coup_cnt``)입니다. ``get_discount_coupons`` 결과의 개수와 항상 같다는 보장은 없습니다.
     discount_coupon_count: str | None = wire("h_disc_coup_cnt")
@@ -317,8 +299,6 @@ class KorailPointSummaryResponse(BaseKorailResponse):
     phone_verified_flag: str | None = wire("h_cp_athn_flg")
     email_verified_flag: str | None = wire("h_emil_athn_flg")
     contact_channel_content: str | None = wire("h_cntc_chn_cont1")
-    # 소셜 연동 플래그의 서비스별 순서는 7.0.6 에서 미확인입니다. 소비 값이 보호된 LoginMethodApiData.java:18-21 을 거치므로 Python
-    # 필드명을 확정된 매핑으로 신뢰하지 않습니다.
     #: 네이버 연동 여부로 추정하는 플래그(``h_logn_tp_cd1``)입니다.
     naver_linked_flag: str | None = wire("h_logn_tp_cd1")
     #: 카카오 연동 여부로 추정하는 플래그(``h_logn_tp_cd2``)입니다.
@@ -327,7 +307,7 @@ class KorailPointSummaryResponse(BaseKorailResponse):
     google_linked_flag: str | None = wire("h_logn_tp_cd4")
     #: 애플 연동 여부로 추정하는 플래그(``h_logn_tp_cd5``)입니다.
     apple_linked_flag: str | None = wire("h_logn_tp_cd5")
-    # ``h_cust_lead_flg``(``MyXPointViewOut.java:43``) — 보조견 등록 플래그 그 자체.
+    # 보조견 등록 플래그입니다(customer_lead_flag_name 의 짝).
     customer_lead_flag: str | None = wire("h_cust_lead_flg")
     #: 장애 유형 코드(``h_hdcp_tp_cd``)입니다. 장애 유형은 ``disability_flag``가 아니라 이 필드와 ``disability_type_name``에
     #: 있습니다.
@@ -340,8 +320,6 @@ class KorailPointSummaryResponse(BaseKorailResponse):
 class MileageHistoryEntry:
     """마일리지 적립 또는 사용 내역 한 행을 담습니다."""
 
-    # AmtSpecOutSpecInfo.java:29-35 가 선언하는 것이 정확히 아래 일곱 필드입니다. 라이브에서 3페이지 14행 전부가 이 일곱 키를
-    # 문자열로 싣고 그 밖의 키는 없었습니다.
     departure_date: str | None = wire("dptDt")
     point_division_name: str | None = wire("pontDvNm")
     accrual_division_name: str | None = wire("mlgAcmDvCdNm")
@@ -358,7 +336,7 @@ class MileageHistoryResponse(BaseKorailResponse):
 
     응답에 따로 있는 합계 필드는 서로 합치지 않고 각각 담습니다."""
 
-    # 앱 근거: AmtSpecOut.java:29-39,199-247. pgCnt 는 AmtSpecOut.java:32.
+    # 실서버가 함께 보내는 railNowSavePontValNum1 은 앱 DTO 에 없어 읽지 않습니다(raw 에 남습니다).
     #: 전체 페이지 수(``pgCnt``)입니다.
     page_count: str | None = wire("pgCnt")
     query_count: str | None = wire("qryCnt")
@@ -430,7 +408,6 @@ class CustomerTripInfo:
     train_connection_flag: str | None = wire("trnCnecFlg")
     train_group_code: str | None = wire("trnGpCd")
     usage_day_no: str | None = wire("utlDno")
-    # @SerialName 이 없어 와이어 철자는 보호됨 이며 코틀린 필드명을 추정해 사용합니다(CustTripInfo.java:48).
     #: 상품 번호입니다. 추정한 응답 키(``gdNo``)로 읽으며, 실제 키 이름은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
     goods_no: str | None = wire("gdNo")
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
@@ -450,8 +427,7 @@ class TripChangeDateResponse(BaseKorailResponse):
     ``trip_change_dates``는 응답의 ``tripChgDates`` 목록입니다. 목록이 없거나 ``null`` 원소가 있으면 ``KorailProtocolError``가
     발생합니다."""
 
-    # 앱 근거: NetworkApi.java:238; TipChgDateInquiryOut.java:28-30. tripChgDate(단수)는 요청 DTO(TipChgDateInquiryIn.java:29)의
-    # 필드입니다 — 응답은 복수형 tripChgDates(List<String>)만 선언하므로, 여기서는 단수형을 읽지 않습니다.
+    # 단수형 tripChgDate 는 요청 필드라 응답에서 읽지 않습니다.
     last_run_date: str | None = wire("lastRunDt")
     trip_change_dates: tuple[str, ...] = ()
 
@@ -462,8 +438,6 @@ class SelfSeatChangeStation:
 
     응답의 도착역 코드·이름과 도착역 편성·운행 순서는 읽지 않습니다. 원본은 ``raw``에 남습니다."""
 
-    # 앱 근거: ChgStnInfo.java:21-35; SeatAvailabilityOut.java:32. DTO 의 도착역 코드·이름·편성/운행순서 4개 필드는 이 모델에서
-    # 읽지 않습니다.
     departure_station_code: str | None = wire("dptRsStnCd")
     departure_station_name: str | None = wire("dptRsStnNm")
     departure_date: str | None = wire("dptDt")
@@ -484,8 +458,6 @@ class SelfSeatChangeReason:
     필드는 추정한 응답 키(``qryCode``, ``qryOrdr``, ``frcSaleRsnCont``)로 읽습니다. 실제 키 이름은 앱 내부 값이 공개돼 있지 않아
     확인하지 못했습니다."""
 
-    # 앱 근거: ChgRsnInfo.java:21-24; SeatAvailabilityOut.java:31. serializer descriptor 의 이름이 보호돼 있어
-    # (ChgRsnInfo$$serializer.java:34-36) 전송 키는 속성명에 따른 추정입니다.
     query_code: str | None = wire("qryCode")
     query_order: str | None = wire("qryOrdr")
     reason_text: str | None = wire("frcSaleRsnCont")
@@ -496,7 +468,6 @@ class SelfSeatChangeReason:
 class SelfSeatChangeInfoResponse(BaseKorailResponse):
     """자율 좌석변경의 대상 역·사유·열차 정보를 담습니다."""
 
-    # 앱 근거: NetworkApi.java:806-808; SeatAvailabilityOut.java:28-42,68.
     train_no: str | None = wire("trnNo")
     train_class_code: str | None = wire("trnClsfCd")
     train_class_name: str | None = wire("trnClsfNm")
@@ -517,7 +488,6 @@ class SelfSeatChangeInfoResponse(BaseKorailResponse):
 class OriginalTicketSeat:
     """변경 기준인 원표의 좌석 정보를 담습니다."""
 
-    # 앱 근거: SeatInfo.java:25-51; JrnyInfo.java:58. 대리수령용 Seat.java:27-36 과는 이름과 구조가 다른 타입입니다.
     passenger_sequence: str | None = wire("psgSqno")
     assign_sequence: str | None = wire("asgnSqno")
     passenger_type_code: str | None = wire("psgTpDvCd")
@@ -540,7 +510,6 @@ class OriginalTicketSeat:
 class OriginalTicketJourney:
     """변경 기준인 원표의 구간과 좌석 목록을 담습니다."""
 
-    # 앱 근거: OrgTk.java:38; JrnyInfo.java:29-63. 대리수령용 Jrny.java:29-38 과 다릅니다.
     journey_sequence: str | None = wire("jrnySqno")
     journey_order: str | None = wire("jrnyOrdr")
     journey_type_code: str | None = wire("jrnyTpCd")
@@ -572,7 +541,6 @@ class OriginalTicket:
     필드는 추정한 응답 키로 읽습니다. 실제 키 이름은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다. ``original_*`` 필드는
     요청한 승차권의 반환 식별자가 그대로 돌아온 값이며 ``repr``에서도 가리지 않습니다."""
 
-    # 앱 근거: OrgTk.java:28-52; OgTicketInquiryOut.java:27. 전송 키는 속성명에 따른 추정입니다.
     pnr_no: str | None = wire("pnrNo")
     ticket_kind_code: str | None = wire("tkKndCd")
     original_sale_datetime: str | None = wire("ogtkSaleDt")
@@ -598,7 +566,6 @@ class OriginalTicket:
 class OriginalTicketInquiryResponse(BaseKorailResponse):
     """변경 기준인 원표 목록을 담습니다."""
 
-    # 앱 근거: NetworkApi.java:234-236; OgTicketInquiryOut.java:26-27,54.
     tickets: tuple[OriginalTicket, ...] = ()
 
 
@@ -610,8 +577,6 @@ class DelayCertificateRow:
     ``delay_arrival_flag``가 특정 값인 행만 보여 주지만, 라이브러리는 거르지 않고 모든 행을 돌려줍니다. 앱이 고르는 값은 앱 내부
     값이 공개돼 있지 않아 확인하지 못했습니다."""
 
-    # DelayCertificate.java:57-60 의 마스크는 여덟 키 모두 필수로 둡니다. 앱은 dlayArvFlg 가 보호된 1글자 값과 같은 행만 보여
-    # 주므로(DelayCertificateViewModel.java:139-150) 이 라이브러리는 거르지 않고 모두 돌려줍니다.
     run_day: str = wire("runDay", required_str)
     train_no: str = wire("trnNo", required_str)
     departure_station_code: str = wire("dptRsStnCd", required_str)
@@ -631,7 +596,6 @@ class DelayCertificateResponse(BaseKorailResponse):
 
     응답에 목록(``dlayList``)이 없거나 ``null``이면 ``delays``는 빈 튜플입니다."""
 
-    # dlay.athnIsu.do. dlayList 는 선택·nullable 입니다(DelayCertificateOut.java:53-59).
     delays: tuple[DelayCertificateRow, ...] = ()
 
 
@@ -641,7 +605,6 @@ class DelayReturnReceiptResponse(BaseKorailResponse):
 
     세 필드 모두 응답에 없으면 ``None``입니다."""
 
-    # 세 필드 모두 선택입니다(DelayReturnReceiptOut.java:53-69).
     return_date: str | None = wire("retDt")
     payment_method_name: str | None = wire("dlayFarePymtMtdNm")
     return_amount: str | None = wire("dlayFareRetAmt")
