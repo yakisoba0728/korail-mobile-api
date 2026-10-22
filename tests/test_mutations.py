@@ -156,13 +156,17 @@ class _UnrenderableCardField:
 @pytest.mark.parametrize(
     "field", ["card_number", "card_password", "card_expire", "birthday", "installment", "card_type"]
 )
-def test_card_repr_does_not_evaluate_unvalidated_fields(field: str) -> None:
-    assert repr(card(**{field: _UnrenderableCardField()})) == "CardPayment()"
+def test_card_rejects_unvalidated_fields_without_evaluating_them(field: str) -> None:
+    """Construction validates the format; a non-string value (even one equal to "J") is never rendered."""
+    with pytest.raises(KorailInvalidInputError):
+        card(**{field: _UnrenderableCardField()})
 
 
 @pytest.mark.parametrize("field", ["card_number", "card_password", "card_expire", "birthday", "installment"])
-def test_card_repr_hides_malformed_strings_before_validation(field: str) -> None:
-    assert repr(card(**{field: "SYNTHETIC-PRIVATE\nVALUE"})) == "CardPayment()"
+def test_card_rejects_malformed_strings_without_echoing_them(field: str) -> None:
+    with pytest.raises(KorailInvalidInputError) as caught:
+        card(**{field: "SYNTHETIC-PRIVATE\nVALUE"})
+    assert "SYNTHETIC-PRIVATE" not in str(caught.value) and "SYNTHETIC-PRIVATE" not in repr(caught.value)
 
 
 def ticket() -> PaidTicket:
@@ -298,7 +302,12 @@ def reservation_form(
 
 
 def payment_form(**changes: str) -> dict[str, Any]:
-    """PayViewModel.java:6680-6684; PaymentMethodHelper.java:110-130 (protected defaults unresolved)."""
+    """PayViewModel.java:6680-6684 (hidTmpJobSqno1/2 echo :6682-6683, hidRsvChgNo :6684);
+    PaymentMethodHelper.java:110-130 (protected defaults unresolved); the numbered suffix 1 follows
+    PaymentMethod.java:672-694 and ReservationPaymentInStlInfo.java:33. INS_0's value is protected
+    (PaymentDefine.java:152-164,185-189,207-210; default choice InstallmentViewModel.java:55,94-96).
+    hiduserYn splits on login (PayViewModel.java:6600-6604; FPayViewModel.java:772-778); both constants are
+    protected."""
     return {
         **COMMON,
         "hidPnrNo": PNR,
@@ -323,7 +332,9 @@ def payment_form(**changes: str) -> dict[str, Any]:
 
 
 def refund_form(**changes: str) -> dict[str, Any]:
-    """MyTicketDetailViewModel.java:1521; RefundTicketIn.java:66."""
+    """MyTicketDetailViewModel.java:1521 fills only these fields (the detail's pbpAcepTgtFlg; the foreign route
+    uses a protected constant, FTicketDetailViewModel.java:634); the protected ctlDvCd is omitted, not guessed
+    (MyTicketDetailViewModel.java:1811-1858; RefundTicketIn.java:66)."""
     return {
         **COMMON,
         "txtPnrNo": PNR,
@@ -452,7 +463,9 @@ def recalc_request(**changes: Any) -> PriceRecalculationRequest:
 
 
 def recalc_form(**changes: Any) -> dict[str, Any]:
-    """NetworkApi.java:583-584: six repeated unnumbered lists preserve empty positions."""
+    """NetworkApi.java:582-584: six repeated unnumbered lists preserve empty positions (a None element would be
+    dropped, ParameterHandler.java:18-31, and misalign the lists); PayViewModel.java:6142-6171,
+    PriceReCalculationIn.java:31-41. txtJobId's job id is protected (ReservationJobId.java:20,42-45)."""
     return {
         **COMMON,
         "hidPnrNo": PNR,
@@ -651,6 +664,7 @@ def cases() -> list[Case]:
             "parse_station_refund_verification_response",
             {"refund_amount": "1100", "refund_fee": "100"},
         ),
+        # ExecuteOnlineRefundsIn.java:60: the twelve keys in this order.
         Case(
             "execute_station_ticket_refund",
             lambda c: c.execute_station_ticket_refund(execution_request()),
@@ -1029,8 +1043,10 @@ def test_refund_requires_the_commission_lookup(mutation_client) -> None:
     for missing in (None, {"strResult": "SUCC"}):
         with pytest.raises(KorailProtocolError, match="get_refund_commission"):
             client.refund(ticket(), commission=missing)  # type: ignore[arg-type]
-    with pytest.raises(KorailProtocolError, match="commission response"):
-        payload_module.build_refund_form(KorailConfig(), ticket(), settle_mileage=True)
+    with pytest.raises(TypeError, match="commission"):
+        payload_module.build_refund_form(KorailConfig(), ticket(), settle_mileage=True)  # type: ignore[call-arg]
+    with pytest.raises(KorailInvalidInputError, match="commission response"):
+        payload_module.build_refund_form(KorailConfig(), ticket(), settle_mileage=True, commission=None)  # type: ignore[arg-type]
     assert requests == []
 
 
@@ -1042,7 +1058,8 @@ def test_refund_pays_the_fee_with_mileage_only_when_the_app_would(
     mutation_client, usable: Any, fee: Any
 ) -> None:
     """MyTicketDetailViewModel.java:1811-1823: mileage settlement needs the commission lookup and usable
-    mileage >= fee; TextHelper.getInteger reads a missing or unparsable number as 0."""
+    mileage >= fee (the refund screen compares the fee total, RefundTicketViewModel.java:924-942; the protected
+    proceed-flag comparison is not reproduced); TextHelper.getInteger reads a missing or unparsable number as 0."""
     client, requests = mutation_client([], "POST", (), {})
     commission = bound_commission(str_result="SUCC", usable_mileage=usable, refund_fee=fee)
     with pytest.raises(KorailProtocolError, match="mileage is below the fee"):
@@ -1062,37 +1079,49 @@ def test_refund_rejects_non_succ_commission_before_http(mutation_client, result:
     assert requests == []
 
 
+_PASSWORD = "first two card password digits"
+_AUTH = "authentication value must be 6 or 10 digits"
+_EXPIRY = "has expired or has an invalid month"
+_EXPIRE_SHAPE = "card_expire must be YYMM digits"
+_NUMBER = "card number must be 13 to 16 digits"
+_INSTALLMENT = "installment must be one or two digits"
+
+
 @pytest.mark.parametrize(
-    "changes",
+    "changes, message",
     [
-        {"card_password": ""},
-        {"card_password": "0"},
-        {"card_password": "000"},
-        {"birthday": "00000"},
-        {"birthday": "0000000"},
-        {"card_type": "S", "birthday": "000000"},
-        {"card_expire": "9900"},
-        {"card_expire": "9913"},
-        {"card_expire": "2608"},
-        {"card_expire": "202609"},
-        {"card_expire": "AB12"},
-        {"card_number": ""},
-        {"card_number": "0000-0000"},
-        {"card_number": "0" * 12},
-        {"card_number": "0" * 17},
-        {"card_password": "ab"},
-        {"birthday": "abcdef"},
-        {"installment": ""},
-        {"installment": None},
-        {"installment": 3},
-        {"installment": "xyz"},
-        {"installment": "123"},
+        ({"card_password": ""}, _PASSWORD),
+        ({"card_password": "0"}, _PASSWORD),
+        ({"card_password": "000"}, _PASSWORD),
+        ({"birthday": "00000"}, _AUTH),
+        ({"birthday": "0000000"}, _AUTH),
+        ({"card_type": "S", "birthday": "000000"}, _AUTH),
+        ({"card_expire": "9900"}, _EXPIRY),
+        ({"card_expire": "9913"}, _EXPIRY),
+        ({"card_expire": "2608"}, _EXPIRY),
+        ({"card_expire": "202609"}, _EXPIRE_SHAPE),
+        ({"card_expire": "AB12"}, _EXPIRE_SHAPE),
+        ({"card_number": ""}, _NUMBER),
+        ({"card_number": "0000-0000"}, _NUMBER),
+        ({"card_number": "0" * 12}, _NUMBER),
+        ({"card_number": "0" * 17}, _NUMBER),
+        ({"card_number": "０" * 16}, _NUMBER),
+        ({"card_password": "ab"}, _PASSWORD),
+        ({"birthday": "abcdef"}, _AUTH),
+        ({"installment": ""}, _INSTALLMENT),
+        ({"installment": None}, _INSTALLMENT),
+        ({"installment": 3}, _INSTALLMENT),
+        ({"installment": "xyz"}, _INSTALLMENT),
+        ({"installment": "123"}, _INSTALLMENT),
     ],
 )
-def test_card_input_rejected_before_http(mutation_client, changes: dict[str, Any]) -> None:
-    """PayViewModel.smali:53511-53710,53727-53863: password 2, auth 6/10, month/current yyyyMM."""
+def test_card_input_rejected_before_http(mutation_client, changes: dict[str, Any], message: str) -> None:
+    """PayViewModel.java:16196-16243; PayViewModel.smali:53511-53710,53727-53863: password 2, auth 6/10,
+    month/current yyyyMM. The app checks the first three number groups' lengths and the fourth's minimum,
+    but those lengths are protected, so the SDK only checks 13-16 ASCII digits. Format errors raise when the
+    CardPayment is built; the expiry against the current month is checked when the payment is built."""
     client, requests = mutation_client([], "POST", (), {})
-    with pytest.raises(KorailProtocolError):
+    with pytest.raises(KorailInvalidInputError, match=message):
         client.pay_with_card(hold(), card(**changes))
     assert not requests
 
@@ -1121,7 +1150,8 @@ def test_card_current_month_allowed_and_auth_type(mutation_client, type_: str, a
     ],
 )
 def test_payment_identifiers_and_money_required_before_http(mutation_client, changes: dict[str, Any]) -> None:
-    """PayViewModel.java:6680-6684; never substitute h_tot_prc for unknown received amount."""
+    """PayViewModel.java:6680-6684; the charge is received_amount, never h_tot_prc
+    (PayViewModel.java:11027-11028,11303-11307)."""
     client, requests = mutation_client([], "POST", (), {})
     with pytest.raises(KorailProtocolError):
         client.pay_with_card(hold(**changes), card())
@@ -1367,7 +1397,10 @@ def test_transfer_seat_and_attribute_indexing(mutation_client) -> None:
 
 
 def test_recalculation_parallel_empty_slots_and_nonmember_options(mutation_client) -> None:
-    """NetworkApi.java:583-584; PriceReCalculationIn.java:38-41; PayViewModel.java:6167-6168."""
+    """NetworkApi.java:583-584; PriceReCalculationIn.java:38-41,114-133 (the four scalar keys are guessed from
+    attribute names; PriceReCalculationIn$$serializer.java:44-47 is protected); non-member hiduserYn/hidCustNo:
+    PriceReCalculationIn.java:32,34,114-129, PayViewModel.java:6167-6168 (smali :11764-11805,11834-11850; the
+    key and N literal are protected)."""
     expected = recalc_form(
         hiduserYn="N",
         hidCustNo="SYNTH-NONMEMBER",
@@ -1596,7 +1629,7 @@ def test_recalculation_adds_nothing_to_the_cart_by_default_or_after_a_failure(mu
 
 def test_recalculation_rows_come_from_the_first_journey_seats_like_the_app() -> None:
     """PayViewModel.java:5518,16856-16863: one row per first-journey seat copying type, cabin and current
-    discount, dcnt_reld_no as hidDscpNo; :17469 refuses when the counts differ."""
+    discount (:16858), dcnt_reld_no as hidDscpNo; :17469 refuses when the counts differ."""
 
     def seats(*rows: tuple[str, str, str, str]) -> dict[str, Any]:
         keys = ("h_psg_tp_cd", "h_psrm_cl_cd", "h_dcnt_knd_cd1", "dcnt_reld_no")
@@ -1819,7 +1852,8 @@ def test_standby_holds_are_not_payable(mutation_client, transfer: bool) -> None:
 
 @pytest.mark.parametrize("amount", ["0", "00000000000"])
 def test_zero_amount_hold_is_not_card_paid(mutation_client, amount: str) -> None:
-    """PayViewModel.java:15572,18144: the app builds no card request when nothing is owed."""
+    """PayViewModel.java:15572,18144: the app builds no card request when nothing is owed and issues the
+    ticket without a payment method (:5148), a path the library does not implement."""
     client, requests = mutation_client([], "POST", ("payment.ReservationPayment",), {})
     with pytest.raises(KorailProtocolError, match="zero-amount"):
         client.pay_with_card(hold(received_amount=amount), card())

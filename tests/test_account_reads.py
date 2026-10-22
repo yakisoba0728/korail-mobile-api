@@ -700,7 +700,9 @@ CASES = [
         },
         success(ret_amt="001200", ret_fee="0000", prg_psb_flg="Y"),
         (("refund_amount", "001200"), ("refund_fee", "0000"), ("proceed_possible_flag", "Y")),
-        "NetworkApi.java:599-600; RefundCommissionIn.java:59",
+        "NetworkApi.java:598-600; RefundCommissionIn.java:32-42,59 (h_orgtk_ret_sale_dt differs from the refund's "
+        "h_orgtk_sale_dt, RefundTicketIn.java:38; compaNm/compaBrth from MyTicketDetailViewModel.java:277, "
+        "FTicketDetailViewModel.java:179); RefundCommissionOut.java:35-41,62,140-164",
     ),
     case(
         "get_refund_ticket_detail",
@@ -718,14 +720,24 @@ CASES = [
             h_pnr_no="TEST-PNR",
             ticket_infos={"ticket_info": [{"h_trn_no": "00999", "tk_seat_info": [{"h_seat_no": "TEST-SEAT"}]}]},
             h_qrcode="TEST-QR",
+            dcnt_crd_info={"h_dcnt_crd_no": "TEST-NCARD", "appSegList": [{"stlbDturDvNm": "TEST-DETOUR"}]},
         ),
         (
             ("pnr_no", "TEST-PNR"),
             ("journeys.0.train_no", "00999"),
             ("journeys.0.seats.0.seat_no", "TEST-SEAT"),
             ("qr_code", "TEST-QR"),
+            ("discount_card.card_no", "TEST-NCARD"),
+            ("discount_card.sections.0.detour_division_name", "TEST-DETOUR"),
         ),
-        "NetworkApi.java:407-408; TicketDetailIn.java:57",
+        "NetworkApi.java:406-408; TicketDetailIn.java:57; TicketDetailOut.java:38,117 (unaliased keys are attribute-name "
+        "guesses: retPsbFlg :71, pbpAcepTgtFlg :65,1936 vs the list's MyTicketListOutTicket.java:92,300 and "
+        "MyTicketBaseViewModel.java:769; mlgSaveFlg/mlgSaveTgt are absent from :39-91), h_abrd_ps_nm/s_brth "
+        ":410,418, h_qrcode :478, dcnt_crd_info :49,438 (DiscountCardInfo.java:27-32,113,117; term extension "
+        "NCardTicketSectionKt.smali:7821-7843; AppSegInfo.java:24-37 with stlbDturDvNm :36 copied to "
+        "AssignScheduleIn.java:41 stlbDturDvNm1 via NCardReservationViewModel.java:154-164 and "
+        "TrainScheduleViewModel.java:2639,2730-2736,2749,2831); retPsbFlg Y is no refund guarantee "
+        "(NormalTicketSectionKt.java:951)",
     ),
     case(
         "get_ticket_list",

@@ -55,11 +55,11 @@ KorailClient.pay_with_card(
 | 예외 | 발생 조건 |
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `card`가 [`CardPayment`][korail_mobile_api.CardPayment]가 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `card`가 [`CardPayment`][korail_mobile_api.CardPayment]가 아니거나 `hold`가 [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse]가 아닐 때 |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 예약대기 홀드(`hold.payable`이 `False`)일 때 |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 홀드의 `str_result`가 `"SUCC"`가 아니거나, `pnr_no`·`window_no`가 비었거나, `received_amount`가 숫자가 아닐 때 |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `received_amount`가 0일 때 |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 카드 번호가 숫자 13~16자리가 아닐 때, 할부 개월 수가 숫자 1~2자리가 아닐 때, 유효기간이 `YYMM` 숫자 4자리가 아니거나 월이 01~12를 벗어나거나 이미 지났을 때, 비밀번호가 숫자 2자리가 아닐 때, `birthday`가 숫자 6자리(`card_type="J"`) 또는 10자리(`card_type="S"`)가 아닐 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 유효기간이 이미 지났을 때. 카드 번호·할부 개월 수·유효기간·비밀번호·`birthday`의 형식 오류는 [`CardPayment`][korail_mobile_api.CardPayment]를 만들 때 발생합니다. |
 
 **정보**
 
@@ -339,7 +339,7 @@ PNR 전체가 아니라 `ticket`이 가리키는 승차권 한 장만 환불하�
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `commission`이 [`RefundCommissionResponse`][korail_mobile_api.RefundCommissionResponse]가 아닐 때. `None`도 거절합니다. |
-| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`의 `pnr_no`, `sale_date`, `sale_window_no`, `sale_sequence`, `return_password` 중 비었거나 문자열이 아닌 값이 있을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `ticket`이 [`PaidTicket`][korail_mobile_api.PaidTicket]이 아닐 때. `pnr_no`, `sale_date`, `sale_window_no`, `sale_sequence`, `return_password` 중 비었거나 문자열이 아닌 값은 `PaidTicket`을 만들 때 거절합니다. |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `settle_mileage`가 `bool`이 아니거나, 대리수령 대상 플래그가 문자열도 `None`도 아닐 때 |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `commission.str_result`가 `"SUCC"`가 아닐 때. 예외의 `raw`에 `commission.raw`가 들어 있습니다. |
 | [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | 수수료 응답의 비공개 조회 문맥이 없거나 원표·동반자 정보가 다르거나 `ticket.return_sale_date`가 없을 때. 직접 생성·직접 파싱한 수수료 응답도 거절합니다. |
@@ -402,6 +402,7 @@ KorailClient.verify_station_ticket_refund(
 | 예외 | 발생 조건 |
 |---|---|
 | [`KorailAuthError`][korail_mobile_api.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.KorailProtocolError] | `request`가 [`StationRefundVerificationRequest`][korail_mobile_api.StationRefundVerificationRequest]가 아닐 때 |
 
 **정보**
 
