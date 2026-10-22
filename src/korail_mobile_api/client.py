@@ -7,7 +7,7 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from types import TracebackType
-from typing import Any, Literal, Self, TypeVar, overload
+from typing import Any, Literal, Self, TypeVar
 
 import httpx
 
@@ -465,6 +465,7 @@ class KorailClient:
         require_envelope: bool = True,
         raise_on_fail: bool = True,
         omit_empty_fields: bool = True,
+        form_encoded: bool = True,
     ) -> T:
         """자동 재로그인·재전송은 하지 않습니다."""
         return self._run_read(
@@ -476,6 +477,7 @@ class KorailClient:
                     require_envelope=require_envelope,
                     raise_on_fail=raise_on_fail,
                     omit_empty_fields=omit_empty_fields,
+                    form_encoded=form_encoded,
                 ).raw
             )
         )
@@ -502,42 +504,27 @@ class KorailClient:
             )
         )
 
-    @overload
-    def _mutation(
-        self,
-        route: str,
-        form: dict[str, str] | dict[str, str | list[str]],
-        *,
-        parser: None = ...,
-        raise_on_fail: bool = ...,
-    ) -> BaseKorailResponse: ...
-
-    @overload
     def _mutation(
         self,
         route: str,
         form: dict[str, str] | dict[str, str | list[str]],
         *,
         parser: Callable[[Mapping[str, object]], T],
-        raise_on_fail: bool = ...,
-    ) -> T: ...
-
-    def _mutation(
-        self,
-        route: str,
-        form: dict[str, str] | dict[str, str | list[str]],
-        *,
-        parser: Callable[[Mapping[str, object]], T] | None = None,
         raise_on_fail: bool = True,
-    ) -> BaseKorailResponse | T:
+    ) -> T:
+        return self._send_mutation(
+            lambda: self.http.post_form(route, form, include_common=False, raise_on_fail=raise_on_fail),
+            parser,
+        )
+
+    def _send_mutation(
+        self,
+        send: Callable[[], BaseKorailResponse],
+        parser: Callable[[Mapping[str, object]], T],
+    ) -> T:
         """파싱 실패만으로 서버 변경 여부를 알 수 없으므로 상태 확인 없이 재전송하지 마십시오."""
         try:
-            response = self._run_read(
-                lambda: self.http.post_form(route, form, include_common=False, raise_on_fail=raise_on_fail)
-            )
-            if parser is not None:
-                return self._parse_mutation_response(response.raw, parser)
-            return response
+            return self._parse_mutation_response(self._run_read(send).raw, parser)
         except (KorailTransportError, KorailProtocolError) as error:
             _note_possible_processing(error)
             raise
@@ -913,20 +900,14 @@ class KorailClient:
         같은 GET이 미결제 취소와 결제 후 환불에 쓰이므로 상세 수수료를 먼저 확인합니다(MyTicketDetailViewModel.java:1183-1192,3271-3291)."""
         self._require_session("product cancel requires")
         query = build_product_cancel_query(detail)
-        try:
-            return self._run_read(
-                lambda: self._parse_mutation_response(
-                    self.http.get_json(
-                        "/classes/com.korail.mobile.product.ReservationCancel",
-                        query,
-                        include_common=True,
-                    ).raw,
-                    parse_product_cancel_response,
-                )
-            )
-        except (KorailTransportError, KorailProtocolError) as error:
-            _note_possible_processing(error)
-            raise
+        return self._send_mutation(
+            lambda: self.http.get_json(
+                "/classes/com.korail.mobile.product.ReservationCancel",
+                query,
+                include_common=True,
+            ),
+            parse_product_cancel_response,
+        )
 
     def get_ticket_receipt(
         self,
@@ -1344,12 +1325,11 @@ class KorailClient:
 
         바인딩: NetworkApi.java:315-321. 앱 부팅은 코드 목록을 한 호출로 전달합니다 (NetworkService.java:2015-2025). 실서버 관측: 부팅 상수
         18개를 한 POST 로 보내 SUCC/API.I00000 과 18키를 받았으며 개별 요청 결과와 같았습니다."""
-        return self._run_read(
-            lambda: self.http.post_form(
-                "/classes/com.korail.mobile.common.code.do",
-                build_common_code_form(self.config, code),
-                include_common=False,
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.common.code.do",
+            build_common_code_form(self.config, code),
+            parser=BaseKorailResponse.from_raw,
+            include_common=False,
         )
 
     def get_app_data(
@@ -1379,15 +1359,12 @@ class KorailClient:
 
     def get_uuid(self) -> UuidResponse:
         """서버가 발급하는 단말 검증값 하나를 받아 옵니다."""
-        return self._run_read(
-            lambda: parse_uuid_response(
-                self.http.post_form(
-                    "/ebizcross/getUUID.do",
-                    include_common=False,
-                    form_encoded=False,
-                    require_envelope=False,
-                ).raw
-            )
+        return self._post_read(
+            "/ebizcross/getUUID.do",
+            parser=parse_uuid_response,
+            include_common=False,
+            form_encoded=False,
+            require_envelope=False,
         )
 
     def get_maas_menu_list(
@@ -1419,53 +1396,40 @@ class KorailClient:
         additional_service_code: str,
     ) -> StationDataResponse:
         """MaaS 부가서비스 하나가 지원하는 역 목록을 조회합니다."""
-        form = build_maas_station_form(additional_service_code)
-        return self._run_read(
-            lambda: parse_station_data_response(
-                self.http.post_form(
-                    "/ebizmaas/EbizMaasStationList.do",
-                    form,
-                    include_common=False,
-                    require_envelope=False,
-                ).raw
-            )
+        return self._post_read(
+            "/ebizmaas/EbizMaasStationList.do",
+            build_maas_station_form(additional_service_code),
+            parser=parse_station_data_response,
+            include_common=False,
+            require_envelope=False,
         )
 
     def get_station_info(self) -> StationInfoResponse:
         """역 데이터의 판본과 수록 역 수를 빈 POST로 조회합니다."""
-        return self._run_read(
-            lambda: parse_station_info_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.common.stationinfo",
-                    include_common=False,
-                    form_encoded=False,
-                    require_envelope=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.common.stationinfo",
+            parser=parse_station_info_response,
+            include_common=False,
+            form_encoded=False,
+            require_envelope=False,
         )
 
     def get_station_data(self) -> StationDataResponse:
         """전체 역 목록을 코드·이름·좌표까지 한 번에 받아 옵니다."""
-        return self._run_read(
-            lambda: parse_station_data_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.common.stationdata",
-                    include_common=False,
-                    form_encoded=False,
-                    require_envelope=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.common.stationdata",
+            parser=parse_station_data_response,
+            include_common=False,
+            form_encoded=False,
+            require_envelope=False,
         )
 
     def get_train_calendar(self) -> TrainCalendarResponse:
         """지금 예매할 수 있는 운행일 달력을 받아 옵니다."""
-        return self._run_read(
-            lambda: parse_train_calendar_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.schedule.runDt",
-                    build_cache_query(),
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.schedule.runDt",
+            build_cache_query(),
+            parser=parse_train_calendar_response,
         )
 
     def search_trains(
@@ -1732,7 +1696,7 @@ class KorailClient:
             sms_notify=sms_notify,
             phone_no=phone_no,
         )
-        return self._mutation(route, form)
+        return self._mutation(route, form, parser=BaseKorailResponse.from_raw)
 
     def reserve_transfer(
         self,
@@ -1830,8 +1794,16 @@ class KorailClient:
         self._require_session("cancellation requires")
         form = build_unpaid_reservation_cancel_form(self.config, hold)
         if check_first:
-            self._mutation("/classes/com.korail.mobile.reservationCancel.ReservationCancel", form)
-        return self._mutation("/classes/com.korail.mobile.reservationCancel.ReservationCancelChk", form)
+            self._mutation(
+                "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+                form,
+                parser=BaseKorailResponse.from_raw,
+            )
+        return self._mutation(
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk",
+            form,
+            parser=BaseKorailResponse.from_raw,
+        )
 
     def pay_with_card(
         self,
@@ -1953,7 +1925,7 @@ class KorailClient:
         self._require_session("discount card extension requires")
         route = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
         query = build_discount_card_extension_query(self.config, ticket)
-        return self._mutation(route, query)
+        return self._mutation(route, query, parser=BaseKorailResponse.from_raw)
 
     def reserve_with_discount_card(
         self,

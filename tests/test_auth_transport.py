@@ -1166,7 +1166,7 @@ def test_mutation_failure_after_handoff_is_marked_sent_with_a_note(factory, repl
     """3.0 spec section 4: request_sent tells 'outcome unknown' from 'refused before sending'; nothing is resent."""
     client, requests = factory([reply])
     with pytest.raises(expected) as caught:
-        client._mutation(MUTATION, {"a": "1"})
+        client._mutation(MUTATION, {"a": "1"}, parser=package.BaseKorailResponse.from_raw)
     assert caught.value.request_sent is True and len(requests) == 1
     assert any(MAYBE_PROCESSED in note for note in caught.value.__notes__)
 
@@ -1197,7 +1197,11 @@ def test_mutation_refused_before_sending_keeps_request_sent_unset(factory, refus
     if refusal == "closed":
         client.close()
     with pytest.raises(E.KorailProtocolError) as caught:
-        client._mutation(MUTATION, {"a": None if refusal == "none-field" else "1"})
+        client._mutation(
+            MUTATION,
+            {"a": None if refusal == "none-field" else "1"},
+            parser=package.BaseKorailResponse.from_raw,
+        )
     assert caught.value.request_sent is None and not getattr(caught.value, "__notes__", None)
     assert not requests
 
@@ -1205,7 +1209,7 @@ def test_mutation_refused_before_sending_keeps_request_sent_unset(factory, refus
 def test_server_answer_on_a_mutation_is_not_marked_as_unknown(factory):
     client, requests = factory([envelope("WRR800029", "FAIL")])
     with pytest.raises(E.KorailReservationRefusedError) as caught:
-        client._mutation(MUTATION, {"a": "1"})
+        client._mutation(MUTATION, {"a": "1"}, parser=package.BaseKorailResponse.from_raw)
     assert caught.value.request_sent is None and not getattr(caught.value, "__notes__", None)
     assert len(requests) == 1
 
