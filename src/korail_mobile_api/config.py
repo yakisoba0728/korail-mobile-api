@@ -126,7 +126,8 @@ class KorailConfig:
             not isinstance(self.app_version, str) or not self.app_version.strip()
         ):
             raise ValueError("app_version must be a nonempty string or None")
-        if self.timeout is not None:
+        # 타입 선언에는 없지만 None 은 httpx 의 "제한 없음"으로 받아 왔습니다.
+        if self.timeout is not None:  # pyright: ignore[reportUnnecessaryComparison]
             _validate_seconds("timeout", self.timeout, allow_zero=False)
         _validate_seconds("netfunnel_timeout", self.netfunnel_timeout, allow_zero=False)
         if self.netfunnel_wait_limit is not None:

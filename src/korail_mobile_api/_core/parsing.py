@@ -47,7 +47,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import MISSING, field, fields
 from functools import wraps
-from typing import TYPE_CHECKING, ParamSpec, TypeAlias, TypedDict, TypeVar, overload
+from typing import TYPE_CHECKING, ParamSpec, TypeAlias, TypedDict, TypeGuard, TypeVar, overload
 
 from ..errors import (
     SESSION_EXPIRED_CODE,
@@ -68,6 +68,18 @@ _D = TypeVar("_D", bound="DataclassInstance")
 _Reader: TypeAlias = Callable[[Mapping[str, object], str, str], _T]
 
 
+def _is_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    return isinstance(value, Mapping)
+
+
+def _is_list(value: object) -> TypeGuard[list[object]]:
+    return isinstance(value, list)
+
+
+def _all_mappings(rows: list[object]) -> TypeGuard[list[Mapping[str, object]]]:
+    return all(isinstance(row, Mapping) for row in rows)
+
+
 def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
     """파서가 거절한 응답 전체를 기존 예외의 raw 에, 기존 부분 원문을 parser_raw 에 남깁니다. 검사·재전송은 하지 않습니다."""
 
@@ -77,7 +89,7 @@ def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
             return parser(*args, **kwargs)
         except KorailApiError as error:
             response = args[0] if args else kwargs.get("raw", kwargs.get("response"))
-            raw = response if isinstance(response, Mapping) else getattr(response, "raw", response)
+            raw = response if _is_mapping(response) else getattr(response, "raw", response)
             if error.raw is not raw:
                 error.parser_raw = error.raw
                 error.raw = raw
@@ -89,7 +101,7 @@ def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
 def _envelope(data: Mapping[str, object]) -> dict[str, str | None]:
     """JSON 정수는 관측에 따라 문자열로 읽고, 다른 비문자열 값은 거절합니다."""
     envelope: dict[str, str | None] = {}
-    invalid = []
+    invalid: list[str] = []
     for name in ("h_msg_cd", "h_msg_txt", "strResult"):
         value = data.get(name)
         if isinstance(value, int) and not isinstance(value, bool):
@@ -133,12 +145,12 @@ def _response_fields(raw: Mapping[str, object]) -> _ResponseFields:
 
 def _optional_mapping(data: Mapping[str, object], key: str) -> Mapping[str, object] | None:
     value = data.get(key)
-    return value if isinstance(value, Mapping) else None
+    return value if _is_mapping(value) else None
 
 
 def _optional_list(data: Mapping[str, object], key: str) -> list[object]:
     value = data.get(key)
-    return value if isinstance(value, list) else []
+    return value if _is_list(value) else []
 
 
 def _nested_rows(raw: Mapping[str, object], outer_key: str, inner_key: str) -> list[Mapping[str, object]]:
@@ -146,9 +158,9 @@ def _nested_rows(raw: Mapping[str, object], outer_key: str, inner_key: str) -> l
 
 
 def _row(value: object, context: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise KorailProtocolError(f"KORAIL {context} must be an object")
-    return value
+    if _is_mapping(value):
+        return value
+    raise KorailProtocolError(f"KORAIL {context} must be an object")
 
 
 def _response_mapping(raw: Mapping[str, object]) -> dict[str, object]:
@@ -161,7 +173,7 @@ def _response_mapping(raw: Mapping[str, object]) -> dict[str, object]:
 def _rows(data: Mapping[str, object] | None, key: str) -> list[Mapping[str, object]]:
     if not isinstance(data, Mapping):
         return []
-    return [item for item in _optional_list(data, key) if isinstance(item, Mapping)]
+    return [item for item in _optional_list(data, key) if _is_mapping(item)]
 
 
 def _present_strings(data: Mapping[str, object], keys: tuple[str, ...]) -> tuple[str, ...]:
@@ -250,9 +262,11 @@ def _inventory_ratio(data: Mapping[str, object], key: str) -> float | None:
         return None
     number: int | float | str
     # bool 을 숫자로 받지 않도록 정확한 int·float 타입만 허용합니다.
-    if type(value) is int or type(value) is float:
-        number = value
-    elif isinstance(value, str) and re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value) is not None:
+    if (
+        type(value) is int
+        or type(value) is float
+        or (isinstance(value, str) and re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value) is not None)
+    ):
         number = value
     else:
         raise KorailProtocolError(
@@ -321,9 +335,9 @@ def _validate_strict_read_envelope(
 def _required_read_rows(data: Mapping[str, object], key: str, context: str) -> list[Mapping[str, object]]:
     """누락·null·비객체 행은 거절합니다(ReceiptInfos.java:49, DeliveredTicketOut.java:50 의 필수 마스크)."""
     value = data.get(key)
-    if not isinstance(value, list) or any(not isinstance(row, Mapping) for row in value):
-        raise KorailProtocolError(f"KORAIL {context} field {key} must be an object list")
-    return value
+    if _is_list(value) and _all_mappings(value):
+        return value
+    raise KorailProtocolError(f"KORAIL {context} field {key} must be an object list")
 
 
 def _optional_read_rows(data: Mapping[str, object], key: str, context: str) -> list[Mapping[str, object]]:

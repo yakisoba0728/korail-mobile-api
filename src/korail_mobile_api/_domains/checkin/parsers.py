@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from ..._core.parsing import (
+    _is_list,
     _optional_read_rows,
     _preserve_read_raw,
     _required_read_rows,
@@ -49,9 +50,9 @@ def parse_pbp_acceptance_specification_response(
     raw: Mapping[str, object],
 ) -> PbpAcceptanceSpecificationResponse:
     _validate_strict_read_envelope(raw)
-    tickets = []
+    tickets: list[PbpAcceptanceTicket] = []
     for ticket in _required_read_rows(raw, "tkList", "PBP acceptance"):
-        journeys = []
+        journeys: list[PbpAcceptanceJourney] = []
         for journey in _required_read_rows(ticket, "jrnyList", "PBP ticket"):
             seats = wire_models(
                 PbpAcceptanceSeat,
@@ -119,9 +120,9 @@ def parse_delivered_ticket_retrieval_response(raw: Mapping[str, object]) -> Deli
     context = "delivered ticket retrieval"
     data = _response_mapping(raw)
     rows = data.get("prsList")
-    if not isinstance(rows, list):
+    if not _is_list(rows):
         raise KorailProtocolError("KORAIL delivered ticket retrieval field prsList must be a list")
-    flags = []
+    flags: list[str] = []
     for value in rows:
         try:
             flags.append(required_str(_row(value, context), "prsFlg", context))

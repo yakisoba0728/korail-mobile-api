@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from ..._core.parsing import (
+    _is_list,
     _nested_rows,
     _optional_mapping,
     _preserve_read_raw,
@@ -91,7 +92,7 @@ def parse_refund_ticket_response(raw: Mapping[str, object]) -> RefundTicketRespo
     if "stlList" not in copied:
         raise KorailProtocolError("KORAIL refund stlList is required")
     rows = copied["stlList"]
-    if rows is not None and not isinstance(rows, list):
+    if rows is not None and not _is_list(rows):
         raise KorailProtocolError("KORAIL refund stlList must be a list or null")
     codes: list[str] = []
     for value in rows or ():
@@ -116,7 +117,7 @@ def parse_station_refund_verification_response(raw: Mapping[str, object]) -> Sta
     context = "station refund Orgtkinfo"
     copied = _response_mapping(raw)
     rows = copied.get("orgtkinfo_list", [])
-    if rows is not None and not isinstance(rows, list):
+    if rows is not None and not _is_list(rows):
         raise KorailProtocolError("KORAIL station refund orgtkinfo_list must be a list")
     original_tickets: list[StationRefundOriginalTicket] = []
     for value in rows or ():

@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Self
 
 from ..._core.parsing import _envelope, defaulted_str, required_str, wire
-from ...errors import KorailProtocolError, resolve_error_message
+from ...errors import KorailProtocolError, _is_json_object, resolve_error_message
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -51,7 +51,7 @@ class BaseKorailResponse:
 
         성공·실패는 판정하지 않습니다. ``raw``가 JSON 객체가 아니거나 봉투 필드가 문자열·정수·``null``이 아니면
         ``KorailProtocolError``가 발생합니다."""
-        if not isinstance(raw, dict):
+        if not _is_json_object(raw):
             error = KorailProtocolError("KORAIL response must be a JSON object")
             error.raw = raw
             raise error

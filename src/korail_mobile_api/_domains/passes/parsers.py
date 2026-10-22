@@ -95,7 +95,7 @@ def _parse_pass_goods_info(data: Mapping[str, object] | None) -> PassGoodsInfo |
 @_preserve_read_raw
 def parse_pass_menu_response(raw: Mapping[str, object]) -> PassMenuResponse:
     _validate_strict_read_envelope(raw, allow_result_only_success=True)
-    items = []
+    items: list[PassMenuItem] = []
     for item in _rows(raw, "list"):
         web_data = _optional_mapping(item, "webData")
         items.append(
@@ -229,7 +229,7 @@ def parse_commuter_info_response(raw: Mapping[str, object]) -> CommuterInfoRespo
 @_preserve_read_raw
 def parse_trip_menu_response(raw: Mapping[str, object]) -> TripMenuResponse:
     _validate_envelope(raw)
-    items = []
+    items: list[TripMenuItem] = []
     for item in _rows(raw, "menuList"):
         contents = tuple(
             wire_model(

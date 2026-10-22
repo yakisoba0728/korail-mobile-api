@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from ..._core.parsing import (
+    _is_list,
+    _is_mapping,
     _nested_rows,
     _optional_mapping,
     _optional_scalar_string,
@@ -193,12 +195,12 @@ def _received_amount(
         container = journey.get("seat_infos")
         if container is None:
             continue
-        if not isinstance(container, Mapping):
+        if not _is_mapping(container):
             raise KorailProtocolError("KORAIL reservation seat_infos must be an object or null")
         seat_rows = container.get("seat_info")
         if seat_rows is None:
             continue
-        if not isinstance(seat_rows, list):
+        if not _is_list(seat_rows):
             raise KorailProtocolError("KORAIL reservation seat_infos.seat_info must be a list or null")
         for seat in seat_rows:
             seat = _row(seat, "reservation seat_info row")
@@ -243,11 +245,11 @@ def parse_reservation_hold_response(
     journey_rows: list[object]
     if journeys_container is None:
         journey_rows = []
-    elif isinstance(journeys_container, Mapping):
+    elif _is_mapping(journeys_container):
         value = journeys_container.get("jrny_info")
         if value is None:
             journey_rows = []
-        elif isinstance(value, list):
+        elif _is_list(value):
             journey_rows = value
         else:
             raise KorailProtocolError("KORAIL reservation jrny_infos.jrny_info must be a list or null")
@@ -301,7 +303,7 @@ def parse_existing_reservation_hold_response(
     for journey in hold.journeys:
         container = _row(journey.raw.get("seat_infos"), "existing reservation seat_infos")
         seats = container.get("seat_info")
-        if not isinstance(seats, list) or not seats:
+        if not _is_list(seats) or not seats:
             raise KorailProtocolError("KORAIL reservation detail requires seat rows for every journey")
         for item in seats:
             seat = _row(item, "existing reservation seat")

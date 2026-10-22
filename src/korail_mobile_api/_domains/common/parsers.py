@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from ..._core.parsing import (
+    _is_list,
+    _is_mapping,
     _optional_mapping,
     _preserve_read_raw,
     _response_fields,
@@ -79,10 +81,10 @@ def parse_uuid_response(raw: Mapping[str, object]) -> UuidResponse:
 def parse_station_data_response(raw: Mapping[str, object]) -> StationDataResponse:
     """봉투가 없는 역 목록을 읽습니다. stns.stn 객체 목록은 필수입니다."""
     container = raw.get("stns")
-    if not isinstance(container, Mapping):
+    if not _is_mapping(container):
         raise KorailProtocolError("KORAIL station data missing stns object")
     rows = container.get("stn")
-    if not isinstance(rows, list):
+    if not _is_list(rows):
         raise KorailProtocolError("KORAIL station data missing stns.stn list")
     stations = (_row(row, "station data stns.stn item") for row in rows)
     return StationDataResponse(

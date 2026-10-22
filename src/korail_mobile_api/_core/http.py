@@ -25,6 +25,7 @@ from ..errors import (
     KorailProtocolError,
     KorailSessionExpiredError,
     KorailTransportError,
+    _is_json_object,
     classify_app_error,
 )
 from .dynapath import DYNAPATH_REQUIRED_PATHS, DynapathRequestContext, DynapathTokenGenerator
@@ -32,7 +33,7 @@ from .parsing import _envelope
 from .wire import _device_version_key
 
 #: 폼·쿼리 값입니다. 목록은 같은 키를 반복해 보냅니다.
-FormValue: TypeAlias = str | int | bool | None | Sequence[str]
+FormValue: TypeAlias = str | int | bool | Sequence[str] | None
 Form: TypeAlias = Mapping[str, FormValue] | Sequence[tuple[str, FormValue]]
 
 _FORM_HEADERS = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -57,7 +58,7 @@ def parse_base_response(
     common_out: bool | None = None,
 ) -> BaseKorailResponse:
     """FAIL 또는 CommonOut 기본 실패만 P058 만료로 판정합니다. 옵션별 계약은 checks/BEHAVIOR.md 참고."""
-    if not isinstance(data, dict):
+    if not _is_json_object(data):
         raise KorailProtocolError("KORAIL response must be a JSON object", raw=data)
     envelope = _envelope(data)
     response = BaseKorailResponse(
@@ -83,7 +84,7 @@ _DYNAPATH_BLOCK_CODES = frozenset({-1203, -1406, -2000, -8005, -8201, -8202, -82
 
 def _dynapath_block_payload(payload: object) -> dict[str, object] | None:
     """앱의 키가 보호돼 최상위 정수를 모두 검사하므로 다른 필드의 같은 값도 오인할 수 있습니다."""
-    if not isinstance(payload, dict):
+    if not _is_json_object(payload):
         return None
     # 문자열은 봉투 없는 명시적 이용제한 코드만 봅니다. 다른 문자열 필드까지 보면 정상 데이터를 오인합니다.
     if "strResult" not in payload and payload.get("code") == "-2000":

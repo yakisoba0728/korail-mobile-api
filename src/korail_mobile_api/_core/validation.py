@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from datetime import date
+from typing import TypeGuard
 
 from ..constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from ..errors import KorailInvalidInputError
@@ -17,6 +19,11 @@ from .wire import _is_ascii_digits
 _DATE_RE = re.compile(r"[0-9]{8}")
 _TIME_RE = re.compile(r"[0-9]{6}")
 _DIGITS_RE = re.compile(r"[0-9]+")
+
+
+def _is_sequence(value: object) -> TypeGuard[Sequence[object]]:
+    """문자열·bytes 를 뺀 시퀀스인지 봅니다."""
+    return isinstance(value, Sequence) and not isinstance(value, (str, bytes))
 
 
 def _int_text(value: int, name: str) -> str:

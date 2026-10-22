@@ -434,8 +434,10 @@ def _coerced_seat_class(value: object) -> KorailSeatClass:
         if not isinstance(value, str):
             raise ValueError(value)
         return KorailSeatClass(value)
-    except ValueError:
-        raise KorailInvalidInputError('KORAIL reservation seat class must be "1" (일반실) or "2" (특실)')
+    except ValueError as exc:
+        raise KorailInvalidInputError(
+            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
+        ) from exc
 
 
 def _resolved_sequence(value: Sequence[_T], message: str) -> tuple[_T, ...]:
@@ -569,11 +571,11 @@ def _build_journey_reservation_form(
     )
     try:
         job_type = KorailReservationJobType(job_type)
-    except ValueError:
+    except ValueError as exc:
         raise KorailInvalidInputError(
             "KORAIL reservation job type must be one of "
             + ", ".join(f'"{member.value}"' for member in KorailReservationJobType)
-        )
+        ) from exc
     # STANDBY·MERGE_STANDING 을 단일 구간으로 제한하지 않습니다. 앱의 특실 상태에는 WAIT/STAND/FREE 반환이 없습니다.
     assignments = _validated_leg_seats(
         leg_seats,
@@ -855,9 +857,9 @@ def build_unpaid_reservation_cancel_form(
     form.update(
         {
             "txtPnrNo": pnr_no,
-            "txtJrnySqno": sequence if sequence else "0001",
+            "txtJrnySqno": sequence or "0001",
             "txtJrnyCnt": journey_count,
-            "hidRsvChgNo": change_no if change_no else "000",
+            "hidRsvChgNo": change_no or "000",
         }
     )
     return form

@@ -10,6 +10,8 @@ from collections.abc import Mapping
 
 from ..._core.parsing import (
     _inventory_ratio,
+    _is_list,
+    _is_mapping,
     _optional_list,
     _optional_mapping,
     _optional_read_rows,
@@ -48,10 +50,10 @@ def parse_limousine_stops(raw: Mapping[str, object]) -> tuple[AirportBusStop, ..
     _require_exact_success(raw)
     names = raw.get("app.limousine.stationNm")
     codes = raw.get("app.limousine.stationCd")
-    if not isinstance(names, list) or not isinstance(codes, list) or len(names) != len(codes):
+    if not _is_list(names) or not _is_list(codes) or len(names) != len(codes):
         raise KorailProtocolError("KORAIL limousine stop names and codes must be lists of the same length")
-    stops = []
-    for pair in ({"name": name, "code": code} for name, code in zip(names, codes)):
+    stops: list[AirportBusStop] = []
+    for pair in ({"name": name, "code": code} for name, code in zip(names, codes, strict=True)):
         name = _strict_scalar_string(pair, "name", "limousine stop")
         code = _strict_scalar_string(pair, "code", "limousine stop")
         if not name or not name.strip() or not code or not code.strip():
@@ -82,9 +84,9 @@ def parse_limousine_seat_inventory_response(raw: Mapping[str, object]) -> Airpor
         _optional_read_rows(raw, "seatList", "limousine seat inventory"),
         "limousine seat inventory",
     )
-    windows = []
+    windows: list[SeatWindow] = []
     for value in _optional_list(raw, "windowList"):
-        if not isinstance(value, Mapping):
+        if not _is_mapping(value):
             continue
         try:
             windows.append(

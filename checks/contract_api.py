@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import pathlib
 import pkgutil
 import sys
 import traceback
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING
 from unittest.mock import patch
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    import httpx
+
+    from korail_mobile_api import KorailClient
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
@@ -23,11 +31,11 @@ def show(value: object) -> str:
         return f"<int {value.bit_length()} bits>"
     try:
         return repr(value)[:40]
-    except Exception:  # noqa: BLE001
+    except Exception:
         return f"<{type(value).__name__}>"
 
 
-def check(cid: str, ok: bool, detail: str = "") -> None:
+def check(cid: str, ok: bool, detail: str = "") -> None:  # noqa: FBT001 - assert-style helper
     if not ok:
         failures.append(f"{cid} {detail}")
 
@@ -35,7 +43,7 @@ def check(cid: str, ok: bool, detail: str = "") -> None:
 ENV = {"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": "ok"}
 
 
-def _offline_transport() -> Any:
+def _offline_transport() -> httpx.MockTransport:
     """불리면 위반을 기록하는 전송. 이 검사기는 네트워크에 닿으면 안 됩니다."""
     import httpx
 
@@ -47,17 +55,17 @@ def _offline_transport() -> Any:
 
 
 # --- G10: import 무결성 -----------------------------------------------------
-def g10(pkg: Any) -> int:
+def g10(pkg: ModuleType) -> int:
     modules = [m.name for m in pkgutil.walk_packages(pkg.__path__, prefix="korail_mobile_api.")]
     for name in modules:
         try:
             importlib.import_module(name)
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             check("G10", False, f"import {name}: {type(error).__name__}")
     undefined = [n for n in pkg.__all__ if not hasattr(pkg, n)]
     check("G10", not undefined, f"__all__ 미정의: {undefined}")
     namespace: dict[str, object] = {}
-    exec("from korail_mobile_api import *", namespace)  # noqa: S102
+    exec("from korail_mobile_api import *", namespace)
     check("G10", all(n in namespace for n in pkg.__all__), "star import 누락")
     return len(modules)
 
@@ -122,7 +130,7 @@ def g9() -> None:
             try:
                 client._mutation("/x", {}, parser=parser)
                 check("G9", False, f"{label}: 파싱 실패가 전파되지 않음")
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 raised = error
         check("G9", calls["n"] == 1, f"{label}: 전송 {calls['n']}회 (정확히 1회여야)")
         return raised
@@ -178,7 +186,7 @@ def logout_state() -> None:
     from korail_mobile_api.config import KorailConfig
     from korail_mobile_api.errors import KorailTransportError
 
-    def logged_in(transport: Any) -> Any:
+    def logged_in(transport: httpx.BaseTransport) -> KorailClient:
         client = KorailClient(KorailConfig(), transport=transport)
         client.session.current = KorailSession(
             jsessionid="SYNTHETIC-JSESSIONID",
@@ -187,11 +195,9 @@ def logout_state() -> None:
         client.http.cookies.set("JSESSIONID", "SYNTHETIC-JSESSIONID", domain="smart.letskorail.com")
         return client
 
-    def assert_cleared(label: str, client: Any, action: Callable[[], None]) -> None:
-        try:
+    def assert_cleared(label: str, client: KorailClient, action: Callable[[], None]) -> None:
+        with contextlib.suppress(Exception):
             action()
-        except Exception:  # noqa: BLE001 — 실패가 올라오는 것은 허용, 상태만 봅니다
-            pass
         check("G11", client.session.current is None, f"{label}: current 가 남음")
         check("G11", client.session.pending is None, f"{label}: pending 이 남음")
         check("G11", len(client.http.cookies) == 0, f"{label}: 쿠키 {len(client.http.cookies)}개가 남음")
@@ -223,7 +229,7 @@ def logout_state() -> None:
 def main() -> int:
     try:
         import korail_mobile_api as pkg
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         print(f"검사 불완전 — 패키지 import 실패: {type(error).__name__}: {error}")
         return 2
 
@@ -240,7 +246,7 @@ def main() -> int:
                 module_count = result
         except ImportError as error:
             incomplete.append(f"{name}: import 실패 {type(error).__name__}: {error}")
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             # 검사 대상이 아니라 **검사기**가 예상하지 못한 곳에서 멈춘 것.
             # 끝까지 보지 못했으니 실패(1)가 아니라 불완전(2)입니다.
             where = traceback.extract_tb(error.__traceback__)[-1]
@@ -267,7 +273,7 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         code = main()
-    except BaseException as error:  # noqa: BLE001
+    except BaseException as error:
         if isinstance(error, SystemExit):
             raise
         print(f"검사 불완전 — 검사기 예외 {type(error).__name__}: {error}")

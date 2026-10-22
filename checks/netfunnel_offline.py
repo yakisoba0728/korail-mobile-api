@@ -7,8 +7,14 @@ import pathlib
 import sys
 import traceback
 from collections.abc import Callable
-from typing import Any
+from functools import partial
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs
+
+if TYPE_CHECKING:
+    import httpx
+
+    from korail_mobile_api import KorailClient
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
@@ -19,7 +25,7 @@ KORAIL_SEARCH = {"strResult": "SUCC", "h_msg_cd": "IRG000000", "h_msg_txt": "syn
 NODE = "ip=rnf12.letskorail.com&port=443"
 
 
-def check(name: str, ok: bool, detail: str = "") -> None:
+def check(name: str, ok: bool, detail: str = "") -> None:  # noqa: FBT001 - assert-style helper
     if not ok:
         failures.append(f"{name}: {detail}")
 
@@ -31,13 +37,13 @@ class World:
         self,
         queue: list[str | Exception],
         *,
-        korail: dict[str, Any] | Exception = KORAIL_EMPTY,
+        korail: dict[str, object] | Exception = KORAIL_EMPTY,
     ) -> None:
         self.queue = list(queue)  # 5101/5002 에 차례로 줄 답
         self.korail = korail
         self.log: list[tuple[str, str, dict[str, str]]] = []
 
-    def handler(self, request: Any) -> Any:
+    def handler(self, request: httpx.Request) -> httpx.Response:
         import httpx
 
         host = request.url.host
@@ -68,7 +74,7 @@ class World:
         ]
 
 
-def make_client(world: World, **config: Any) -> tuple[Any, list[float]]:
+def make_client(world: World, **config: object) -> tuple[KorailClient, list[float]]:
     import httpx
 
     from korail_mobile_api import KorailClient, KorailConfig, KorailSession
@@ -91,12 +97,12 @@ def make_client(world: World, **config: Any) -> tuple[Any, list[float]]:
 def raises(call: Callable[[], object]) -> BaseException | None:
     try:
         call()
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         return error
     return None
 
 
-def search(client: Any) -> object:
+def search(client: KorailClient) -> object:
     from korail_mobile_api import TrainSearchQuery
 
     return client.search_trains(
@@ -153,7 +159,7 @@ def case_blocked() -> None:
     for label, call in (("reservation_view", lambda c: c.list_reservations()), ("inquiry", search)):
         world = World([f"301:key=KB&{NODE}"], korail=KORAIL_SEARCH)
         client, _ = make_client(world)
-        error = raises(lambda: call(client))
+        error = raises(partial(call, client))
         check("c", isinstance(error, KorailQueueRejectedError), f"{label}: {type(error).__name__}")
         check("c", "KORAIL" not in world.opcodes(), f"{label}: KORAIL 요청이 나감")
         check("c", world.completes() == [("rnf12.letskorail.com", "KB")], f"{label}: 반납 {world.completes()}")
@@ -257,7 +263,7 @@ def main() -> int:
         import httpx  # noqa: F401
 
         import korail_mobile_api  # noqa: F401
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         print(f"검사 불완전 — import 실패: {type(error).__name__}: {error}")
         return 2
     # case_queue_down 의 mode=1 우회는 경고 로그를 남깁니다 — 여기서는 소음입니다.
@@ -266,7 +272,7 @@ def main() -> int:
     for case in CASES:
         try:
             case()
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             where = traceback.extract_tb(error.__traceback__)[-1]
             incomplete.append(
                 f"{case.__name__}: {type(error).__name__}: {error}"

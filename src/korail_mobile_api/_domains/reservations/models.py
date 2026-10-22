@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from ..._core.parsing import _optional_scalar_string, optional_int, strict_str, wire
+from ..._core.parsing import _is_list, _is_mapping, _optional_scalar_string, optional_int, strict_str, wire
 from ...errors import KorailInvalidInputError, KorailProtocolError
 from ..common.models import BaseKorailResponse
 
@@ -345,8 +345,9 @@ class HoldReference:
         if pnr_no is None or journey_count is None:
             raise KorailProtocolError("KORAIL hold reference needs h_pnr_no and h_jrny_cnt", raw=raw)
         container = raw.get("jrny_infos")
-        rows = container.get("jrny_info") if isinstance(container, Mapping) else None
-        first = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], Mapping) else {}
+        rows = container.get("jrny_info") if _is_mapping(container) else None
+        row = rows[0] if _is_list(rows) and rows else None
+        first: Mapping[str, object] = row if _is_mapping(row) else {}
         return cls(
             pnr_no=pnr_no,
             journey_count=journey_count,

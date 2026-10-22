@@ -14,6 +14,7 @@ from dataclasses import dataclass, field, fields
 from datetime import datetime, timedelta, timezone
 from typing import Literal, NoReturn
 
+from ..._core.parsing import _all_mappings, _is_list, _is_mapping
 from ..._core.validation import _optional_text, _required_mutation_text, _txt_index
 from ..._core.wire import _device_version_key, _is_ascii_digits
 from ...config import KorailConfig
@@ -307,8 +308,8 @@ class PriceRecalculationRequest:
         if isinstance(requested_discount_codes, str) or not isinstance(requested_discount_codes, Sequence):
             raise KorailInvalidInputError("requested_discount_codes must be a sequence with one code per seat")
         container = hold.journeys[0].raw.get("seat_infos") if hold.journeys else None
-        seats = container.get("seat_info") if isinstance(container, Mapping) else None
-        if not isinstance(seats, list) or not seats or not all(isinstance(seat, Mapping) for seat in seats):
+        seats = container.get("seat_info") if _is_mapping(container) else None
+        if not _is_list(seats) or not seats or not _all_mappings(seats):
             raise KorailInvalidInputError("KORAIL price recalculation needs the hold's first-journey seat rows")
         if len(requested_discount_codes) != len(seats):
             raise KorailInvalidInputError(

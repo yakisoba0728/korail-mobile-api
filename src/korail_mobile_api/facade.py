@@ -81,9 +81,11 @@ class StationResource:
         self._client = client
 
     def all(self, *, refresh: bool = False) -> tuple[KorailStation, ...]:
+        """역 목록을 반환합니다. 처음 한 번 또는 ``refresh=True`` 일 때만 서버에서 읽습니다."""
         return self._client._cached_station_data(refresh=refresh).stations
 
     def find(self, reference: str) -> KorailStation | None:
+        """이름이나 코드가 같은 역을 반환하고, 없으면 ``None`` 입니다."""
         value = reference.strip()
         if not value:
             return None
@@ -94,6 +96,7 @@ class StationResource:
         return {station.name for station in self.all()}
 
     def ensure_exists(self, *references: str) -> None:
+        """모든 참조가 캐시된 역 이름이나 코드인지 확인하고, 아니면 ``KorailInvalidInputError`` 를 발생시킵니다."""
         stations = self.all()
         names = {station.name for station in stations}
         codes = {station.code for station in stations}
@@ -137,10 +140,18 @@ class TrainResource:
             raise KorailInvalidInputError("continuation needs the depart_after of the first page")
         moment = _departure_moment(depart_after, allow_past=continuation is not None)
         query = self._query(
-            departure, arrival, moment, passengers, train_group_code, include_srt, include_nearby_stations
+            departure,
+            arrival,
+            moment,
+            passengers,
+            train_group_code,
+            include_srt=include_srt,
+            include_nearby_stations=include_nearby_stations,
         )
         result = self._client.search_trains(query, peak_season=peak_season, continuation=continuation)
-        return self._filter(result, include_no_seats, include_waiting_list)
+        return self._filter(
+            result, include_no_seats=include_no_seats, include_waiting_list=include_waiting_list
+        )
 
     def _query(
         self,
@@ -149,6 +160,7 @@ class TrainResource:
         moment: datetime,
         passengers: KorailPassengerCounts | None,
         train_group_code: str,
+        *,
         include_srt: bool,
         include_nearby_stations: bool,
     ) -> TrainSearchQuery:
@@ -177,7 +189,7 @@ class TrainResource:
 
     @staticmethod
     def _filter(
-        result: TrainSearchResult, include_no_seats: bool, include_waiting_list: bool
+        result: TrainSearchResult, *, include_no_seats: bool, include_waiting_list: bool
     ) -> TrainSearchResult:
         if include_no_seats:
             return result
@@ -213,7 +225,13 @@ class TrainResource:
             raise TypeError("include_no_seats and include_waiting_list must be bool")
         moment = _departure_moment(depart_after)
         query = self._query(
-            departure, arrival, moment, passengers, train_group_code, include_srt, include_nearby_stations
+            departure,
+            arrival,
+            moment,
+            passengers,
+            train_group_code,
+            include_srt=include_srt,
+            include_nearby_stations=include_nearby_stations,
         )
         seen: set[tuple[str | None, ...]] = set()
         cursors: set[TrainSearchContinuation] = set()
@@ -222,8 +240,8 @@ class TrainResource:
             try:
                 result = self._filter(
                     self._client.search_trains(query, peak_season=peak_season, continuation=continuation),
-                    include_no_seats,
-                    include_waiting_list,
+                    include_no_seats=include_no_seats,
+                    include_waiting_list=include_waiting_list,
                 )
             except KorailNoResultsError:
                 if page == 0:
@@ -352,7 +370,7 @@ class AirportBusResource:
             _required_text(departure, "departure").strip(),
             _required_text(arrival, "arrival").strip(),
         )
-        codes = []
+        codes: list[str] = []
         stops = self.stops()
         for reference in references:
             matches = [stop for stop in stops if reference in (stop.name, stop.code)]
@@ -576,7 +594,9 @@ class Korail:
         )
 
     def logout(self) -> None:
+        """``KorailClient.logout`` 을 호출합니다."""
         self.client.logout()
 
     def close(self) -> None:
+        """``KorailClient.close`` 를 호출합니다."""
         self.client.close()

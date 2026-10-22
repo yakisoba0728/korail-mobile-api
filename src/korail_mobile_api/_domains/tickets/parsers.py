@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from ..._core.parsing import (
+    _is_list,
+    _is_mapping,
     _nested_rows,
     _optional_mapping,
     _optional_read_rows,
@@ -138,9 +140,9 @@ def parse_customer_trip_info_response(raw: Mapping[str, object]) -> CustomerTrip
 def parse_trip_change_date_response(raw: Mapping[str, object]) -> TripChangeDateResponse:
     _validate_strict_read_envelope(raw)
     dates = raw.get("tripChgDates")
-    if not isinstance(dates, list):
+    if not _is_list(dates):
         raise KorailProtocolError("KORAIL tripChgDates must be a string list")
-    normalized_dates = []
+    normalized_dates: list[str] = []
     for value in dates:
         date = _strict_scalar_string({"tripChgDates": value}, "tripChgDates", "trip change dates")
         if date is None:
@@ -158,9 +160,9 @@ def parse_trip_change_date_response(raw: Mapping[str, object]) -> TripChangeDate
 @_preserve_read_raw
 def parse_ticket_list_response(raw: Mapping[str, object]) -> TicketListResponse:
     _validate_envelope(raw)
-    reservations = []
+    reservations: list[TicketListReservation] = []
     for reservation in _rows(raw, "pnr_list"):
-        tickets = []
+        tickets: list[TicketListTicket] = []
         for ticket in _rows(reservation, "ticket_list"):
             train_info = tuple(_rows(ticket, "jrn_info"))
             trains = wire_models(TicketListTrain, train_info, "ticket list train")
@@ -195,9 +197,9 @@ def parse_ticket_list_response(raw: Mapping[str, object]) -> TicketListResponse:
 def parse_ticket_receipt_response(raw: Mapping[str, object]) -> TicketReceiptResponse:
     _validate_envelope(raw)
     receipt_infos = raw.get("receipt_infos")
-    if not isinstance(receipt_infos, Mapping):
+    if not _is_mapping(receipt_infos):
         raise KorailProtocolError("KORAIL receipt_infos must be an object")
-    items = []
+    items: list[TicketReceipt] = []
     for item in _required_read_rows(receipt_infos, "receipt_info", "ticket receipt"):
         payments = wire_models(
             ReceiptPayment, _required_read_rows(item, "stl_info", "ticket receipt"), "receipt payment"
@@ -243,7 +245,7 @@ def parse_self_seat_change_info_response(raw: Mapping[str, object]) -> SelfSeatC
 def parse_original_ticket_inquiry_response(raw: Mapping[str, object]) -> OriginalTicketInquiryResponse:
     """원표→여정→좌석 행은 대리수령 내역의 여정·좌석과 다른 앱 타입이라 모델을 따로 둡니다."""
     _validate_strict_read_envelope(raw)
-    tickets = []
+    tickets: list[OriginalTicket] = []
     for ticket in _rows(raw, "orgTkList"):
         journeys = tuple(
             wire_model(

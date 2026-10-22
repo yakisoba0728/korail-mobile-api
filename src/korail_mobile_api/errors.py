@@ -7,12 +7,11 @@
 앱의 일반 결과 메시지 사전입니다. 사전에 있다는 이유만으로 실패나 재시도를 판정하지 않습니다."""
 
 import copyreg
-from collections.abc import Callable
 from functools import cache
 from html.parser import HTMLParser
 from importlib.resources import files
 from json import loads
-from typing import cast
+from typing import TypeGuard, cast
 
 _LANGUAGES = {"ko": "ko", "en": "en", "ja": "ja", "jp": "ja", "zh": "zh", "cn": "zh"}
 # P058's asset value is a browser redirect script, not a readable session-expiry explanation.
@@ -21,7 +20,7 @@ _SESSION_MESSAGES = {
     "ko": "로그인이 만료되었습니다. 다시 로그인해 주세요.",
     "en": "Your session has expired. Please log in again.",
     "ja": "ログインの有効期限が切れました。再度ログインしてください。",
-    "zh": "登录已过期，请重新登录。",
+    "zh": "登录已过期，请重新登录。",  # noqa: RUF001
 }
 
 
@@ -113,8 +112,13 @@ def resolve_error_message(
     return None
 
 
+def _is_json_object(value: object) -> TypeGuard[dict[str, object]]:
+    """JSON 객체(dict)인지 봅니다. 타입 검사기가 ``isinstance`` 만으로는 키·값 타입을 모르므로 둡니다."""
+    return isinstance(value, dict)
+
+
 # 타입 스텁에 없는 이름입니다. pickle 은 이 함수를 NEWOBJ 로 기록해 __init__ 없이 복원합니다.
-_NEWOBJ: Callable[..., object] = getattr(copyreg, "__newobj__")
+_NEWOBJ: object = getattr(copyreg, "__newobj__")  # noqa: B009
 
 
 class KorailApiError(Exception):
@@ -243,8 +247,8 @@ class KorailAuthContinuationRequired(KorailAuthError):
 
     def __init__(self, redirect_url: str, *, raw: object | None = None) -> None:
         self.redirect_url = redirect_url
-        code = raw.get("h_msg_cd") if isinstance(raw, dict) else None
-        message = raw.get("h_msg_txt") if isinstance(raw, dict) else None
+        code = raw.get("h_msg_cd") if _is_json_object(raw) else None
+        message = raw.get("h_msg_txt") if _is_json_object(raw) else None
         super().__init__(
             "KORAIL login requires a web step (dormant account or password change)",
             code=code if isinstance(code, str) else None,
@@ -401,19 +405,19 @@ OBSERVED_APP_UPDATE_REQUIRED_CODES = frozenset({"-8204"})
 SESSION_EXPIRED_CODE = "P058"
 
 _APP_ERROR_BY_CODE: dict[str, type[KorailAppError]] = {
-    **{code: KorailNoResultsError for code in NO_RESULT_CODES},
+    **dict.fromkeys(NO_RESULT_CODES, KorailNoResultsError),
     NO_DIRECT_TRAIN_CODE: KorailNoDirectTrainError,
-    **{code: KorailSoldOutError for code in SOLD_OUT_CODES},
-    **{code: KorailSeatUnavailableError for code in SEAT_UNAVAILABLE_CODES},
-    **{code: KorailReservationRefusedError for code in RESERVATION_REFUSED_CODES},
-    **{code: KorailInvalidRequestError for code in INVALID_REQUEST_CODES},
-    **{code: KorailNotEntitledError for code in NOT_ENTITLED_CODES},
-    **{code: KorailServiceUnavailableError for code in SERVICE_UNAVAILABLE_CODES},
-    **{code: KorailRateLimitError for code in RATE_LIMIT_CODES},
-    **{code: KorailProcessingError for code in PROCESSING_CODES},
-    **{code: KorailAlreadyProcessedError for code in ALREADY_PROCESSED_CODES},
+    **dict.fromkeys(SOLD_OUT_CODES, KorailSoldOutError),
+    **dict.fromkeys(SEAT_UNAVAILABLE_CODES, KorailSeatUnavailableError),
+    **dict.fromkeys(RESERVATION_REFUSED_CODES, KorailReservationRefusedError),
+    **dict.fromkeys(INVALID_REQUEST_CODES, KorailInvalidRequestError),
+    **dict.fromkeys(NOT_ENTITLED_CODES, KorailNotEntitledError),
+    **dict.fromkeys(SERVICE_UNAVAILABLE_CODES, KorailServiceUnavailableError),
+    **dict.fromkeys(RATE_LIMIT_CODES, KorailRateLimitError),
+    **dict.fromkeys(PROCESSING_CODES, KorailProcessingError),
+    **dict.fromkeys(ALREADY_PROCESSED_CODES, KorailAlreadyProcessedError),
     APP_UPDATE_REQUIRED_CODE: KorailAppUpdateRequiredError,
-    **{code: KorailAppUpdateRequiredError for code in OBSERVED_APP_UPDATE_REQUIRED_CODES},
+    **dict.fromkeys(OBSERVED_APP_UPDATE_REQUIRED_CODES, KorailAppUpdateRequiredError),
 }
 
 

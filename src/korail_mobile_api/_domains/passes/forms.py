@@ -16,6 +16,7 @@ from typing import Literal
 from ..._core.validation import (
     _ascii_digits,
     _int_text,
+    _is_sequence,
     _optional_text,
     _required_mutation_text,
     _required_text,
@@ -238,8 +239,8 @@ def _validate_commuter_passenger_request(
 ) -> tuple[str, ...]:
     _exact_server_pass_data(request.pass_data)
     # 0명 선택 거절은 빌더에 남습니다.
-    options = getattr(request.source, "passenger_options", None)
-    if not isinstance(options, Sequence) or isinstance(options, (str, bytes)):
+    options: object = getattr(request.source, "passenger_options", None)
+    if not _is_sequence(options):
         raise KorailInvalidInputError("source must carry passenger_options")
     validated_age_codes = [
         _required_text(getattr(option, "commuter_usage_age_code", None), "commuter_usage_age_code")

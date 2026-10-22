@@ -322,8 +322,7 @@ def encode_normal_be(data: str, table: str, *, i8: int = 161, i9: int = 30, i10:
         for i in range(i10 + 1):
             arr[i] = val % i9
             val //= i9
-        for i in range(i10, -1, -1):
-            out.append(table[arr[i]])
+        out.extend(table[arr[i]] for i in range(i10, -1, -1))
 
     if remain > 0:
         val = 0

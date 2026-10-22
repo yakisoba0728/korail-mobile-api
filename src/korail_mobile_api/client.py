@@ -7,12 +7,12 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from types import TracebackType
-from typing import Any, Literal, Self, TypeVar
+from typing import Literal, Self, TypeVar
 
 import httpx
 
 from ._core.cleanup import _close_connections
-from ._core.http import KorailHttpClient
+from ._core.http import Form, FormValue, KorailHttpClient
 from ._core.netfunnel import KorailNetFunnelClient, KorailNetFunnelGateName
 from ._core.parsing import _preserve_read_raw
 from ._core.session import KorailSessionClient
@@ -443,7 +443,7 @@ class KorailClient:
     def _post_read(
         self,
         route: str,
-        form: Mapping[str, Any] | Sequence[tuple[str, Any]] | None = None,
+        form: Form | None = None,
         *,
         parser: Callable[[Mapping[str, object]], T],
         include_common: bool = True,
@@ -470,7 +470,7 @@ class KorailClient:
     def _get_read(
         self,
         route: str,
-        params: Mapping[str, Any] | None = None,
+        params: Mapping[str, FormValue] | None = None,
         *,
         parser: Callable[[Mapping[str, object]], T],
         require_envelope: bool = True,

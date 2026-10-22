@@ -9,7 +9,10 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 
 from ..._core.parsing import (
+    _all_mappings,
     _inventory_ratio,
+    _is_list,
+    _is_mapping,
     _nested_rows,
     _optional_mapping,
     _optional_scalar_string,
@@ -90,17 +93,17 @@ _SCHEDULE_ONLY_KEYS = frozenset(
 def parse_train_rows(raw: Mapping[str, object]) -> list[TrainSummary]:
     """그 밖의 컨테이너·비객체 행은 오류입니다. 빈 목록만으로 직통 없음 예외를 만들지는 않습니다."""
     container = raw.get("trn_infos")
-    if isinstance(container, Mapping):
+    if _is_mapping(container):
         rows = container.get("trn_info", [])
-    elif isinstance(container, list):
+    elif _is_list(container):
         rows = container
     elif container is None:
         rows = []
     else:
         raise KorailProtocolError("KORAIL train response had invalid trn_infos")
-    if not isinstance(rows, list):
+    if not _is_list(rows):
         raise KorailProtocolError("KORAIL train response missing trn_infos.trn_info list")
-    if any(not isinstance(row, Mapping) for row in rows):
+    if not _all_mappings(rows):
         raise KorailProtocolError("KORAIL train response contained a non-object row")
     return [TrainSummary.from_raw(dict(row)) for row in rows]
 
@@ -121,7 +124,7 @@ def parse_train_schedule_response(raw: Mapping[str, object]) -> TrainScheduleRes
 def _present_rows(data: Mapping[str, object], key: str, context: str) -> Iterator[Mapping[str, object]]:
     """누락은 빈 목록이고, 명시적 null·목록이 아닌 값·객체가 아닌 행은 거절합니다."""
     rows = data.get(key, [])
-    if not isinstance(rows, list):
+    if not _is_list(rows):
         raise KorailProtocolError(f"KORAIL {context} field {key} must be a list")
     return (_row(row, f"{context} field {key} item") for row in rows)
 
@@ -145,7 +148,7 @@ def _inventory_count(data: Mapping[str, object], key: str) -> int | None:
 @_preserve_read_raw
 def parse_seat_car_list_response(raw: Mapping[str, object]) -> SeatCarListResponse:
     """호차 네 예외 필드는 누락 시 앱 기본값을 쓰며 나머지 선택값은 None입니다(checks/BEHAVIOR.md)."""
-    cars = []
+    cars: list[SeatCar] = []
     for row in _nested_rows(raw, "srcar_infos", "srcar_info"):
         car_no = _inventory_count(row, "h_srcar_no")
         # seatAttInfos 누락은 앱 기본값 빈 목록이고, 명시적 null 도 빈 목록으로 읽는 것은 라이브러리 정책입니다.

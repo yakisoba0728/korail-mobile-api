@@ -21,6 +21,7 @@ from ..errors import (
     KorailInvalidInputError,
     KorailRateLimitError,
     KorailServiceUnavailableError,
+    _is_json_object,
     classify_app_error,
 )
 from .crypto import transform_login_password
@@ -73,7 +74,7 @@ def infer_login_input_flag(login_id: str) -> KorailLoginInputFlag:
 def extract_login_crypto_payload(raw: Mapping[str, object]) -> dict[str, object]:
     """암호화 파라미터는 최상위가 아닌 app.login.cphd 객체에서만 읽습니다."""
     value = raw.get("app.login.cphd")
-    return value if isinstance(value, dict) else {}
+    return value if _is_json_object(value) else {}
 
 
 def _text(value: object) -> str:
