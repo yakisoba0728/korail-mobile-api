@@ -4,7 +4,7 @@
 
 """공개 진입점은 __all__이며 그 밖의 이름은 내부 구현입니다."""
 
-__version__ = "2.6.2"
+__version__ = "3.0.0.dev0"
 
 from ._core.dynapath import DynapathConfig, DynapathRequestContext, DynapathTokenProvider, DynapathTokenSettings
 from ._domains.airport_bus.forms import (
