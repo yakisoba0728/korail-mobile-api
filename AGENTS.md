@@ -11,7 +11,7 @@
 
 | Task | Read first |
 |---|---|
-| Usage, installation, released vs. development behavior | [README.md](README.md), [CHANGELOG.md](CHANGELOG.md) (top entry; `3.0.0` is unreleased), [docs/migration-3.0.md](docs/migration-3.0.md) |
+| Usage, installation, released vs. development behavior | [README.md](README.md), [CHANGELOG.md](CHANGELOG.md) (top entry), [docs/migration-3.0.md](docs/migration-3.0.md) |
 | Requests, parsing, raw data, errors, sessions, queues or money | [checks/BEHAVIOR.md](checks/BEHAVIOR.md), [checks/ACCEPTANCE.md](checks/ACCEPTANCE.md) |
 | App compatibility, fields, defaults or protected values | [docs/verification-7010.md](docs/verification-7010.md); distinguish static evidence, limited live observations and unknowns |
 | Public API or examples | [docs/api/](docs/api/), the matching [docs/guide/](docs/guide/) page, `tests/test_docs.py`, `tests/test_types.py` |

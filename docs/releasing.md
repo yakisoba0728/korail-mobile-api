@@ -1,7 +1,7 @@
 # 배포 절차
 
 패키지 버전은 `src/korail_mobile_api/__init__.py`의 `__version__` 한 곳에서 관리합니다.
-`pyproject.toml`과 배포 파일의 메타데이터는 이 값을 읽습니다. 아래 명령은 마지막 배포인 **2.6.2** 기준입니다.
+`pyproject.toml`과 배포 파일의 메타데이터는 이 값을 읽습니다. 아래 명령은 **3.0.0** 배포 기준입니다.
 다음 배포에서는 버전, 변경 이력, 태그와 파일 경로를 함께 바꾸세요.
 
 ## 문서와 버전
@@ -57,14 +57,14 @@ Python 3.14/current 조합 한 곳에서 빌드·`twine check --strict`·설치 
 `python -m build`는 sdist를 만든 뒤 그 sdist에서 wheel을 빌드합니다.
 
 ```sh
-.venv/bin/python -m build --outdir dist/2.6.2
-.venv/bin/python -m twine check --strict dist/2.6.2/*.whl dist/2.6.2/*.tar.gz
+.venv/bin/python -m build --outdir dist/3.0.0
+.venv/bin/python -m twine check --strict dist/3.0.0/*.whl dist/3.0.0/*.tar.gz
 ```
 
 배포 파일은 다음 두 개입니다.
 
-- `dist/2.6.2/korail_mobile_api-2.6.2-py3-none-any.whl`
-- `dist/2.6.2/korail_mobile_api-2.6.2.tar.gz`
+- `dist/3.0.0/korail_mobile_api-3.0.0-py3-none-any.whl`
+- `dist/3.0.0/korail_mobile_api-3.0.0.tar.gz`
 
 wheel에는 런타임 소스·`py.typed`·패키지 메타데이터와 라이선스가 들어갑니다.
 sdist에는 README·변경 이력·검사·테스트도 포함됩니다. 문서 사이트는 별도 배포합니다.
@@ -77,9 +77,9 @@ sdist에는 README·변경 이력·검사·테스트도 포함됩니다. 문서 
 ```sh
 git status --short
 git log -1 --oneline
-git tag -a v2.6.2 -m 'Release 2.6.2'
-git push origin v2.6.2
-gh workflow run publish.yml --ref v2.6.2
+git tag -a v3.0.0 -m 'Release 3.0.0'
+git push origin v3.0.0
+gh workflow run publish.yml --ref v3.0.0
 ```
 
 이 마지막 명령은 실제 PyPI 업로드를 시작합니다. 워크플로는 태그 이름과 패키지 버전 일치를 검사하고,
@@ -99,14 +99,14 @@ Actions의 **Publish to PyPI** 실행 결과와 PyPI에 표시되는 버전을 �
 
 ```sh
 git fetch origin --tags
-test "$(git rev-parse origin/main)" = "$(git rev-parse 'v2.6.2^{commit}')" &&
+test "$(git rev-parse origin/main)" = "$(git rev-parse 'v3.0.0^{commit}')" &&
     gh workflow run docs-deploy.yml --ref main
 ```
 
 **Docs site** 워크플로가 성공했는지 확인하고, 문서 사이트의 변경 이력과
 [기존 예약 가이드](guide/payments.md#existing-reservation)가 해당 버전 내용인지 확인합니다.
 워크플로 실행의 커밋도 릴리스 태그와 일치해야 합니다. `main`이 앞서간 경우에는 위 명령을 그대로 진행하지 말고 배포할 문서 버전을 먼저 확인하세요.
-GitHub Release를 만들 때는 `CHANGELOG.md`의 2.6.2 항목을 릴리스 설명으로 사용하고 같은 태그를 지정하세요.
+GitHub Release를 만들 때는 `CHANGELOG.md`의 3.0.0 항목을 릴리스 설명으로 사용하고 같은 태그를 지정하세요.
 
-마지막으로 새 가상환경에서 `pip install korail-mobile-api==2.6.2`을 실행해
-`korail_mobile_api.__version__`과 설치된 패키지 메타데이터가 `2.6.2`인지 확인합니다.
+마지막으로 새 가상환경에서 `pip install korail-mobile-api==3.0.0`을 실행해
+`korail_mobile_api.__version__`과 설치된 패키지 메타데이터가 `3.0.0`인지 확인합니다.
