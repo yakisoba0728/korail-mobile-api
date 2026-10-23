@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from datetime import datetime, timezone
 
 import httpx
@@ -12,6 +13,7 @@ from korail_mobile_api import (
     DynapathConfig,
     DynapathRequestContext,
     Korail,
+    KorailClient,
     KorailConfig,
     KorailDeviceProfile,
     KorailInvalidInputError,
@@ -88,6 +90,44 @@ def test_past_date_and_unknown_station_do_not_send_search() -> None:
         with pytest.raises(KorailInvalidInputError, match="역을 찾을 수 없습니다"):
             korail.trains.search("서울", "대전", depart_after=datetime(2099, 1, 1))
     assert len(calls) == 1 and calls[0].url.path.endswith("common.stationdata")
+
+
+@pytest.mark.parametrize("value", [None, 123, b"station", "", " "])
+@pytest.mark.parametrize("operation", ["find", "ensure", "departure", "arrival", "iterator"])
+def test_station_text_is_validated_before_cache_lookup(operation, value) -> None:
+    calls: list[httpx.Request] = []
+    with Korail(_config(), transport=httpx.MockTransport(_station_and_search_handler(calls))) as korail:
+        if operation == "find" and value in ("", " "):
+            assert korail.stations.find(value) is None
+        else:
+            with pytest.raises(KorailInvalidInputError) as raised:
+                if operation == "find":
+                    korail.stations.find(value)
+                elif operation == "ensure":
+                    korail.stations.ensure_exists("서울", value)
+                elif operation == "iterator":
+                    list(
+                        korail.trains.iter_search("서울", value, depart_after=datetime(2099, 1, 2), max_pages=1)
+                    )
+                else:
+                    korail.trains.search(
+                        value if operation == "departure" else "서울",
+                        value if operation == "arrival" else "부산",
+                        depart_after=datetime(2099, 1, 2),
+                    )
+            assert raised.value.request_sent is None
+    assert calls == []
+
+
+def test_station_lookup_keeps_trimmed_names_codes_and_suggestions() -> None:
+    calls: list[httpx.Request] = []
+    with Korail(_config(), transport=httpx.MockTransport(_station_and_search_handler(calls))) as korail:
+        assert korail.stations.find("") is None and calls == []
+        korail.stations.ensure_exists(" 서울 ", " 0020 ")
+        assert korail.stations.find(" 서울 ") is korail.stations.find(" 0001 ")
+        with pytest.raises(KorailInvalidInputError, match="가까운 역: 서울"):
+            korail.stations.ensure_exists("서울역")
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize(
@@ -179,6 +219,37 @@ def test_ticket_and_login_facades_forward_the_client_options(monkeypatch: pytest
             {"input_flag": "4", "check_valid_pw": "N", "cust_id": None, "etr_path": ""},
         ),
     ]
+
+
+def test_logged_in_explicitly_mirrors_and_forwards_login_options(monkeypatch, f8_logged_in_session) -> None:
+    calls = []
+
+    def login(self, *args, **kwargs):
+        calls.append((args, kwargs))
+        return f8_logged_in_session
+
+    monkeypatch.setattr(KorailClient, "login", login)
+    with Korail.logged_in(
+        "SYNTHETIC-MEMBER",
+        "SYNTHETIC-PASSWORD",
+        config=_config(),
+        validate_stations=False,
+        input_flag="4",
+        check_valid_pw="N",
+        cust_id=None,
+        etr_path="SYNTHETIC-PATH",
+    ):
+        assert calls == [
+            (
+                ("SYNTHETIC-MEMBER", "SYNTHETIC-PASSWORD"),
+                {"input_flag": "4", "check_valid_pw": "N", "cust_id": None, "etr_path": "SYNTHETIC-PATH"},
+            )
+        ]
+    login_parameters = inspect.signature(Korail.login).parameters
+    factory_parameters = inspect.signature(Korail.logged_in).parameters
+    for name in ("input_flag", "check_valid_pw", "cust_id", "etr_path"):
+        assert factory_parameters[name] == login_parameters[name]
+    assert all(parameter.kind != inspect.Parameter.VAR_KEYWORD for parameter in factory_parameters.values())
 
 
 def test_profile_keeps_token_queue_and_device_fields_consistent() -> None:

@@ -213,14 +213,14 @@ class DiscountCouponListResponse(BaseKorailResponse):
 class ReceiptPayment:
     """영수증의 결제수단 한 행을 담습니다."""
 
-    payment_method: str = wire("h_stl_way_nm", required_str)
-    approval_date: str = wire("h_apv_dt", required_str)
-    installment_months: int = wire("h_ismt_mnth_num", required_int)
-    amount: int = wire("h_stl_amt", required_int)
-    account_no: str = wire("h_acnt_no", required_str)
-    approval_no: str = wire("h_apv_no", required_str)
-    settlement_card_no: str = wire("h_stl_crd_no", required_str)
-    point_no: str = wire("h_xpot_no", required_str)
+    payment_method: str = field(metadata={"wire": "h_stl_way_nm", "read": required_str})
+    approval_date: str = field(metadata={"wire": "h_apv_dt", "read": required_str})
+    installment_months: int = field(metadata={"wire": "h_ismt_mnth_num", "read": required_int})
+    amount: int = field(metadata={"wire": "h_stl_amt", "read": required_int})
+    account_no: str = field(metadata={"wire": "h_acnt_no", "read": required_str})
+    approval_no: str = field(metadata={"wire": "h_apv_no", "read": required_str})
+    settlement_card_no: str = field(metadata={"wire": "h_stl_crd_no", "read": required_str})
+    point_no: str = field(metadata={"wire": "h_xpot_no", "read": required_str})
     raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
@@ -231,11 +231,15 @@ class ReceiptCashPayment:
     인증 도메인 인식번호와 현금영수증 승인번호도 가리지 않고 서버가 보낸 값 그대로 담습니다."""
 
     #: 승인 방법 이름(``h_apv_mtd_nm``)입니다.
-    approval_method_name: str = wire("h_apv_mtd_nm", required_str)
-    authentication_domain_recognition_no: str = wire("h_athn_dmn_rcgn_no", required_str)
-    cash_receipt_approval_no: str = wire("h_cash_rcet_apv_no", required_str)
-    cash_receipt_transaction_division_code: str = wire("h_cash_rcet_txn_dv_cd", required_str)
-    total_approved_amount: int = wire("h_tot_apv_amt", required_int)
+    approval_method_name: str = field(metadata={"wire": "h_apv_mtd_nm", "read": required_str})
+    authentication_domain_recognition_no: str = field(
+        metadata={"wire": "h_athn_dmn_rcgn_no", "read": required_str}
+    )
+    cash_receipt_approval_no: str = field(metadata={"wire": "h_cash_rcet_apv_no", "read": required_str})
+    cash_receipt_transaction_division_code: str = field(
+        metadata={"wire": "h_cash_rcet_txn_dv_cd", "read": required_str}
+    )
+    total_approved_amount: int = field(metadata={"wire": "h_tot_apv_amt", "read": required_int})
     raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
@@ -243,33 +247,33 @@ class ReceiptCashPayment:
 class TicketReceipt:
     """승차권 영수증의 이용 내역과 결제 정보를 담습니다."""
 
-    travel_date: str = wire("h_abrd_dt", required_str)
-    departure_station_name: str = wire("h_dpt_rs_stn_nm", required_str)
-    departure_time: str = wire("h_dpt_tm", required_str)
-    arrival_station_name: str = wire("h_arv_rs_stn_nm", required_str)
-    arrival_time: str = wire("h_arv_tm", required_str)
-    commuter_kind_code: str = wire("h_cmtr_knd_cd", required_str)
-    journey_type_code: str = wire("h_jrny_tp_cd", required_str)
-    printed_discount_name: str = wire("h_prt_disc_knd_nm", required_str)
-    printed_discount_kind_code: str = wire("h_prt_disc_knd_cd", required_str)
-    print_type: str = wire("h_prt_type", required_str)
-    room_class_name: str = wire("h_psrm_cl_nm", required_str)
-    ticket_kind_code: str = wire("h_tk_knd_cd", required_str)
-    ticket_kind_name: str = wire("h_tk_knd_nm", required_str)
-    ticket_status_code: str = wire("h_tk_stt_cd", required_str)
-    train_class_code: str = wire("h_trn_clsf_cd", required_str)
-    train_class_name: str = wire("h_trn_clsf_nm", required_str)
-    train_group_code: str = wire("h_trn_gp_cd", required_str)
-    train_no: str = wire("h_trn_no", required_str)
+    travel_date: str = field(metadata={"wire": "h_abrd_dt", "read": required_str})
+    departure_station_name: str = field(metadata={"wire": "h_dpt_rs_stn_nm", "read": required_str})
+    departure_time: str = field(metadata={"wire": "h_dpt_tm", "read": required_str})
+    arrival_station_name: str = field(metadata={"wire": "h_arv_rs_stn_nm", "read": required_str})
+    arrival_time: str = field(metadata={"wire": "h_arv_tm", "read": required_str})
+    commuter_kind_code: str = field(metadata={"wire": "h_cmtr_knd_cd", "read": required_str})
+    journey_type_code: str = field(metadata={"wire": "h_jrny_tp_cd", "read": required_str})
+    printed_discount_name: str = field(metadata={"wire": "h_prt_disc_knd_nm", "read": required_str})
+    printed_discount_kind_code: str = field(metadata={"wire": "h_prt_disc_knd_cd", "read": required_str})
+    print_type: str = field(metadata={"wire": "h_prt_type", "read": required_str})
+    room_class_name: str = field(metadata={"wire": "h_psrm_cl_nm", "read": required_str})
+    ticket_kind_code: str = field(metadata={"wire": "h_tk_knd_cd", "read": required_str})
+    ticket_kind_name: str = field(metadata={"wire": "h_tk_knd_nm", "read": required_str})
+    ticket_status_code: str = field(metadata={"wire": "h_tk_stt_cd", "read": required_str})
+    train_class_code: str = field(metadata={"wire": "h_trn_clsf_cd", "read": required_str})
+    train_class_name: str = field(metadata={"wire": "h_trn_clsf_nm", "read": required_str})
+    train_group_code: str = field(metadata={"wire": "h_trn_gp_cd", "read": required_str})
+    train_no: str = field(metadata={"wire": "h_trn_no", "read": required_str})
     passenger_counts: tuple[int, int, int]
-    received_amount: int = wire("h_rcvd_amt", required_int)
-    card_refund_amount: int = wire("h_crd_ret_amt", required_int)
-    refund_fee: int = wire("h_ret_fee", required_int)
-    refund_received_amount: int = wire("h_ret_rcvd_amt", required_int)
-    point_refund_amount: int = wire("h_xpoint_ret_amt", required_int)
+    received_amount: int = field(metadata={"wire": "h_rcvd_amt", "read": required_int})
+    card_refund_amount: int = field(metadata={"wire": "h_crd_ret_amt", "read": required_int})
+    refund_fee: int = field(metadata={"wire": "h_ret_fee", "read": required_int})
+    refund_received_amount: int = field(metadata={"wire": "h_ret_rcvd_amt", "read": required_int})
+    point_refund_amount: int = field(metadata={"wire": "h_xpoint_ret_amt", "read": required_int})
     payments: tuple[ReceiptPayment, ...] = ()
     cash_receipts: tuple[ReceiptCashPayment, ...] = ()
-    member_card_no: str = wire("h_stl_mb_crd_no", required_str)
+    member_card_no: str = field(metadata={"wire": "h_stl_mb_crd_no", "read": required_str})
     raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
@@ -577,13 +581,13 @@ class DelayCertificateRow:
     ``delay_arrival_flag``가 특정 값인 행만 보여 주지만, 라이브러리는 거르지 않고 모든 행을 돌려줍니다. 앱이 고르는 값은 앱 내부
     값이 공개돼 있지 않아 확인하지 못했습니다."""
 
-    run_day: str = wire("runDay", required_str)
-    train_no: str = wire("trnNo", required_str)
-    departure_station_code: str = wire("dptRsStnCd", required_str)
-    arrival_station_code: str = wire("arvRsStnCd", required_str)
-    arrival_station_name: str = wire("arvRsStnNm", required_str)
-    delay_arrival_flag: str = wire("dlayArvFlg", required_str)
-    delay_minutes: str = wire("trnDlayTm", required_str)
+    run_day: str = field(metadata={"wire": "runDay", "read": required_str})
+    train_no: str = field(metadata={"wire": "trnNo", "read": required_str})
+    departure_station_code: str = field(metadata={"wire": "dptRsStnCd", "read": required_str})
+    arrival_station_code: str = field(metadata={"wire": "arvRsStnCd", "read": required_str})
+    arrival_station_name: str = field(metadata={"wire": "arvRsStnNm", "read": required_str})
+    delay_arrival_flag: str = field(metadata={"wire": "dlayArvFlg", "read": required_str})
+    delay_minutes: str = field(metadata={"wire": "trnDlayTm", "read": required_str})
     # runDt 는 마스크상 필수이지만 실서버 응답에는 없었습니다.
     #: 운행일(``runDt``)입니다. 응답에 없으면 ``None``이며, 운행일은 ``run_day``에도 있습니다(예: 요일이 붙은 날짜).
     run_date: str | None = wire("runDt")

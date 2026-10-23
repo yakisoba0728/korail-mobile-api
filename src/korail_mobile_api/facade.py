@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from difflib import get_close_matches
@@ -35,8 +35,13 @@ from ._domains.payments.models import (
     RefundTicketResponse,
     ReservationPaymentResponse,
 )
-from ._domains.reservations.forms import KorailPassengerCounts, TicketReservationDetailRequest
+from ._domains.reservations.forms import (
+    KorailPassengerCounts,
+    KorailSeatAssignment,
+    TicketReservationDetailRequest,
+)
 from ._domains.reservations.models import (
+    HoldReference,
     ReservationHistoryResponse,
     ReservationHoldResponse,
     TicketReservationDetailResponse,
@@ -55,7 +60,7 @@ from ._domains.trains.models import (
     TrainSummary,
     _train_datetime,
 )
-from .client import KorailClient
+from .client import KorailClient, _parse_received_response
 from .config import KorailConfig
 from .constants import KorailLoginInputFlag, KorailReservationJobType, KorailReserveOption, KorailSeatClass
 from .errors import KorailInvalidInputError, KorailNoResultsError
@@ -86,7 +91,7 @@ class StationResource:
 
     def find(self, reference: str) -> KorailStation | None:
         """이름이나 코드가 같은 역을 반환하고, 없으면 ``None`` 입니다."""
-        value = reference.strip()
+        value = _optional_text(reference, "reference").strip()
         if not value:
             return None
         return next((station for station in self.all() if value in (station.name, station.code)), None)
@@ -97,6 +102,7 @@ class StationResource:
 
     def ensure_exists(self, *references: str) -> None:
         """모든 참조가 캐시된 역 이름이나 코드인지 확인하고, 아니면 ``KorailInvalidInputError`` 를 발생시킵니다."""
+        references = tuple(_required_text(reference, "reference") for reference in references)
         stations = self.all()
         names = {station.name for station in stations}
         codes = {station.code for station in stations}
@@ -350,7 +356,7 @@ class AirportBusResource:
         """정류장 이름·코드 목록을 한 번 조회해 캐시합니다. 잘못된 응답은 캐시하지 않습니다."""
         if self._stops is None or refresh:
             response = self._client.get_common_codes(["app.limousine.stationNm", "app.limousine.stationCd"])
-            self._stops = parse_limousine_stops(response.raw)
+            self._stops = _parse_received_response(response.raw, parse_limousine_stops)
         return self._stops
 
     def search(
@@ -419,6 +425,8 @@ class ReservationResource:
         seat_class: KorailSeatClass | None = None,
         job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
         option: KorailReserveOption | None = None,
+        seats: Sequence[KorailSeatAssignment] | None = None,
+        seat_attribute_code: str | None = None,
     ) -> ReservationHoldResponse:
         """실제 미결제 홀드를 만듭니다(기본 일반실, ``option``은 조회 결과로 객실 선택).
 
@@ -451,7 +459,14 @@ class ReservationResource:
             if seat_class is None:
                 raise KorailInvalidInputError("KORAIL reservation option requires an evidenced available seat")
         selected = KorailSeatClass.GENERAL if seat_class is None else seat_class
-        return self._client.reserve(train, passengers=passengers, seat_class=selected, job_type=job_type)
+        return self._client.reserve(
+            train,
+            passengers=passengers,
+            seat_class=selected,
+            job_type=job_type,
+            seats=seats,
+            seat_attribute_code=seat_attribute_code,
+        )
 
     def get(self, pnr_no: str) -> ReservationHoldResponse:
         """PNR로 기존 예약을 한 번 조회해 결제용 홀드를 반환합니다."""
@@ -468,9 +483,13 @@ class ReservationResource:
         """기존 예약 이력 응답을 보존합니다."""
         return self._client.list_reservations()
 
-    def cancel(self, hold: ReservationHoldResponse) -> BaseKorailResponse:
-        """미결제 홀드의 가능 여부를 확인한 뒤 취소합니다."""
-        return self._client.cancel_unpaid_hold(hold)
+    def cancel(
+        self, hold: ReservationHoldResponse | HoldReference, *, check_first: bool = True
+    ) -> BaseKorailResponse:
+        """미결제 홀드나 복구 참조를 취소하며 기본적으로 가능 여부를 먼저 확인합니다.
+
+        서버 상태를 바꾸므로 실패해도 다시 보내지 말고 예약 내역을 확인하십시오."""
+        return self._client.cancel_unpaid_hold(hold, check_first=check_first)
 
     def pay(self, hold: ReservationHoldResponse, card: CardPayment) -> ReservationPaymentResponse:
         """카드를 실제 청구합니다. 서버 거절은 결과의 ``str_result``로 확인하세요."""
@@ -552,11 +571,22 @@ class Korail:
         config: KorailConfig | None = None,
         transport: httpx.BaseTransport | None = None,
         validate_stations: bool = True,
+        input_flag: KorailLoginInputFlag | None = None,
+        check_valid_pw: Literal["Y", "N"] = "Y",
+        cust_id: str | None = "",
+        etr_path: str | None = "",
     ) -> Korail:
         """로그인 실패 시 연결을 닫고 원래 예외를 다시 발생시킵니다."""
         korail = cls(config, transport=transport, validate_stations=validate_stations)
         try:
-            korail.login(member_no, password)
+            korail.login(
+                member_no,
+                password,
+                input_flag=input_flag,
+                check_valid_pw=check_valid_pw,
+                cust_id=cust_id,
+                etr_path=etr_path,
+            )
         except BaseException as error:
             _close_connections(korail.close, primary=error)
             raise

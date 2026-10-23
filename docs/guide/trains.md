@@ -86,6 +86,7 @@ finally:
 | `connection_train_group_code` | `None` | 환승 열차군 코드입니다. `None`이 아니면 요청에 싣습니다. |
 
 `connection_station_codes`와 `connection_train_group_code`는 값을 넣었을 때만 보내며, 서버가 이 값을 어떻게 쓰는지는 확인하지 못했습니다.
+`connection_station_codes`는 문자열·bytes가 아닌 `Sequence`이며 튜플을 권장하고 정상 목록의 순서·중복도 유지합니다. generator·dict는 요청 전에 거절합니다. `include_srt`·`include_nearby_stations`와 호출 옵션 `use_special_schedule`·`peak_season`은 실제 `bool`만 받습니다. 문자열 `"False"`나 정수 1은 truthiness로 바꾸지 않습니다. 저수준 인원 범위·합계를 새로 제한하지는 않습니다.
 
 ## 조회 결과 {#results}
 
@@ -137,7 +138,7 @@ finally:
 실서버의 직통 조회에서는 다음 페이지 표시(`result.metadata.next_page_flag`가 `"Y"`)가 있어도 필요한 값이 오지 않아 `next_page()`가 `None`인 경우가 있었습니다.
 이때는 `result.next_query_from_last_departure(query)`로 마지막 열차의 출발일·출발 시각에서 시작하는 새 조건을 만들어 다시 조회할 수 있습니다. 이 메서드는 요청을 보내지 않고 조건만 만듭니다.
 열차가 없거나 마지막 열차의 출발일·출발 시각이 없으면 `None`을 반환합니다.
-마지막 열차가 다시 포함될 수 있으므로 열차 번호로 중복을 거르세요.
+마지막 열차가 다시 포함될 수 있습니다. 직접 중복을 거를 때는 열차 번호뿐 아니라 출발일·시각, 출발·도착역, 운행일, 열차군·종류를 함께 비교하세요. 같은 번호라도 다른 날짜·구간의 행은 합치지 않습니다. 이 복합 식별자와 조회 상한을 이미 적용하는 [`korail.trains.iter_search`](convenience.md#필요한-만큼-이어-읽기)를 사용할 수 있습니다.
 마지막 열차의 출발일·출발 시각이 조건의 값과 같으면 새 조건이 이전 조건과 같아집니다. 새 조건이 이전 조건과 같거나 새 열차가 없으면 조회를 멈추세요.
 
 ## 환승 여정 조회 {#transfer}

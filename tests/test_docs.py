@@ -13,8 +13,10 @@ import datetime as datetime_module
 import inspect
 import pathlib
 import re
+import runpy
 import textwrap
-from contextlib import closing
+import xml.etree.ElementTree as ET
+from contextlib import closing, nullcontext
 from datetime import datetime, timezone
 from functools import cache
 from types import SimpleNamespace
@@ -117,11 +119,17 @@ def test_examples_compile_and_use_public_names_and_arguments() -> None:
             "korail.airport_bus": korail_mobile_api.AirportBusResource,
         }
     )
-    for path, block in _python_blocks():
+    demo = DOCS / "assets" / "demo.svg"
+    demo_lines = ["".join(node.itertext()) for node in ET.parse(demo).iter("{http://www.w3.org/2000/svg}text")]
+    demo_block = "\n".join(
+        line[4:].replace("\N{NO-BREAK SPACE}", " ") for line in demo_lines if line.startswith((">>> ", "... "))
+    )
+    for path, block in [*_python_blocks(), (demo, demo_block)]:
         if _is_signature(block):
             continue
         where = path.relative_to(ROOT)
         tree = ast.parse(block, filename=str(where))
+        compile(tree, str(where), "exec")
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module == "korail_mobile_api":
                 missing = [alias.name for alias in node.names if alias.name not in exported]
@@ -327,3 +335,186 @@ def test_documented_reservation_keeps_search_passengers(
     assert reservation["txtTotPsgCnt"] == ["3"]
     assert reservation["txtCompaCnt1"] == ["2"] and reservation["txtPsgTpCd1"] == ["1"]
     assert reservation["txtCompaCnt2"] == ["1"] and reservation["txtPsgTpCd2"] == ["3"]
+
+
+def test_every_public_export_has_a_root_reference() -> None:
+    directives = {
+        name
+        for path in DOCS.rglob("*.md")
+        for name in re.findall(r"^::: korail_mobile_api\.(\w+)\s*$", path.read_text(encoding="utf-8"), re.M)
+    }
+    assert directives == set(korail_mobile_api.__all__)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "``next_page()``로 이어서 조회하세요. ``repr()``은 원문을 숨깁니다.",
+        "예제::\n\n    rows = ()\n    if rows:\n        print(rows)\n\n\n다음 문단입니다.",
+    ],
+)
+def test_griffe_cleanup_preserves_calls_tuples_and_indentation(text: str) -> None:
+    pytest.importorskip("griffe")
+    clean = runpy.run_path(str(DOCS / "griffe_docs.py"))["clean"]
+    assert clean(text) == text
+
+
+def test_griffe_extension_keeps_wire_defaults_and_field_comments(tmp_path: pathlib.Path) -> None:
+    griffe = pytest.importorskip("griffe")
+    extension = runpy.run_path(str(DOCS / "griffe_docs.py"))["DocsExtension"]
+    source = tmp_path / "doc_fields.py"
+    source.write_text(
+        "from korail_mobile_api._core.parsing import wire\n"
+        "#: 첫 줄입니다.\n#: 두 번째 줄입니다.\n"
+        'optional: str | None = wire("optional")\n'
+        'required: str = wire("required", str)\n'
+        'empty: str = wire("empty", str, default="")\n'
+        'nullable: str | None = wire("nullable", str, default=None)\n',
+        encoding="utf-8",
+    )
+    module = griffe.load(
+        "doc_fields",
+        search_paths=[tmp_path],
+        extensions=griffe.load_extensions(extension),
+        allow_inspection=False,
+    )
+    assert str(module["optional"].value) == "None"
+    assert module["required"].value is None
+    assert str(module["empty"].value) == "''"
+    assert str(module["nullable"].value) == "None"
+    assert module["optional"].docstring.value == "첫 줄입니다. 두 번째 줄입니다."
+
+
+@pytest.mark.parametrize("invalid_input", [False, True], ids=["null-response", "preflight-rejection"])
+def test_documented_recovery_checks_state_after_a_null_response(
+    invalid_input: bool, scripted_client_factory, f8_logged_in_session, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = DOCS / "guide" / "errors.md"
+    (block,) = [block for source, block in _python_blocks() if source == path and "def held_pnrs():" in block]
+    row = {
+        "h_trn_no": "90001",
+        "h_trn_gp_cd": "101",
+        "h_trn_clsf_cd": "00",
+        "h_run_dt": "20990102",
+        "h_dpt_dt": "20990102",
+        "h_dpt_tm": "100000",
+        "h_dpt_rs_stn_cd": "9901",
+        "h_arv_rs_stn_cd": "9903",
+        "h_dpt_stn_cons_ordr": "001",
+        "h_arv_stn_cons_ordr": "002",
+        "h_dpt_stn_run_ordr": "001",
+        "h_arv_stn_run_ordr": "002",
+        "h_gen_rsv_cd": "11",
+    }
+    if invalid_input:
+        row["h_run_dt"] = "invalid"
+    replies = [
+        {"strResult": "SUCC", "trn_infos": {"trn_info": [row]}},
+        {"strResult": "FAIL", "h_msg_cd": "P100"},
+    ]
+    if not invalid_input:
+        replies += [None, {"strResult": "FAIL", "h_msg_cd": "P100"}]
+    client, requests, pending = scripted_client_factory(
+        replies,
+        config=synthetic_config(netfunnel_enabled=False, disable_dynapath=True),
+        session=f8_logged_in_session,
+    )
+    query = korail_mobile_api.TrainSearchQuery(
+        departure_station="서울", arrival_station="부산", departure_date="20990102"
+    )
+    with client, pytest.raises(korail_mobile_api.KorailProtocolError) as caught:
+        exec(compile(block, str(path), "exec"), {"client": client, "query": query})
+    error = caught.value
+    assert error.raw is None
+    assert error.request_sent is (None if invalid_input else True)
+    assert isinstance(error, korail_mobile_api.KorailInvalidInputError) is invalid_input
+    expected = ["seatMovie.ScheduleView", "reservation.ReservationView"]
+    if not invalid_input:
+        expected += ["certification.TicketReservation", "reservation.ReservationView"]
+    assert [request.url.path.rsplit("mobile.", 1)[-1] for request in requests] == expected
+    assert pending == []
+    assert ("새 홀드가 보이지 않습니다" in capsys.readouterr().out) is not invalid_input
+
+
+@pytest.mark.parametrize("cart_fails", [False, True], ids=["cart-success", "cart-timeout"])
+def test_documented_recalculation_keeps_the_latest_hold_if_optional_cart_fails(
+    cart_fails: bool, scripted_client_factory, f8_logged_in_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = DOCS / "guide" / "payments.md"
+    (block,) = [
+        block
+        for source, block in _python_blocks()
+        if source == path and "recalculated = client.recalculate_price(request)" in block
+    ]
+    hold = korail_mobile_api.ReservationHoldResponse(
+        str_result="SUCC",
+        pnr_no="SYNTHETIC-PNR",
+        received_amount="1200",
+        journeys=(
+            korail_mobile_api.ReservationJourney(
+                raw={
+                    "seat_infos": {
+                        "seat_info": [{"h_psg_tp_cd": "1", "h_psrm_cl_cd": "1", "h_dcnt_knd_cd1": "000"}]
+                    }
+                }
+            ),
+        ),
+    )
+    client, requests, pending = scripted_client_factory(
+        [
+            {"strResult": "SUCC", "h_pnr_no": "SYNTHETIC-PNR", "h_tot_rcvd_amt": "1000"},
+            httpx.ReadTimeout("synthetic cart timeout") if cart_fails else {"strResult": "SUCC"},
+        ],
+        config=synthetic_config(netfunnel_enabled=False, disable_dynapath=True),
+        session=f8_logged_in_session,
+    )
+    monkeypatch.setattr("builtins.input", lambda _: "000")
+    namespace = {"client": client, "hold": hold}
+    expectation = pytest.raises(korail_mobile_api.KorailTransportError) if cart_fails else nullcontext()
+    with client, expectation:
+        exec(compile(block, str(path), "exec"), namespace)
+    assert namespace["hold"] is namespace["recalculated"]
+    assert namespace["hold"].received_amount == "1000"
+    assert len(requests) == 2 and pending == []
+    assert wire_form(requests[1])["hidPnrNo"] == ["SYNTHETIC-PNR"]
+    assert all("ReservationPayment" not in request.url.path for request in requests)
+    with pytest.raises(korail_mobile_api.KorailProtocolError, match="closed"):
+        client.get_service_status()
+
+
+@pytest.mark.parametrize("method", ["pay_with_card", "get_guide_seat_condition", "list_discount_coupons"])
+def test_documented_update_code_keeps_each_methods_existing_failure_policy(
+    method: str, scripted_client_factory, f8_logged_in_session
+) -> None:
+    raw = {"strResult": "FAIL", "h_msg_cd": "-8204", "h_msg_txt": "synthetic update required"}
+    client, requests, pending = scripted_client_factory(
+        [raw],
+        config=synthetic_config(netfunnel_enabled=False, disable_dynapath=True),
+        session=f8_logged_in_session,
+    )
+    if method == "pay_with_card":
+        args = (
+            korail_mobile_api.ReservationHoldResponse(
+                str_result="SUCC",
+                pnr_no="SYNTHETIC-PNR",
+                window_no="SYNTHETIC-WINDOW",
+                journey_count="1",
+                received_amount="1000",
+            ),
+            korail_mobile_api.CardPayment(
+                card_number="0000000000000000", card_password="00", card_expire="9912", birthday="000000"
+            ),
+        )
+    elif method == "get_guide_seat_condition":
+        args = (korail_mobile_api.GuideSeatConditionRequest(seat_attribute_code="SYNTHETIC"),)
+    else:
+        args = ()
+    with client:
+        if method == "list_discount_coupons":
+            with pytest.raises(korail_mobile_api.KorailAppUpdateRequiredError) as caught:
+                getattr(client, method)(*args)
+            assert caught.value.raw == raw and caught.value.message == raw["h_msg_txt"]
+        else:
+            result = getattr(client, method)(*args)
+            assert result.str_result == "FAIL" and result.h_msg_cd == "-8204" and result.raw == raw
+    assert len(requests) == 1 and pending == []

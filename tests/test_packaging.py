@@ -178,7 +178,14 @@ def test_f8_distribution_contents_and_metadata(
         assert not any(member.endswith("/" + name) for member in wheel)
     for name in ("contract_api.py", "netfunnel_offline.py", "README.md", "ACCEPTANCE.md"):
         assert "checks/" + name in source
-    for name in ("conftest.py", "test_public_api_smoke.py", "test_packaging.py"):
+    for name in (
+        "conftest.py",
+        "test_public_api_smoke.py",
+        "test_packaging.py",
+        "test_wire_equivalence.py",
+        "_wire_pin.py",
+        "test_maintenance.py",
+    ):
         assert "tests/" + name in source
     for name, data in wheel.items():
         _f8_safe_name(name)

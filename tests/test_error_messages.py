@@ -26,6 +26,11 @@ def test_catalog_provenance_and_shape():
     assert catalog["source"] == "assets/error_json.json"
     assert catalog["source_sha256"] == "7b7998f2582217aba20e58a722b3640a6ef3a2751d9816aaf2f78cfc97c74d00"
     messages = catalog["messages"]
+    canonical = json.dumps(messages, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    assert (
+        hashlib.sha256(canonical).hexdigest()
+        == "7f6674b4fbf1ff60a4829ee8129bdfa0ee65c24a95a3e0fe6ddaa59e87df4885"
+    )
     assert len(messages) == 10305
     assert sum(len(translations) for translations in messages.values()) == 17256
     builder = runpy.run_path(str(ROOT / "checks/build_error_catalog.py"))
@@ -66,6 +71,21 @@ def test_catalog_builder_keeps_only_result_messages_and_translations():
     for invalid in ([], {"S003": 123}, {"S003": None}):
         with pytest.raises(ValueError):
             builder(json.dumps(invalid).encode(), app_version="synthetic")
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        b'{"S003":"first","S003":"last"}',
+        b'{"S003":"base","S003EN":"first","S003EN":"last"}',
+        b'{"S003":123,"S003":"valid last"}',
+        b'{"S003":"same","S003":"same"}',
+    ],
+)
+def test_catalog_builder_rejects_duplicate_keys(source):
+    builder = runpy.run_path(str(ROOT / "checks/build_error_catalog.py"))["build_catalog"]
+    with pytest.raises(ValueError, match="duplicate.*S003"):
+        builder(source, app_version="synthetic")
 
 
 @pytest.mark.parametrize("language", ["en", "en-US", "EN_us"])
@@ -147,7 +167,127 @@ def test_server_message_priority_plain_text_and_raw_preservation():
     assert api.resolve_error_message("S003", "서버 원문", language="en") == "서버 원문"
 
 
-@pytest.mark.parametrize("message", [None, "", "  \n ", "<script>synthetic()</script><style>body{}</style>"])
+@pytest.mark.parametrize(
+    "message,expected",
+    [
+        ("합성 범위 (0<SRCAR_NO<21)", "합성 범위 (0<SRCAR_NO<21)"),
+        ("<b>합성 범위</b> (0<SRCAR_NO<21)", "합성 범위 (0<SRCAR_NO<21)"),
+        ("A\nB (0<X<21)", "A\nB (0<X<21)"),
+        ("1 <= n <= 20", "1 <= n <= 20"),
+        ("<안내> %s, %ld, {{amount}}", "<안내> %s, %ld, {{amount}}"),
+        ("A <b", "A <b"),
+        ("A <b title='unfinished", "A <b title='unfinished"),
+        ("A </b", "A </b"),
+        ("A <", "A <"),
+        ("A &amp", "A &"),
+        ("A &#65", "A A"),
+        ("A &#x41", "A A"),
+        ("A &#x", "A &#x"),
+        ("A &unknown", "A &unknown"),
+        ("A &amp;lt;", "A &lt;"),
+        ("&lt;script&gt;synthetic()&lt;/script&gt;", "<script>synthetic()</script>"),
+        ("A<br>B<br/>C", "A\nB\nC"),
+        ("A<b>B</b>C", "ABC"),
+        ("A\n\n<div>B</div>", "A\n\nB"),
+        ("<div>A\n\nB</div>", "A\n\nB"),
+        ("A<script>synthetic()</script>B<style>body{}</style>C", "ABC"),
+        ("A<script>synthetic(0<X<21)", "A"),
+        ("A<style>body{color:red}&amp", "A"),
+        ("A<script>synthetic()</scr", "A"),
+        ("A<style>body{}</sty", "A"),
+        ("A<script", "A"),
+        ("A<STYLE type='unfinished", "A"),
+        ("A<scripture", "A<scripture"),
+        ("A<!--hidden-->B", "AB"),
+        ("A<!--unfinished", "A"),
+        ("A<!--unfinished<script>synthetic()</script>", "A"),
+        ("A<!--unfinished--", "A"),
+        ("A<!-", "A"),
+        ("A<?unfinished", "A"),
+        ("A<!DOCTYPE unfinished", "A"),
+        ("A &amp<!--unfinished", "A &"),
+        ("A\nB &amp", "A\nB &"),
+    ],
+)
+def test_plain_display_preserves_text_and_original_response(message, expected):
+    raw = {"strResult": "FAIL", "h_msg_cd": "SYNTHETIC-UNKNOWN", "h_msg_txt": message}
+    original = copy.deepcopy(raw)
+    with pytest.raises(api.KorailAppError) as caught:
+        parse_base_response(raw)
+    error = caught.value
+    assert type(error) is api.KorailAppError
+    assert error.display_message == expected
+    assert error.message is message and error.raw is raw
+    assert error.args == (f"SYNTHETIC-UNKNOWN: {message}",)
+    assert str(error) == f"SYNTHETIC-UNKNOWN: {message}"
+    response = parse_base_response(raw, raise_on_fail=False)
+    assert response.display_message == expected
+    assert response.h_msg_txt is message and response.raw is raw
+    assert raw == original
+    assert api.resolve_error_message(None, message) == expected
+
+
+@pytest.mark.parametrize("tag", ["p", "div", "li", "tr"])
+@pytest.mark.parametrize(
+    "message,expected",
+    [
+        ("A<{tag}>B</{tag}>", "A\nB"),
+        ("<{tag}>A</{tag}><{tag}>B</{tag}>", "A\nB"),
+    ],
+)
+def test_plain_display_preserves_block_boundaries(tag, message, expected):
+    message = message.format(tag=tag)
+    raw = {"h_msg_cd": "SYNTHETIC-UNKNOWN", "h_msg_txt": message}
+    assert api.resolve_error_message(None, message) == expected
+    assert api.BaseKorailResponse.from_raw(raw).display_message == expected
+    assert api.KorailAppError("SYNTHETIC-UNKNOWN", message, raw=raw).display_message == expected
+
+
+@pytest.mark.parametrize(
+    "code,language,expected",
+    [
+        ("WRS600022", "ko", "호차범위를 초과했습니다.(0<SRCAR_NO<21)"),
+        ("WRS600022", "en", "Exceeds the maximum compartment number(0<SRCAR_NO<21)"),
+        ("WRS600022", "ja", "号車範囲を超過しました。(0<SRCAR_NO<21)"),
+        ("WRS600022", "zh", "超过号次范围(0<SRCAR_NO<21)"),
+        (
+            "WRS600162",
+            "en",
+            "The number of the tickets for cancellation exceeds the limit(0<the number of tickets for cancellation<11)",
+        ),
+        (
+            "WRS600163",
+            "en",
+            "The number of the cancelled tickets exceeds the limit.(0<The number of the cancelled tickets<10)",
+        ),
+        (
+            "WRS600164",
+            "en",
+            "Entered incorrect compartment number for cancellation(0<compartment for cancellation<21)",
+        ),
+        ("WRS600165", "en", "Entered incorrect seat number for cancellation(0<seat for cancellation<101)"),
+    ],
+)
+def test_catalog_comparison_text_is_not_an_unfinished_html_tag(code, language, expected):
+    assert api.get_error_message(code, language=language) == expected
+    assert api.resolve_error_message(code, language=language) == expected
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        None,
+        "",
+        "  \n ",
+        "<script>synthetic()</script><style>body{}</style>",
+        "<script>synthetic(0<X<21)",
+        "<style>body{}",
+        "<script",
+        "<style type='unfinished",
+        "<!--unfinished",
+        "<?unfinished",
+    ],
+)
 def test_missing_or_unreadable_server_message_uses_catalog(message):
     error = E.classify_app_error("BT019", message)
     assert error.display_message == "요청횟수(6회)를 초과하였습니다."

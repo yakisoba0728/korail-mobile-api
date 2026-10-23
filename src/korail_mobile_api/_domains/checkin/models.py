@@ -19,22 +19,22 @@ class DeliveryRecipientResponse(BaseKorailResponse):
 
     네 필드는 응답에 반드시 있어야 하며, 없거나 ``null``이면 ``KorailProtocolError``가 발생합니다."""
 
-    acceptance_customer_management_no: str = wire("acepCustMgNo", required_str)
-    acceptance_customer_name: str = wire("acepCustNm", required_str)
-    acceptance_customer_phone: str = wire("acepCustTeln", required_str)
-    member_card_no: str = wire("mbCrdNo", required_str)
+    acceptance_customer_management_no: str = field(metadata={"wire": "acepCustMgNo", "read": required_str})
+    acceptance_customer_name: str = field(metadata={"wire": "acepCustNm", "read": required_str})
+    acceptance_customer_phone: str = field(metadata={"wire": "acepCustTeln", "read": required_str})
+    member_card_no: str = field(metadata={"wire": "mbCrdNo", "read": required_str})
 
 
 @dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceSeat:
     """대리수령 내역의 좌석 한 자리를 담습니다."""
 
-    passenger_type_division_name: str = wire("psgTpDvNm", required_str)
-    room_class_code: str = wire("psrmClCd", required_str)
-    room_class_name: str = wire("psrmClNm", required_str)
+    passenger_type_division_name: str = field(metadata={"wire": "psgTpDvNm", "read": required_str})
+    room_class_code: str = field(metadata={"wire": "psrmClCd", "read": required_str})
+    room_class_name: str = field(metadata={"wire": "psrmClNm", "read": required_str})
     # 앱 DTO 가 int 라 정수입니다. 그대로 되돌려 보내는 SelfCheckInSeat.car_no 는 문자열로 둡니다.
-    car_no: int = wire("scarNo", required_int)
-    seat_no: str = wire("seatNo", required_str)
+    car_no: int = field(metadata={"wire": "scarNo", "read": required_int})
+    seat_no: str = field(metadata={"wire": "seatNo", "read": required_str})
     raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
@@ -42,16 +42,16 @@ class PbpAcceptanceSeat:
 class PbpAcceptanceJourney:
     """대리수령 내역의 여정과 좌석 목록을 담습니다."""
 
-    acceptance_customer_name: str = wire("acepCustNm", required_str)
-    acceptance_customer_phone: str = wire("acepCustTeln", required_str)
-    journey_type_code: str = wire("jrnyTpCd", required_str)
-    member_division_name: str = wire("mbDvNm", required_str)
-    acceptance_kind_name: str = wire("pbpAcepKndNm", required_str)
-    pbp_reservation_no: str = wire("pbpRsvNo", required_str)
-    registered_date: str = wire("regDt", required_str)
-    withdrawal_possible_flag: str = wire("wdrwPsbFlg", required_str)
+    acceptance_customer_name: str = field(metadata={"wire": "acepCustNm", "read": required_str})
+    acceptance_customer_phone: str = field(metadata={"wire": "acepCustTeln", "read": required_str})
+    journey_type_code: str = field(metadata={"wire": "jrnyTpCd", "read": required_str})
+    member_division_name: str = field(metadata={"wire": "mbDvNm", "read": required_str})
+    acceptance_kind_name: str = field(metadata={"wire": "pbpAcepKndNm", "read": required_str})
+    pbp_reservation_no: str = field(metadata={"wire": "pbpRsvNo", "read": required_str})
+    registered_date: str = field(metadata={"wire": "regDt", "read": required_str})
+    withdrawal_possible_flag: str = field(metadata={"wire": "wdrwPsbFlg", "read": required_str})
     seats: tuple[PbpAcceptanceSeat, ...] = ()
-    member_card_no: str = wire("mbCrdNo", required_str)
+    member_card_no: str = field(metadata={"wire": "mbCrdNo", "read": required_str})
     raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
@@ -59,11 +59,11 @@ class PbpAcceptanceJourney:
 class PbpAcceptanceTicket:
     """대리수령 내역의 승차권과 여정 목록을 담습니다."""
 
-    pnr_no: str = wire("pnrNo", required_str)
-    sale_date: str = wire("saleDt", required_str)
-    sale_sequence: str = wire("saleSqno", required_str)
-    sale_window_no: str = wire("saleWctNo", required_str)
-    return_password: str = wire("tkRetPwd", required_str)
+    pnr_no: str = field(metadata={"wire": "pnrNo", "read": required_str})
+    sale_date: str = field(metadata={"wire": "saleDt", "read": required_str})
+    sale_sequence: str = field(metadata={"wire": "saleSqno", "read": required_str})
+    sale_window_no: str = field(metadata={"wire": "saleWctNo", "read": required_str})
+    return_password: str = field(metadata={"wire": "tkRetPwd", "read": required_str})
     journeys: tuple[PbpAcceptanceJourney, ...] = ()
     raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
@@ -81,12 +81,12 @@ class PbpAcceptanceSpecificationResponse(BaseKorailResponse):
 class RecentDeliveryRecipient:
     """최근 승차권을 전달한 수령자 한 명을 담습니다."""
 
-    acceptance_customer_management_flag: str = wire("acepCustMgFlg", required_str)
-    acceptance_customer_management_no: str = wire("acepCustMgNo", required_str)
-    acceptance_customer_name: str = wire("acepCustNm", required_str)
-    acceptance_customer_phone: str = wire("acepCustTeln", required_str)
-    acceptance_customer_phone_2: str = wire("acepCustTeln2", required_str)
-    member_card_no: str = wire("mbCrdNo", required_str)
+    acceptance_customer_management_flag: str = field(metadata={"wire": "acepCustMgFlg", "read": required_str})
+    acceptance_customer_management_no: str = field(metadata={"wire": "acepCustMgNo", "read": required_str})
+    acceptance_customer_name: str = field(metadata={"wire": "acepCustNm", "read": required_str})
+    acceptance_customer_phone: str = field(metadata={"wire": "acepCustTeln", "read": required_str})
+    acceptance_customer_phone_2: str = field(metadata={"wire": "acepCustTeln2", "read": required_str})
+    member_card_no: str = field(metadata={"wire": "mbCrdNo", "read": required_str})
     raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 
@@ -107,22 +107,22 @@ class SelfCheckInSeat:
     ``register_self_checkin``의 ``seat``로 넘깁니다."""
 
     # 앱은 첫 행을 등록에 넘깁니다.
-    pnr_no: str = wire("pnrNo", required_str)
-    journey_sequence: str = wire("jrnySqno", required_str)
-    assignment_sequence: str = wire("asgnSqno", required_str)
-    run_date: str = wire("runDt", required_str)
-    train_no: str = wire("trnNo", required_str)
-    departure_construction_order: str = wire("dptStnConsOrdr", required_str)
-    departure_station_code: str = wire("dptRsStnCd", required_str)
-    arrival_construction_order: str = wire("arvStnConsOrdr", required_str)
-    arrival_station_code: str = wire("arvRsStnCd", required_str)
-    ticket_kind_code: str = wire("tkKndCd", required_str)
-    train_group_code: str = wire("trnGpCd", required_str)
-    car_no: str = wire("scarNo", required_str)
-    seat_no: str = wire("seatNo", required_str)
-    departure_datetime: str = wire("dptDttm", required_str)
-    arrival_datetime: str = wire("arvDttm", required_str)
-    cps_no: str = wire("cpsNo", required_str)
+    pnr_no: str = field(metadata={"wire": "pnrNo", "read": required_str})
+    journey_sequence: str = field(metadata={"wire": "jrnySqno", "read": required_str})
+    assignment_sequence: str = field(metadata={"wire": "asgnSqno", "read": required_str})
+    run_date: str = field(metadata={"wire": "runDt", "read": required_str})
+    train_no: str = field(metadata={"wire": "trnNo", "read": required_str})
+    departure_construction_order: str = field(metadata={"wire": "dptStnConsOrdr", "read": required_str})
+    departure_station_code: str = field(metadata={"wire": "dptRsStnCd", "read": required_str})
+    arrival_construction_order: str = field(metadata={"wire": "arvStnConsOrdr", "read": required_str})
+    arrival_station_code: str = field(metadata={"wire": "arvRsStnCd", "read": required_str})
+    ticket_kind_code: str = field(metadata={"wire": "tkKndCd", "read": required_str})
+    train_group_code: str = field(metadata={"wire": "trnGpCd", "read": required_str})
+    car_no: str = field(metadata={"wire": "scarNo", "read": required_str})
+    seat_no: str = field(metadata={"wire": "seatNo", "read": required_str})
+    departure_datetime: str = field(metadata={"wire": "dptDttm", "read": required_str})
+    arrival_datetime: str = field(metadata={"wire": "arvDttm", "read": required_str})
+    cps_no: str = field(metadata={"wire": "cpsNo", "read": required_str})
     raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
 
 

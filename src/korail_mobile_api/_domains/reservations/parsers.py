@@ -191,6 +191,7 @@ def _received_amount(
 
     summed = 0
     seats_seen = 0
+    journeys_with_seats = 0
     for journey in journey_rows:
         container = journey.get("seat_infos")
         if container is None:
@@ -202,6 +203,7 @@ def _received_amount(
             continue
         if not _is_list(seat_rows):
             raise KorailProtocolError("KORAIL reservation seat_infos.seat_info must be a list or null")
+        previous_seats = seats_seen
         for seat in seat_rows:
             seat = _row(seat, "reservation seat_info row")
             amount = _strict_scalar_string(seat, "h_rcvd_amt", "reservation seat")
@@ -218,8 +220,21 @@ def _received_amount(
                 continue
             summed += value
             seats_seen += 1
+        if seats_seen > previous_seats:
+            journeys_with_seats += 1
+    count = _strict_scalar_string(raw, "h_jrny_cnt", "reservation")
+    if (
+        journey_rows
+        and count is not None
+        and _is_ascii_digits(count.strip())
+        and count.strip().lstrip("0") != str(len(journey_rows))
+    ):
+        return None
     if seats_seen == 0:
         return None if declared_int is None else str(declared_int)
+    # 일부 여정의 좌석 합은 명시 총액이 같아도 완전한 결제액이 아닙니다.
+    if journeys_with_seats != len(journey_rows):
+        return None
     seat_total = str(summed)
     # 표기 문자열이 아니라 숫자로 비교해야 같은 금액을 모순으로 오인하지 않습니다.
     if declared_int is not None and declared_int != summed:

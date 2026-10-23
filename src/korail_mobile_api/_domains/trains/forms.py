@@ -27,12 +27,6 @@ _SEAT_READ_IDENTIFIERS = (
 )
 
 
-def _identifier(value: object, name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise KorailInvalidInputError(f"{name} must not be empty")
-    return value
-
-
 def validate_seat_inventory_inputs(
     train: TrainSummary,
     passenger_count: int,
@@ -46,7 +40,7 @@ def validate_seat_inventory_inputs(
     if car_no is not None and (type(car_no) is not int or car_no < 1):
         raise KorailInvalidInputError("car_no must be a positive integer")
     for name in _SEAT_READ_IDENTIFIERS:
-        _identifier(getattr(train, name), name)
+        _required_text(getattr(train, name), name)
     if train.goods_no:
         _wire_goods_no(train.goods_no)
 
@@ -240,8 +234,8 @@ def build_train_schedule_form(
     """열차번호는 5자리로 영 채움하고 Key 는 싣지 않습니다."""
     return {
         **_device_version(config),
-        "runDt": _identifier(run_date, "run_date"),
-        "trnNo": _identifier(train_no, "train_no").zfill(5),
+        "runDt": _required_text(run_date, "run_date"),
+        "trnNo": _required_text(train_no, "train_no").zfill(5),
     }
 
 
@@ -260,7 +254,7 @@ class FreeSeatCarRequest:
 
     def __post_init__(self) -> None:
         for item in fields(self):
-            _identifier(getattr(self, item.name), item.name)
+            _required_text(getattr(self, item.name), item.name)
 
     @classmethod
     def from_train(cls, train: TrainSummary) -> FreeSeatCarRequest:
@@ -336,7 +330,7 @@ class MergeSeatsInquiryRequest:
             "departure_station_name",
             "arrival_station_name",
         ):
-            _identifier(getattr(self, name), name)
+            _required_text(getattr(self, name), name)
         _passenger_count(self.passenger_count, "passenger_count")
 
     @classmethod

@@ -29,7 +29,7 @@ KorailClient.pay_with_card(
 [`recalculate_price`](#recalculate_price)가 반환한 객체를 그대로 넘깁니다.
 기존 예약번호로 가져오는 방법은 [기존 예약 결제 가이드](../guide/payments.md#existing-reservation)를 참고하세요.
 
-`pay_with_card`는 세션 만료(`P058`)를 뺀 모든 실패 응답을 예외로 바꾸지 않고 반환하며, 카드 거절도 그중 하나입니다.
+`pay_with_card`는 정상적으로 해석할 수 있는 실패 봉투를 예외로 바꾸지 않고 반환하며, 카드 거절과 앱 업데이트 요구(`-8204`)도 포함합니다. 세션 만료(`P058`)·전송·응답 해석 실패는 예외입니다.
 실패 응답은 `strResult`가 `"FAIL"`이거나 없는 응답이며, `strResult`가 없으면 `str_result`는 `None`입니다. 반환값의 `str_result`가 `"SUCC"`인지 반드시 확인하세요.
 최상위 결과와 정산수단별 `settlement_result`는 따로 읽으며, 라이브러리는 `settlement_result`의 값을 해석하지 않습니다.
 
@@ -305,6 +305,7 @@ PNR 전체가 아니라 `ticket`이 가리키는 승차권 한 장만 환불하�
 동반자 필드와 조회 문맥의 `repr` 숨김은 속성·`raw`·직렬화 전체의 마스킹이 아닙니다.
 대상 연결은 수수료 금액의 유효기간이나 서버 승인을 보장하지 않습니다.
 `ticket.train_no`가 있으면 열차 번호를, `commission.ticket_return_times_division_code`가 있으면 그 값을 요청에 함께 싣습니다.
+`ticket.train_no`는 문자열, `latitude`·`longitude`는 문자열 또는 `None`이어야 합니다. 숫자 등을 자동 문자열화하지 않고 추가 요청 전에 `KorailInvalidInputError`로 거절합니다. 선택 좌표의 `None`·빈 문자열은 생략하고 정상 문자열은 그대로 보냅니다. 수수료 응답의 대상 연결 검사는 그대로 적용합니다.
 
 `settle_mileage=True`는 `commission.usable_mileage`가 `commission.refund_fee` 이상일 때만 허용합니다.
 두 값은 정수로 읽으며, 없거나 정수로 읽을 수 없으면 0으로 봅니다.

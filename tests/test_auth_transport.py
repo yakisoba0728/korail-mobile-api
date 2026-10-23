@@ -652,6 +652,50 @@ def test_unsendable_provider_token_never_sends_request(factory, token):
     assert not requests
 
 
+@pytest.mark.parametrize("control", [*range(32), 127], ids=lambda value: f"CTL-{value:02x}")
+def test_public_provider_control_characters_are_rejected_before_handoff(scripted_client_factory, control):
+    contexts = []
+    token = f"synthetic-prefix{chr(control)}synthetic-suffix"
+
+    def provider(context):
+        contexts.append(context)
+        return token
+
+    client, requests, pending = scripted_client_factory(
+        [envelope()],
+        config=offline(
+            dynapath=DynapathConfig(enabled=True, token_provider=provider, allowlist_paths=frozenset({COMMON}))
+        ),
+    )
+    with pytest.raises(E.KorailProtocolError) as caught:
+        client.get_common_codes(["SYNTHETIC"])
+    assert caught.value.request_sent is None and caught.value.raw is None
+    assert caught.value.__cause__ is None and not getattr(caught.value, "__notes__", None)
+    assert "synthetic-prefix" not in str(caught.value)
+    assert len(contexts) == 1 and requests == [] and pending == [envelope()]
+
+
+@pytest.mark.parametrize(
+    "token", [None, "", "synthetic-token", " synthetic-token ", "".join(map(chr, range(32, 127)))]
+)
+def test_public_provider_preserves_none_empty_and_printable_ascii_tokens(scripted_client_factory, token):
+    contexts = []
+
+    def provider(context):
+        contexts.append(context)
+        return token
+
+    client, requests, pending = scripted_client_factory(
+        [envelope()],
+        config=offline(
+            dynapath=DynapathConfig(enabled=True, token_provider=provider, allowlist_paths=frozenset({COMMON}))
+        ),
+    )
+    client.get_common_codes(["SYNTHETIC"])
+    assert requests[0].headers.get("x-dynapath-m-token") == token
+    assert len(contexts) == len(requests) == 1 and not pending
+
+
 def test_explicit_disable_and_raw_header_bypass_policy(factory):
     config = KorailConfig(base_url="https://offline.invalid", netfunnel_enabled=False, disable_dynapath=True)
     client, requests = factory([envelope()], config=config)
@@ -1239,3 +1283,236 @@ def test_unbuildable_url_is_a_transport_error_that_sent_nothing(factory):
         client.http.post_form("/classes/synthetic\x00path")
     assert isinstance(caught.value.__cause__, httpx.InvalidURL)
     assert caught.value.request_sent is None and not requests
+
+
+@pytest.mark.parametrize(
+    "call, raw",
+    [
+        (lambda c: c.list_stations(), {}),
+        (lambda c: c.get_commuter_kind_menu("synthetic"), envelope(result="UNKNOWN")),
+        (lambda c: c.list_delay_discount_tickets("20990101"), {}),
+        (lambda c: c.get_reservation_hold("SYNTHETIC-PNR"), envelope()),
+    ],
+    ids=["post", "get", "query-post", "existing-hold"],
+)
+def test_received_domain_parse_failure_is_marked_sent(factory, call, raw):
+    client, requests = factory([raw])
+    client.session.current = package.KorailSession(jsessionid=COOKIE)
+    with pytest.raises(E.KorailProtocolError) as caught:
+        call(client)
+    assert caught.value.raw == raw and caught.value.request_sent is True
+    assert len(requests) == 1 and not getattr(caught.value, "__notes__", None)
+
+
+def test_received_facade_stops_failure_is_marked_sent_and_not_cached(factory):
+    from korail_mobile_api.facade import AirportBusResource
+
+    raw = envelope(**{"app.limousine.stationNm": ["SYNTHETIC"], "app.limousine.stationCd": []})
+    client, requests = factory([raw])
+    resource = AirportBusResource(client)
+    with pytest.raises(E.KorailProtocolError) as caught:
+        resource.stops()
+    assert caught.value.raw == raw and caught.value.request_sent is True
+    assert resource._stops is None and len(requests) == 1
+    assert not getattr(caught.value, "__notes__", None)
+
+
+@pytest.mark.parametrize("external", [False, True])
+def test_received_read_preserves_parser_identity_raw_and_cause(factory, monkeypatch, external):
+    from korail_mobile_api import client as client_module
+
+    partial = {"synthetic": "partial"}
+    cause = ValueError("synthetic parser cause")
+    original = E.KorailProtocolError("synthetic parser failure", raw=partial)
+    original.__cause__ = cause
+    received = []
+
+    def parser(raw):
+        received.append(raw)
+        raise cause if external else original
+
+    monkeypatch.setattr(client_module, "parse_station_data_response", parser)
+    client, requests = factory([{}])
+    with pytest.raises(E.KorailProtocolError) as caught:
+        client.list_stations()
+    assert caught.value.__cause__ is cause
+    if not external:
+        assert caught.value is original and caught.value.parser_raw is partial
+    assert caught.value.raw is received[0] and caught.value.request_sent is True
+    assert len(requests) == 1 and not getattr(caught.value, "__notes__", None)
+
+
+def test_direct_domain_parser_failure_stays_network_neutral():
+    from korail_mobile_api._domains.common.parsers import parse_station_data_response
+
+    raw = {}
+    with pytest.raises(E.KorailProtocolError) as caught:
+        parse_station_data_response(raw)
+    assert caught.value.raw is raw and caught.value.request_sent is None
+
+
+@pytest.mark.parametrize("key", [1, None, ("synthetic",)])
+def test_public_http_envelope_rejects_non_string_immediate_keys(factory, monkeypatch, key):
+    raw = {"strResult": "SUCC", key: "synthetic"}
+    with pytest.raises(E.KorailProtocolError) as direct:
+        parse_base_response(raw)
+    assert direct.value.raw is raw and direct.value.request_sent is None
+    response = httpx.Response(200, content=b"{}")
+    monkeypatch.setattr(response, "json", lambda: raw)
+    client, requests = factory([response])
+    with pytest.raises(E.KorailProtocolError) as caught:
+        client.get_common_codes(["SYNTHETIC"])
+    assert caught.value.raw is raw and caught.value.request_sent is True
+    assert len(requests) == 1 and not getattr(caught.value, "__notes__", None)
+
+
+def test_public_http_envelope_keeps_unknown_nested_values_without_recursing(factory, monkeypatch):
+    nested = {1: ["synthetic"]}
+    raw = {"strResult": "SUCC", "unknown": nested}
+    assert parse_base_response(raw).raw is raw
+    response = httpx.Response(200, content=b"{}")
+    monkeypatch.setattr(response, "json", lambda: raw)
+    client, requests = factory([response])
+    result = client.get_common_codes(["SYNTHETIC"])
+    assert result.raw is raw and result.raw["unknown"] is nested and len(requests) == 1
+
+
+@pytest.mark.parametrize("status", [200, 503])
+@pytest.mark.parametrize("mutation", [False, True])
+@pytest.mark.parametrize("failure", ["syntax", "recursion"])
+def test_decoder_failure_preserves_cause_and_handoff(factory, monkeypatch, status, mutation, failure):
+    body = b"{"
+    response = httpx.Response(status, content=body)
+    decoder_error = RecursionError("synthetic decoder depth")
+    if failure == "recursion":
+
+        def decode():
+            raise decoder_error
+
+        monkeypatch.setattr(response, "json", decode)
+    client, requests = factory([response])
+    client.session.current = package.KorailSession(jsessionid=COOKIE)
+    expected = E.KorailProtocolError if status == 200 else E.KorailTransportError
+    with pytest.raises(expected) as caught:
+        if mutation:
+            client.cancel_product_reservation(
+                package.ProductDetailResponse(virtual_reservation_no="SYNTHETIC", goods_sequence="1")
+            )
+        else:
+            client.list_stations()
+    assert caught.value.raw == body and caught.value.request_sent is True
+    assert isinstance(caught.value.__cause__, RecursionError if failure == "recursion" else ValueError)
+    if failure == "recursion":
+        assert caught.value.__cause__ is decoder_error
+    if status == 503:
+        assert caught.value.status_code == 503
+    assert bool(getattr(caught.value, "__notes__", None)) is mutation
+    assert len(requests) == 1
+
+
+@pytest.mark.parametrize("method", ["form", "get", "query-post"])
+def test_provider_context_uses_the_same_prepared_request(factory, monkeypatch, method):
+    contexts, prepared = [], []
+    path = {
+        "form": COMMON,
+        "get": "/classes/com.korail.mobile.push.cmtrKnd.do",
+        "query-post": "/classes/com.korail.mobile.passCard.DelayDiscountView",
+    }[method]
+
+    def provider(context):
+        contexts.append(context)
+        return None
+
+    config = offline(
+        base_url="https://offline.invalid:443/prefix/",
+        dynapath=DynapathConfig(enabled=True, token_provider=provider, allowlist_paths=frozenset({path})),
+    )
+    client, requests = factory([envelope()], config=config)
+    client.session.current = package.KorailSession(jsessionid=COOKIE)
+    build = client.http._client.build_request
+
+    def build_once(*args, **kwargs):
+        request = build(*args, **kwargs)
+        prepared.append(request)
+        return request
+
+    monkeypatch.setattr(client.http._client, "build_request", build_once)
+    if method == "form":
+        client.get_common_codes(["synthetic 한글 &=+"])
+    elif method == "get":
+        client.get_commuter_kind_menu("synthetic 한글 &=+")
+    else:
+        client.list_delay_discount_tickets("20990101")
+    assert len(contexts) == len(prepared) == len(requests) == 1
+    assert prepared[0] is requests[0]
+    assert contexts[0].url == str(requests[0].url)
+    assert contexts[0].body == requests[0].content and contexts[0].path == path
+    assert requests[0].url.path == "/prefix" + path
+    assert "x-dynapath-m-token" not in requests[0].headers
+
+
+@pytest.mark.parametrize("refusal", ["closed", "invalid-url"])
+def test_provider_is_not_called_before_request_can_be_prepared(factory, refusal):
+    contexts = []
+    path = LOGIN if refusal == "closed" else "/classes/synthetic\x00path"
+    config = offline(
+        dynapath=DynapathConfig(enabled=True, token_provider=contexts.append, allowlist_paths=frozenset({path}))
+    )
+    client, requests = factory(config=config)
+    if refusal == "closed":
+        client.close()
+    expected = E.KorailProtocolError if refusal == "closed" else E.KorailTransportError
+    with pytest.raises(expected) as caught:
+        client.http.post_form(path)
+    assert caught.value.request_sent is None and not contexts and not requests
+
+
+def test_closed_protected_fare_does_not_call_a_failing_provider(factory):
+    contexts = []
+
+    def provider(context):
+        contexts.append(context)
+        raise AssertionError("closed clients must not call a provider")
+
+    client, requests = factory(config=offline(dynapath=DynapathConfig(enabled=True, token_provider=provider)))
+    client.close()
+    leg = package.PriceFareLeg(
+        departure_station_code="0001",
+        arrival_station_code="0099",
+        run_date="20990101",
+        train_no="1",
+        requested_seat_attribute_code="015",
+        train_group_code="109",
+        train_class_code="00",
+    )
+    with pytest.raises(E.KorailProtocolError, match="client is closed") as caught:
+        client.get_fare_quote(package.PriceFareQuoteRequest(legs=(leg,)))
+    assert caught.value.request_sent is None and caught.value.__cause__ is None
+    assert not contexts and not requests
+
+
+def test_provider_stays_after_queue_admission_and_before_api_handoff(f8_client_factory):
+    events = []
+
+    def provider(context):
+        assert events == ["5101"]
+        events.append("provider")
+        return "synthetic-token"
+
+    def handler(request):
+        if request.url.host == "queue.example.invalid":
+            events.append(request.url.params["opcode"])
+            return httpx.Response(200, text="200:key=SYNTHETIC-QUEUE&nwait=0&ttl=1")
+        events.append("api")
+        assert request.headers["x-dynapath-m-token"] == "synthetic-token"
+        return httpx.Response(200, json=envelope())
+
+    client = f8_client_factory(
+        handler, config=synthetic_config(dynapath=DynapathConfig(enabled=True, token_provider=provider))
+    )
+    client.search_trains(
+        package.TrainSearchQuery(
+            departure_station="SYNTH_DEP", arrival_station="SYNTH_ARR", departure_date="20990101"
+        )
+    )
+    assert events == ["5101", "provider", "api", "5004"]

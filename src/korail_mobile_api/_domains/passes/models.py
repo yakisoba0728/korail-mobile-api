@@ -149,7 +149,7 @@ class ProductDetailResponse(BaseKorailResponse):
     usage_period: str | None = wire("strUtlTrmCont")
     included_item_names: tuple[str, ...] = ()
     virtual_reservation_no: str | None = wire("strVrRsvNo")
-    detail_raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+    detail_raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
     #: 상품 일련번호(``strGdSqno``)입니다. ``cancel_product_reservation``은 이 값과 ``virtual_reservation_no``로 취소를 요청하며,
     #: 값이 비어 있으면 요청을 보내기 전에 ``KorailProtocolError``를 발생시킵니다.
     goods_sequence: str | None = wire("strGdSqno")

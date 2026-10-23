@@ -236,7 +236,7 @@ KorailClient.get_commuter_info(request: CommuterInfoRequest) -> CommuterInfoResp
 7.0.8에서는 현재 계정의 조회가 `ERR000100`으로 거절됐습니다. 아래 단계별 정상 응답 설명은 성공 시의 모델 계약이며, 이번 계정에서 다시 확인한 결과는 아닙니다.
 
 - **초기 단계**: [`CommuterInitialRequest`][korail_mobile_api.CommuterInitialRequest]에 `pass_data`를 넣습니다. 응답의 `passenger_options`에 승객 종류별 연령 코드와 연령·인원 범위가 옵니다.
-- **인원 단계**: [`CommuterPassengerRequest`][korail_mobile_api.CommuterPassengerRequest]는 생성자 대신 `from_response(pass_data, source, passenger_counts)`로 만듭니다. `source`는 초기 단계의 응답이고, `passenger_counts`는 `source.passenger_options`의 행마다 인원을 하나씩 적은 정수 튜플입니다. 요청에는 승객 한 명마다 그 행의 연령 코드를 한 번씩 넣습니다.
+- **인원 단계**: [`CommuterPassengerRequest`][korail_mobile_api.CommuterPassengerRequest]는 생성자 대신 `from_response(pass_data, source, passenger_counts)`로 만듭니다. `source`는 초기 단계의 응답이고, `passenger_counts`는 `source.passenger_options`의 행마다 인원을 하나씩 적은 `Sequence[int]`(목록·튜플 등)입니다. 실제 `int`인 비음수만 받으며 입력을 튜플로 복사해 보관합니다. 요청에는 승객 한 명마다 그 행의 연령 코드를 한 번씩 넣습니다.
 - **원표 단계**: [`CommuterTicketInquiryRequest`][korail_mobile_api.CommuterTicketInquiryRequest]에 원표의 반환 식별자([`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference])를 넣습니다. 판매일에 `sale_date`(`YYYYMMDD`)와 `return_sale_date`(`MMDD`) 중 어느 값을 넣어야 하는지는 확인하지 못했습니다([승차권 식별자 이어 쓰기](account.md#ticket-identifiers) 참고). `inquiry_type`은 `"0"`(기본값) 또는 `"1"`이며, 두 값의 뜻은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 
 **매개변수**

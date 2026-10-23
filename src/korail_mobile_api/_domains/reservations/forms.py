@@ -391,7 +391,7 @@ def build_merge_reservation_form(
         seat_attribute_code=seat_attribute_code,
     )
     form["txtStndFlg"] = "Y" if any(_standing_only(row) for row in (first, last)) else "N"
-    form.update({key: str(value) for key, value in middle.items()})
+    form.update({key: _required_digits(value, field=key) for key, value in middle.items()})
     return _in_reservation_order(form)
 
 
@@ -783,7 +783,8 @@ _STANDBY_PHONE_RE = re.compile(r"[0-9]{11}")
 
 
 def _successful_hold_pnr(hold: ReservationHoldResponse, *, context: str) -> str:
-    """실패 메시지는 context 로 구분합니다."""
+    if not isinstance(hold, ReservationHoldResponse):
+        raise KorailInvalidInputError(context)
     pnr_no = hold.pnr_no
     if hold.str_result != "SUCC" or not isinstance(pnr_no, str) or not pnr_no.strip():
         raise KorailInvalidInputError(context)

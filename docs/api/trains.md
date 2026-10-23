@@ -709,16 +709,10 @@ KorailClient.get_fare_quote(
 ```python
 from korail_mobile_api import PriceFareLeg, PriceFareQuoteRequest
 
-leg = PriceFareLeg(
-    departure_station_code=train.departure_station_code,
-    arrival_station_code=train.arrival_station_code,
-    run_date=train.run_date,
-    train_no=train.train_no,
-    requested_seat_attribute_code=train.seat_attribute_code,
-    train_group_code=train.train_group_code,
-    train_class_code=train.train_class_code,
-)
+leg = PriceFareLeg.from_train(train)
 quote = client.get_fare_quote(PriceFareQuoteRequest(legs=(leg,)))
 for fare in quote.fares:
     print(fare.room_class_name, fare.received_price, fare.total_amount)
 ```
+
+`from_train()`은 필수 식별값을 검사하고 상품 번호(`goods_no`)도 보존합니다. 메뉴·좌석 속성 등 다른 입력이 필요하면 `PriceFareLeg`와 `PriceFareQuoteRequest`를 직접 생성할 수 있습니다.

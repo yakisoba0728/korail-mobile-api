@@ -6,6 +6,8 @@
 
 ::: korail_mobile_api.BaseKorailResponse
 
+`from_raw()`는 바로 아래 키가 문자열인 `dict`의 봉투 세 필드만 옮기며 도메인 파싱·성공 판정을 하지 않습니다. 상속한 모델의 필수 도메인 인자가 더 필요하면 원문과 생성자 `TypeError` cause를 보존한 `KorailProtocolError`입니다. 전체 DTO는 해당 typed client 조회로 받으세요. 직접 생성자는 기존 필수 키워드 인자와 기본값을 유지합니다.
+
 ::: korail_mobile_api.AppVersionInfo
 
 ::: korail_mobile_api.AppDataResponse

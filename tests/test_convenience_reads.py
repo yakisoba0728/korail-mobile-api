@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
+from collections import UserList
+from dataclasses import replace
 from datetime import date, datetime, timezone
 
 import httpx
 import pytest
-from conftest import synthetic_config, wire_form
+from conftest import synthetic_config, wire_form, wire_pairs
 
 from korail_mobile_api import (
     AirportBusResource,
     AirportBusSchedule,
+    AirportBusSeatInventoryQuery,
     AirportBusStop,
     BaseKorailResponse,
     DynapathTokenSettings,
     Korail,
+    KorailAuthError,
     KorailConfig,
     KorailInvalidInputError,
     KorailNoResultsError,
@@ -31,6 +35,7 @@ from korail_mobile_api import (
     StationRefundExecutionRequest,
     StationRefundVerificationRequest,
     StationResource,
+    TicketListTicket,
     TrainResource,
     TrainSummary,
 )
@@ -145,6 +150,61 @@ def test_caller_secrets_are_hidden_from_debug_representations(model, attribute):
     marker = value["debug"] if attribute == "raw" else value
     assert marker.startswith("SYNTHETIC-HIDDEN")
     assert marker not in repr(model) and marker not in str(model)
+
+
+_SALE_TICKET = TicketListTicket(
+    sale_window_no="0001",
+    sale_date="20990102",
+    return_sale_date="1231",
+    sale_sequence="0007",
+    return_password="SYNTHETIC-RETURN",
+)
+
+
+def test_sale_ticket_factory_keeps_full_sale_date_and_return_factory_meaning(
+    scripted_client_factory, config, f8_logged_in_session
+):
+    reference = OriginalTicketReference.from_sale_ticket(_SALE_TICKET)
+    assert reference == OriginalTicketReference(
+        sale_window_no="0001", sale_date="20990102", sale_sequence="0007", return_password="SYNTHETIC-RETURN"
+    )
+    assert OriginalTicketReference.from_ticket(_SALE_TICKET) == replace(reference, sale_date="1231")
+    assert replace(reference, sale_date="manual-date").sale_date == "manual-date"
+    client, requests, pending = scripted_client_factory(
+        [{"strResult": "SUCC", "tkList": []}], config=config, session=f8_logged_in_session
+    )
+    client.list_pbp_acceptances([reference, reference])
+    assert wire_pairs(requests[0])[-3:] == [
+        ("tkCnt", "2"),
+        ("tkRetNo", "0001-20990102-0007-SYNTHETIC-RETURN"),
+        ("tkRetNo", "0001-20990102-0007-SYNTHETIC-RETURN"),
+    ]
+    assert len(requests) == 1 and pending == []
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"sale_date": None},
+        {"sale_date": ""},
+        {"sale_date": "0102"},
+        {"sale_date": "２０９９０１０２"},
+        {"sale_window_no": None},
+        {"sale_sequence": " "},
+        {"return_password": None},
+    ],
+)
+def test_sale_ticket_factory_rejects_missing_identity_or_non_full_sale_date(changes):
+    with pytest.raises(KorailInvalidInputError):
+        OriginalTicketReference.from_sale_ticket(replace(_SALE_TICKET, **changes))
+
+
+def test_sale_ticket_factory_does_not_require_a_return_date_or_accept_another_model():
+    assert OriginalTicketReference.from_sale_ticket(replace(_SALE_TICKET, return_sale_date=None)).sale_date == (
+        "20990102"
+    )
+    with pytest.raises(KorailInvalidInputError, match="TicketListTicket"):
+        OriginalTicketReference.from_sale_ticket(object())
 
 
 @pytest.mark.parametrize("goods", [None, "", "SYNTHETIC-GOODS"])
@@ -632,3 +692,83 @@ def test_invalid_bus_passenger_count_never_sends(scripted_client_factory, config
     with pytest.raises(KorailProtocolError, match="passenger_count"):
         AirportBusResource(client).seats(AirportBusSchedule(), passenger_count=count)
     assert requests == []
+
+
+@pytest.fixture
+def bus_seat_query():
+    return AirportBusSeatInventoryQuery(
+        train_class_code="98",
+        service_code="980",
+        run_date="20990102",
+        train_no="00007",
+        car_no="0001",
+        room_class_code="1",
+        departure_station_code="9901",
+        arrival_station_code="9903",
+        seat_attribute_code="015",
+        departure_run_order="001",
+        arrival_run_order="002",
+        passenger_count=-1,
+    )
+
+
+@pytest.mark.parametrize("product_no", [False, 1, 1.5, b"product", [], {}])
+def test_bus_product_number_rejects_non_text_before_send(
+    scripted_client_factory, config, bus_seat_query, product_no
+):
+    client, requests, _ = scripted_client_factory([], config=config)
+    with pytest.raises(KorailInvalidInputError, match="product_no") as raised:
+        client.get_airport_bus_seat_inventory(replace(bus_seat_query, product_no=product_no))
+    assert requests == [] and raised.value.request_sent is None
+
+
+@pytest.mark.parametrize("product_no", [None, "", " ", "SYNTHETIC-PRODUCT"])
+def test_bus_product_number_keeps_optional_text_and_low_level_count_policy(
+    scripted_client_factory, config, bus_seat_query, product_no
+):
+    client, requests, pending = scripted_client_factory([{"strResult": "SUCC", "seatList": []}], config=config)
+    client.get_airport_bus_seat_inventory(replace(bus_seat_query, product_no=product_no))
+    form = wire_form(requests[0])
+    assert form["totPsgCnt"] == ["-1"] and form["isArrow"] == ["false"]
+    assert form.get("gdNo") == (None if product_no in (None, "") else [product_no])
+    assert len(requests) == 1 and pending == []
+
+
+@pytest.mark.parametrize("kind", ["generator", "dict", "set", "int"])
+@pytest.mark.parametrize("authenticated", [False, True])
+def test_ticket_maas_requires_a_sequence_without_consuming_unsupported_iterables(
+    scripted_client_factory, config, f8_logged_in_session, kind, authenticated
+):
+    numbers = {
+        "generator": (number for number in ("SYNTHETIC-A", "SYNTHETIC-B")),
+        "dict": {"SYNTHETIC-A": "ignored"},
+        "set": {"SYNTHETIC-A"},
+        "int": 1,
+    }[kind]
+    client, requests, _ = scripted_client_factory(
+        [{"strResult": "SUCC"}], config=config, session=f8_logged_in_session if authenticated else None
+    )
+    with pytest.raises(KorailInvalidInputError if authenticated else KorailAuthError) as raised:
+        client.list_maas_menus(pnr_no="SYNTHETIC-PNR", ticket_return_numbers=numbers)
+    assert requests == [] and raised.value.request_sent is None
+    if kind == "generator":
+        assert list(numbers) == ["SYNTHETIC-A", "SYNTHETIC-B"]
+
+
+@pytest.mark.parametrize("container", [list, tuple, UserList])
+def test_ticket_maas_sequences_preserve_return_number_order_and_repeats(
+    scripted_client_factory, config, f8_logged_in_session, container
+):
+    client, requests, pending = scripted_client_factory(
+        [{"strResult": "SUCC"}], config=config, session=f8_logged_in_session
+    )
+    client.list_maas_menus(
+        pnr_no="SYNTHETIC-PNR", ticket_return_numbers=container(["SYNTHETIC-A", "SYNTHETIC-A", "SYNTHETIC-B"])
+    )
+    assert wire_pairs(requests[0])[-4:] == [
+        ("pnrNo", "SYNTHETIC-PNR"),
+        ("tkRetNo", "SYNTHETIC-A"),
+        ("tkRetNo", "SYNTHETIC-A"),
+        ("tkRetNo", "SYNTHETIC-B"),
+    ]
+    assert len(requests) == 1 and pending == []

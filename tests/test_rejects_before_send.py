@@ -7,6 +7,7 @@ reworded message still passes. Synthetic values only; offline.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date
@@ -14,6 +15,7 @@ from typing import Any
 
 import httpx
 import pytest
+from conftest import synthetic_config
 from test_public_api_smoke import F8_DATE, _f8_arguments
 
 import korail_mobile_api as api
@@ -361,6 +363,11 @@ ROWS = [
         lambda c: _station_refund(c, str_result="FAIL"),
         "successful verif",
     ),
+    Row(
+        "station-refund-no-original-ticket",
+        lambda c: _station_refund(c, original_tickets=()),
+        "successful verif",
+    ),
     Row("station-refund-no-fee", lambda c: _station_refund(c, refund_fee=None), "missing refund_fee"),
     Row(
         "station-verify-blank-name",
@@ -644,6 +651,22 @@ ROWS = [
 
 # Defects fixed in 2.6.2.
 FIXES = [
+    Row("search-query-mapping", lambda c: c.search_trains({})),
+    Row("search-query-none", lambda c: c.search_transfer_trains(None)),
+    Row("search-connections-none", lambda c: _search(c, connection_station_codes=None)),
+    Row("search-connections-mapping", lambda c: _search(c, connection_station_codes={"0001": "x"})),
+    Row("search-connections-generator", lambda c: _search(c, connection_station_codes=iter(["0001"]))),
+    Row("search-srt-text", lambda c: _search(c, include_srt="False")),
+    Row("search-nearby-int", lambda c: _search(c, include_nearby_stations=1)),
+    Row("search-special-text", lambda c: c.search_trains(QUERY, use_special_schedule="False")),
+    Row("search-peak-int", lambda c: c.search_transfer_trains(QUERY, peak_season=1)),
+    Row(
+        "search-numeric-invalid-cursor",
+        lambda c: c.search_trains(replace(QUERY, departure_station="0001"), continuation=("1", "2")),
+    ),
+    Row("search-numeric-blank-arrival", lambda c: _search(c, departure_station="0001", arrival_station=" ")),
+    Row("mileage-request-mapping", lambda c: c.get_mileage_history({})),
+    Row("self-seat-change-request-none", lambda c: c.get_self_seat_change_options(None)),
     # D6: non-ASCII digits reach int() (bare ValueError) or the wire.
     Row(
         "cancel-journey-count-superscript",
@@ -706,6 +729,140 @@ def test_invalid_input_is_rejected_before_any_request(
     """The default config keeps NetFunnel on, so zero requests also means no 5101 gate entry."""
     sent: list[httpx.Request] = []
     client = f8_client_factory(_recording(sent), logged_in=row.logged_in)
-    with pytest.raises(row.error, match=row.match):
+    with pytest.raises(row.error, match=row.match) as caught:
         row.call(client)
+    if isinstance(caught.value, api.KorailApiError):
+        assert caught.value.request_sent is None
     assert [request.url.path for request in sent] == []
+
+
+@pytest.mark.parametrize(
+    "method,field,path,before,after",
+    [
+        (
+            "list_discount_coupons",
+            "page_no",
+            "passCard.CouponView",
+            b"&txtSelPage=",
+            b"&pnrNo=SYNTHETIC-PNR",
+        ),
+        (
+            "list_product_reservations",
+            "page_no",
+            "product.ReservationList",
+            b"&txtSelPage=",
+            b"&txtCntPerPage=10",
+        ),
+        (
+            "list_product_reservations",
+            "page_size",
+            "product.ReservationList",
+            b"&txtSelPage=1&txtCntPerPage=",
+            b"",
+        ),
+        (
+            "list_tickets",
+            "page_no",
+            "myTicket.MyTicketNewList.do",
+            b"&txtIndex=1&hiduserYn=Y&h_page_no=",
+            b"",
+        ),
+        (
+            "get_mileage_history",
+            "page_no",
+            "mlg.amtSpec.do",
+            b"&pontTpVal=1&qryDvVal=0&qryStDt=20990102&qryClsDt=20990102&pgPrCnt=20&nowPgNo=",
+            b"",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "value,text",
+    [
+        pytest.param(-1, b"-1", id="negative"),
+        pytest.param(0, b"0", id="zero"),
+        pytest.param(10**600, b"1" + b"0" * 600, id="large-convertible"),
+        pytest.param(10 ** max(5000, sys.get_int_max_str_digits()), None, id="too-long"),
+    ],
+)
+def test_page_integer_conversion_preserves_wire_or_rejects_before_send(
+    f8_client_factory, method, field, path, before, after, value, text
+):
+    limit = sys.get_int_max_str_digits()
+    if text is None and limit == 0:
+        pytest.skip("interpreter integer-to-string conversion limit is disabled")
+    sent = []
+    provider_calls = []
+    path = "/classes/com.korail.mobile." + path
+    config = synthetic_config(
+        dynapath=api.DynapathConfig(
+            enabled=True,
+            allowlist_paths=frozenset({path}),
+            token_provider=lambda context: provider_calls.append(context) or "SYNTHETIC-TOKEN",
+        )
+    )
+    client = f8_client_factory(_recording(sent), config=config)
+    arguments = dict(F8[method])
+    if method == "get_mileage_history":
+        arguments["request"] = replace(arguments["request"], page_no=value)
+    else:
+        arguments[field] = value
+
+    if text is None:
+        with pytest.raises(ValueError) as conversion:
+            str(value)
+        with pytest.raises(INVALID) as caught:
+            getattr(client, method)(**arguments)
+        assert isinstance(caught.value, api.KorailProtocolError)
+        assert isinstance(caught.value, ValueError)
+        assert type(caught.value.__cause__) is ValueError
+        assert caught.value.__cause__.args == conversion.value.args
+        assert str(caught.value) == f"{field} cannot be converted to a decimal string"
+        assert caught.value.request_sent is None
+        assert sent == provider_calls == []
+    else:
+        getattr(client, method)(**arguments)
+        assert len(sent) == len(provider_calls) == 1
+        assert sent[0].url.host == "api.example.invalid"
+        assert sent[0].url.path == path
+        is_query = method == "list_product_reservations"
+        assert sent[0].method == ("GET" if is_query else "POST")
+        assert (sent[0].url.query if is_query else sent[0].content) == (
+            b"Device=AD&Version=250601003&AppVersion=7.0.8&Key=SYNTHETIC-APP-KEY" + before + text + after
+        )
+    assert sys.get_int_max_str_digits() == limit
+
+
+@pytest.mark.parametrize("factory", ["detail", "verification"])
+@pytest.mark.parametrize(
+    "response",
+    [
+        pytest.param({}, id="mapping"),
+        pytest.param(None, id="none"),
+        pytest.param(object(), id="object"),
+        pytest.param(api.RefundCommissionResponse(str_result="SUCC"), id="other-response"),
+    ],
+)
+def test_refund_factory_wrong_response_is_rejected_before_send(f8_client_factory, factory, response):
+    sent = []
+    provider_calls = []
+    config = synthetic_config(
+        dynapath=api.DynapathConfig(
+            enabled=True,
+            token_provider=lambda context: provider_calls.append(context) or "SYNTHETIC-TOKEN",
+        )
+    )
+    client = f8_client_factory(_recording(sent), config=config)
+    with pytest.raises(INVALID) as caught:
+        if factory == "detail":
+            ticket = api.PaidTicket.from_refund_detail(response)
+            client.refund(ticket, commission=F8["refund"]["commission"])
+        else:
+            request = api.StationRefundExecutionRequest.from_verification(
+                response, customer_phone="00000000000", customer_name="SYNTHETIC-NAME"
+            )
+            client.refund_station_ticket(request)
+    expected_type = "RefundTicketDetailResponse" if factory == "detail" else "StationRefundVerificationResponse"
+    assert str(caught.value) == f"{factory} must be a {expected_type}"
+    assert caught.value.request_sent is None
+    assert sent == provider_calls == []

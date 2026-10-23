@@ -7,13 +7,13 @@
 조회 봉투와 필수 행 규칙, 타입이 정해진 스칼라 읽기를 함께 둡니다.
 
 필드 메타데이터 패턴(``_domains/checkin`` 이 기준 예시): 모델 필드가 전송 키와 읽기 규칙을 들고, 파서는 ``wire_model``
-하나로 읽습니다. ``wire(key)`` 는 가장 흔한 경우(관대한 nullable 문자열, 기본값 ``None``)이고, ``wire(key, read)`` 는
-생성자 필수 필드, ``wire(key, read, default=None)`` 은 기본값이 있는 필드입니다. 기존 기본값 유무와 필드 순서는 그대로 둡니다::
+하나로 읽습니다. ``wire(key)`` 는 관대한 nullable 문자열·기본값 ``None``, ``wire(key, read, default=...)`` 는
+명시한 기본값을 씁니다. 생성자 필수 필드는 표준 ``field(metadata=...)`` 로 선언합니다::
 
     @dataclass(frozen=True, kw_only=True)
     class Seat:
-        seat_no: str = wire("seatNo", required_str)
-        car_no: int = wire("scarNo", required_int)
+        seat_no: str = field(metadata={"wire": "seatNo", "read": required_str})
+        car_no: int = field(metadata={"wire": "scarNo", "read": required_int})
         note: str | None = wire("rmkCont")
         rows: tuple[Row, ...] = ()  # 중첩 목록·교차 검사·특수 규칙은 메타데이터 없이 명시 코드로 넘깁니다
         raw: Mapping[str, object] = field(default_factory=dict[str, object], repr=False, compare=False)
@@ -36,8 +36,9 @@
 - ``required_int``: 오류 / 오류 / 오류. JSON int 와 ASCII 십진 문자열(앞의 ``-`` 하나)을 받습니다.
 - ``optional_bool``: None / None / None.
 
-읽기 규칙의 반환 타입이 필드 선언과 다르면 mypy·Pyright 가 잡습니다. 다만 타입 검사기는 ``wire()`` 필드를 기본값이 있는
-필드로 보므로, 필수 필드 누락은 실행 시 ``TypeError`` 로만 드러납니다.
+``wire()`` 의 반환 타입과 필수 생성자 인자는 mypy·Pyright 가 검사합니다. 표준 필드 메타데이터의 reader 반환형은
+``tests/test_types.py`` 가 선언과 대조합니다. ``wire_model`` 의 동적 키·추가 중첩값은 정적으로 연결되지 않으므로
+각 도메인 파서 계약 테스트에서 검증합니다.
 """
 
 from __future__ import annotations
@@ -47,7 +48,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import MISSING, field, fields
 from functools import wraps
-from typing import TYPE_CHECKING, ParamSpec, TypeAlias, TypedDict, TypeGuard, TypeVar, overload
+from typing import TYPE_CHECKING, ParamSpec, TypeAlias, TypedDict, TypeGuard, TypeVar, cast, overload
 
 from ..errors import (
     SESSION_EXPIRED_CODE,
@@ -69,7 +70,9 @@ _Reader: TypeAlias = Callable[[Mapping[str, object], str, str], _T]
 
 
 def _is_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
-    return isinstance(value, Mapping)
+    if not isinstance(value, Mapping):
+        return False
+    return all(isinstance(key, str) for key in cast(Mapping[object, object], value))
 
 
 def _is_list(value: object) -> TypeGuard[list[object]]:
@@ -77,7 +80,7 @@ def _is_list(value: object) -> TypeGuard[list[object]]:
 
 
 def _all_mappings(rows: list[object]) -> TypeGuard[list[Mapping[str, object]]]:
-    return all(isinstance(row, Mapping) for row in rows)
+    return all(_is_mapping(row) for row in rows)
 
 
 def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
@@ -89,7 +92,7 @@ def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
             return parser(*args, **kwargs)
         except KorailApiError as error:
             response = args[0] if args else kwargs.get("raw", kwargs.get("response"))
-            raw = response if _is_mapping(response) else getattr(response, "raw", response)
+            raw = getattr(response, "raw", response) if not _is_mapping(response) else response
             if error.raw is not raw:
                 error.parser_raw = error.raw
                 error.raw = raw
@@ -165,13 +168,13 @@ def _row(value: object, context: str) -> Mapping[str, object]:
 
 def _response_mapping(raw: Mapping[str, object]) -> dict[str, object]:
     """얕은 복사본을 돌려줍니다. 봉투 필드 타입은 ``_envelope`` 가 검사하며 성공 여부는 보지 않습니다."""
-    if not isinstance(raw, Mapping):
+    if not _is_mapping(raw):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     return dict(raw)
 
 
 def _rows(data: Mapping[str, object] | None, key: str) -> list[Mapping[str, object]]:
-    if not isinstance(data, Mapping):
+    if not _is_mapping(data):
         return []
     return [item for item in _optional_list(data, key) if _is_mapping(item)]
 
@@ -289,7 +292,7 @@ def _validate_envelope(
     return_all_failures: bool = False,
     allow_result_only_success: bool = False,
 ) -> bool:
-    if not isinstance(raw, Mapping):
+    if not _is_mapping(raw):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     # raw 를 직접 받는 호출자는 http.parse_base_response 를 거치지 않으므로 봉투 필드 타입을 여기서도 확인합니다.
     envelope = _envelope(raw)
@@ -390,7 +393,6 @@ def _typed_non_negative_integer_value(
     return parsed
 
 
-# 필드 메타데이터 읽기 규칙: 모두 (data, key, context) 를 받습니다. 표는 모듈 docstring 참고.
 def defaulted_str(data: Mapping[str, object], key: str, context: str) -> str:
     """누락은 앱 합성 생성자의 기본값 "" 이고, 값이 있으면 문자열·JSON 정수만 받습니다(일반 좌석 재고의 layout_type 정수 관측). null 과 다른
     타입은 앱의 Json 설정이 보호돼 있어 받아도 되는지 확인할 수 없으므로 거절합니다."""
@@ -417,7 +419,7 @@ required_int = _required_integer
 @overload
 def wire(key: str) -> str | None: ...
 @overload
-def wire(key: str, read: _Reader[_T], *, default: _T = ...) -> _T: ...
+def wire(key: str, read: _Reader[_T], *, default: _T) -> _T: ...
 def wire(key: str, read: _Reader[object] | None = None, *, default: object = MISSING) -> object:
     """모델 필드에 전송 키와 읽기 규칙을 붙입니다. ``read`` 를 빼면 nullable_str·기본값 None 입니다."""
     if read is None:
@@ -426,8 +428,8 @@ def wire(key: str, read: _Reader[object] | None = None, *, default: object = MIS
 
 
 def wire_model(cls: type[_D], data: Mapping[str, object], context: str, /, **extra: object) -> _D:
-    """``wire()`` 필드를 선언 순서로 읽어 ``extra`` 와 함께 생성합니다."""
-    values = {
+    """전송 메타데이터 필드를 선언 순서로 읽어 ``extra`` 와 함께 생성합니다."""
+    values: dict[str, object] = {
         item.name: item.metadata["read"](data, item.metadata["wire"], context)
         for item in fields(cls)
         if "wire" in item.metadata

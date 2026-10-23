@@ -9,17 +9,21 @@ from typing import Any
 from unittest.mock import Mock
 
 import pytest
-from conftest import synthetic_config
+from conftest import synthetic_config, wire_form, wire_pairs
 
 from korail_mobile_api import (
     BaseKorailResponse,
+    HoldReference,
     Korail,
+    KorailInvalidInputError,
     KorailPassengerCounts,
     KorailProtocolError,
     KorailReservationJobType,
     KorailReserveOption,
+    KorailSeatAssignment,
     KorailSeatClass,
     ReservationHoldResponse,
+    ReservationResource,
     TrainSearchMetadata,
     TrainSearchQuery,
     TrainSearchResult,
@@ -31,6 +35,15 @@ def _train(**changes: Any) -> TrainSummary:
     return replace(
         TrainSummary(
             train_no="90001",
+            train_group_code="100",
+            train_class_code="0A",
+            run_date="20990102",
+            departure_station_code="9901",
+            arrival_station_code="9903",
+            departure_construction_order="003",
+            arrival_construction_order="009",
+            departure_run_order="002",
+            arrival_run_order="007",
             train_class_name="KTX",
             departure_station_name="출발시험역",
             arrival_station_name="도착시험역",
@@ -171,7 +184,13 @@ def test_cabin_option_matrix_sends_at_most_one_reservation(
     if allowed:
         assert korail.reservations.create(train, option=option, passengers=counts) is hold
         assert calls == [
-            {"passengers": counts, "seat_class": expected, "job_type": KorailReservationJobType.IMMEDIATE}
+            {
+                "passengers": counts,
+                "seat_class": expected,
+                "job_type": KorailReservationJobType.IMMEDIATE,
+                "seats": None,
+                "seat_attribute_code": None,
+            }
         ]
     else:
         with pytest.raises(KorailProtocolError, match="available seat"):
@@ -234,6 +253,115 @@ def test_default_and_explicit_cabin_behavior_remain(
     assert reserve.call_args.kwargs["seat_class"] is (
         KorailSeatClass.GENERAL if seat_class is None else seat_class
     )
+
+
+@pytest.mark.parametrize("container", [tuple, list])
+def test_create_designated_seats_forwards_existing_wire_options_once(
+    scripted_client_factory, f8_logged_in_session, container
+):
+    raw = {"strResult": "SUCC", "h_pnr_no": "SYNTHETIC-PNR"}
+    client, requests, pending = scripted_client_factory(
+        [raw],
+        config=synthetic_config(netfunnel_enabled=False, disable_dynapath=True),
+        session=f8_logged_in_session,
+    )
+    result = ReservationResource(client).create(
+        _train(special_reservation_code="11"),
+        passengers=KorailPassengerCounts(adult=2),
+        seat_class=KorailSeatClass.SPECIAL,
+        job_type=KorailReservationJobType.SEAT_DESIGNATED,
+        seats=container(
+            [KorailSeatAssignment(car_no=2, seat_no="01A"), KorailSeatAssignment(car_no=3, seat_no="02B")]
+        ),
+        seat_attribute_code="031",
+    )
+    assert result.raw == raw and len(requests) == 1 and pending == []
+    form = wire_form(requests[0])
+    assert {key: form[key] for key in ("txtJobId", "txtPsrmClCd1", "txtSeatAttCd4", "txtTotPsgCnt")} == {
+        "txtJobId": ["1103"],
+        "txtPsrmClCd1": ["2"],
+        "txtSeatAttCd4": ["031"],
+        "txtTotPsgCnt": ["2"],
+    }
+    assert [
+        (key, value) for key, value in wire_pairs(requests[0]) if key.startswith(("txtSrcar", "txtSeatNo"))
+    ] == [
+        ("txtSrcarCnt", "2"),
+        ("txtSrcarNo1", "2"),
+        ("txtSeatNo1", "01A"),
+        ("txtSrcarNo2", "3"),
+        ("txtSeatNo2", "02B"),
+    ]
+
+
+def test_create_keeps_option_selection_with_an_explicit_seat_attribute(
+    scripted_client_factory, f8_logged_in_session
+):
+    client, requests, pending = scripted_client_factory(
+        [{"strResult": "SUCC"}],
+        config=synthetic_config(netfunnel_enabled=False, disable_dynapath=True),
+        session=f8_logged_in_session,
+    )
+    ReservationResource(client).create(
+        _train(general_reservation_code="13", special_reservation_code="11"),
+        option=KorailReserveOption.GENERAL_FIRST,
+        seat_attribute_code="031",
+    )
+    form = wire_form(requests[0])
+    assert form["txtJobId"] == ["1101"] and form["txtPsrmClCd1"] == ["2"] and form["txtSeatAttCd4"] == ["031"]
+    assert "txtSrcarCnt" not in form and len(requests) == 1 and pending == []
+
+
+@pytest.mark.parametrize("option", [None, KorailReserveOption.GENERAL_FIRST])
+def test_create_does_not_infer_a_designated_job_from_seats(
+    scripted_client_factory, f8_logged_in_session, option
+):
+    client, requests, _ = scripted_client_factory(
+        [], config=synthetic_config(netfunnel_enabled=False), session=f8_logged_in_session
+    )
+    with pytest.raises(KorailInvalidInputError, match="seat-designated"):
+        ReservationResource(client).create(
+            _train(), option=option, seats=[KorailSeatAssignment(car_no=1, seat_no="01A")]
+        )
+    assert requests == []
+
+
+@pytest.mark.parametrize("target", ["hold", "reference", "recovered"])
+@pytest.mark.parametrize("check_first", [None, True, False])
+def test_cancel_supports_hold_recovery_and_explicit_check_budget(
+    scripted_client_factory, f8_logged_in_session, target, check_first
+):
+    reference = HoldReference(pnr_no="SYNTHETIC-PNR", journey_count="0002")
+    targets = {
+        "hold": ReservationHoldResponse(str_result="SUCC", pnr_no="SYNTHETIC-PNR", journey_count="0002"),
+        "reference": reference,
+        "recovered": HoldReference.from_raw(
+            {"h_pnr_no": "SYNTHETIC-PNR", "h_jrny_cnt": "0002", "h_wct_no": []}
+        ),
+    }
+    budget = 1 if check_first is False else 2
+    client, requests, pending = scripted_client_factory(
+        [{"strResult": "SUCC"}] * budget,
+        config=synthetic_config(netfunnel_enabled=False, disable_dynapath=True),
+        session=f8_logged_in_session,
+    )
+    resource = ReservationResource(client)
+    result = (
+        resource.cancel(targets[target])
+        if check_first is None
+        else resource.cancel(targets[target], check_first=check_first)
+    )
+    assert result.str_result == "SUCC" and len(requests) == budget and pending == []
+    assert [request.url.path.rsplit(".", 1)[-1] for request in requests] == (
+        ["ReservationCancel", "ReservationCancelChk"] if budget == 2 else ["ReservationCancelChk"]
+    )
+    for request in requests:
+        assert wire_pairs(request)[-4:] == [
+            ("txtPnrNo", "SYNTHETIC-PNR"),
+            ("txtJrnySqno", "0001"),
+            ("txtJrnyCnt", "0002"),
+            ("hidRsvChgNo", "000"),
+        ]
 
 
 @pytest.mark.parametrize(

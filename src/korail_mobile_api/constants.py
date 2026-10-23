@@ -16,7 +16,7 @@ KORAIL_API_VERSION = "250601003"
 KORAIL_APP_VERSION = "7.0.8"
 KORAIL_APP_KEY = "korail1234567890"
 KORAIL_TIMEOUT_SECONDS = 60.0
-# 기기 기본값은 한 표본 기기의 값입니다. DynaPath 토큰의 dm·os 와 기본 대기열 User-Agent 에 함께 씁니다.
+# 기기 기본값은 대기열 User-Agent와 공급자 문맥의 표본이며 기본 DynaPath 진단 토큰에는 합성하지 않습니다.
 KORAIL_DEFAULT_DEVICE_NAME = "SM-S948N"
 # Build.VERSION.RELEASE 이며 SDK 정수(KORAIL_DEFAULT_ANDROID_SDK_INT)와 다릅니다.
 KORAIL_DEFAULT_ANDROID_OS_RELEASE = "17"
@@ -83,7 +83,7 @@ KorailLoginInputFlag: TypeAlias = Literal["2", "4", "5"]
 class KorailReservationJobType(StrEnum):
     """예약 종류(일반 예약, 예약대기, 좌석 지정 예약, 병합 예약)를 구분합니다.
 
-    ``reserve``, ``reserve_transfer``, ``reserve_merge``의 ``job_type``에 넣습니다."""
+    ``reserve``와 ``reserve_transfer``의 ``job_type``에 넣으며 ``reserve_merge``는 병합 유형으로 고정됩니다."""
 
     # 앱의 DEFAULT/WAIT/SEAT/MERGE 등에 대응하나 코드 평문은 보호돼 있습니다.
     # evidence: app 7.0.6 ReservationJobId.java:20-24

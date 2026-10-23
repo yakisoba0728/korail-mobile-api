@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import ast
 import re
-from typing import Any
 
 import griffe
 
-_SOURCE = r"[\w$./]+\.(?:java|smali|kt)(?::[\d,\-–]+)?|[\w$./]+\.json:[\d,\-–]+"
+_SOURCE = r"[\w$./]+\.(?:java|smali|kt)(?::[\d,\-\u2013]+)?|[\w$./]+\.json:[\d,\-\u2013]+"
 _PAREN = re.compile(r"\s*\((?=[^()]*\.(?:java|smali|kt)\b|[^()]*\.json:\d)[^()]*\)")
 _ROLE = re.compile(r":(?:class|attr|func|meth|data|mod|exc):`~?([^`]+)`")
 _LABELLED = re.compile(
@@ -27,21 +26,21 @@ _BARE = re.compile(r"(?:``)?" + _SOURCE + r"(?:``)?(?:\s*[,;]\s*(?:``)?" + _SOUR
 
 
 def clean(text: str) -> str:
+    """호출 표기와 들여쓰기를 보존하며 소스 인용·Sphinx 역할만 정리합니다."""
     text = _ROLE.sub(r"``\1``", text)
     text = _PAREN.sub("", text)
     text = _LABELLED.sub("", text)
     text = _BARE.sub("", text)
-    text = re.sub(r"\(\s*[,;]?\s*\)", "", text)
-    text = re.sub(r"[ \t]+([.,;])", r"\1", text)
-    text = re.sub(r"[ \t]{2,}", " ", text)
-    text = re.sub(r"^[ \t]*[.,;][ \t]*", "", text, flags=re.M)
-    return re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text
 
 
 class DocsExtension(griffe.Extension):
+    """공개 타입 문서의 필드 기본값과 설명을 보완합니다."""
+
     def on_attribute_instance(
-        self, *, node: ast.AST | griffe.ObjectNode, attr: griffe.Attribute, **kwargs: Any
+        self, *, node: ast.AST | griffe.ObjectNode, attr: griffe.Attribute, **kwargs: object
     ) -> None:
+        """wire 기본값과 필드 바로 위 설명을 반영합니다."""
         value = attr.value
         if isinstance(value, griffe.ExprCall) and str(value.function) == "wire":
             # wire() 는 dataclasses.field 를 감싸므로 실제 기본값(wire(key) 는 None, default 가 없으면 필수)만 보입니다.
@@ -66,7 +65,9 @@ class DocsExtension(griffe.Extension):
         if comments:
             attr.docstring = griffe.Docstring(" ".join(comments), parent=attr)
 
-    def on_package(self, *, pkg: griffe.Module, **kwargs: Any) -> None:
+    def on_package(self, *, pkg: griffe.Module, **kwargs: object) -> None:
+        """별칭은 유지하고 문서 본문과 비공개 상속 표기를 정리합니다."""
+
         def walk(obj: griffe.Object | griffe.Alias) -> None:
             if isinstance(obj, griffe.Alias):
                 return

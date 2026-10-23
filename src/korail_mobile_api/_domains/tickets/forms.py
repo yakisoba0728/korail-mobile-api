@@ -35,8 +35,7 @@ def build_ticket_list_form(
     """목록 종류·날짜·쪽번호를 보정하지 않습니다. mode 의 의미는 앱 리터럴이 보호돼 실서버 관측으로 정했습니다."""
     if not isinstance(mode, str) or not mode:
         raise KorailInvalidInputError("ticket list mode must be a non-empty string")
-    if type(page_no) is not int:
-        raise KorailInvalidInputError("page_no must be an integer")
+    page_text = _int_text(page_no, "page_no")
     for name, value in (("boarding_date_from", boarding_date_from), ("boarding_date_to", boarding_date_to)):
         if not (value == "" or _is_ascii_digits(value, frozenset({8}))):
             raise KorailInvalidInputError(f"{name} must be empty or exactly 8 ASCII digits")
@@ -46,7 +45,7 @@ def build_ticket_list_form(
         "h_abrd_dt_to": boarding_date_to,
         "txtDeviceId": config.advertising_id,
         "hiduserYn": "Y",
-        "h_page_no": str(page_no),
+        "h_page_no": page_text,
     }
 
 
@@ -95,11 +94,7 @@ def build_mileage_history_form(
 
 @dataclass(frozen=True, kw_only=True)
 class OriginalTicketReference:
-    """원표 조회와 환불·대리수령 같은 후속 처리에 쓰는 반환 식별자를 구성합니다.
-
-    네 필드 모두 비어 있지 않은 문자열이어야 하며, 아니면 ``KorailInvalidInputError``가 발생합니다. ``sale_date``의 형식은
-    메서드마다 다릅니다. 수령자·대리수령 조회 두 메서드는 승차권의 ``sale_date``(``YYYYMMDD``)를 받고, 그 밖의 메서드는
-    ``return_sale_date``(``MMDD``)를 받습니다. 메서드 사이에 값을 섞어 쓰지 마세요."""
+    """호출 메서드에 맞는 판매일과 원표 식별자를 구성합니다."""
 
     sale_window_no: str
     sale_date: str
@@ -117,15 +112,26 @@ class OriginalTicketReference:
 
     @classmethod
     def from_ticket(cls, ticket: TicketListTicket) -> OriginalTicketReference:
-        """승차권 목록의 한 장에서 원표 반환일(``return_sale_date``, ``MMDD``)을 판매일로 넣어 만듭니다.
-
-        수령자·대리수령 조회처럼 ``YYYYMMDD`` 판매일을 받는 메서드에는 ``sale_date=ticket.sale_date``로 직접 만드세요.
-        값이 없으면 ``KorailInvalidInputError``가 발생합니다."""
+        """승차권의 원표 반환일(``return_sale_date``, ``MMDD``)로 참조를 만듭니다."""
         if not isinstance(ticket, TicketListTicket):
             raise KorailInvalidInputError("ticket must be a TicketListTicket")
         return cls(
             sale_window_no=_required_text(ticket.sale_window_no, "sale_window_no"),
             sale_date=_required_text(ticket.return_sale_date, "return_sale_date"),
+            sale_sequence=_required_text(ticket.sale_sequence, "sale_sequence"),
+            return_password=_required_text(ticket.return_password, "return_password"),
+        )
+
+    @classmethod
+    def from_sale_ticket(cls, ticket: TicketListTicket) -> OriginalTicketReference:
+        """승차권의 전체 판매일(``sale_date``, ``YYYYMMDD``)로 참조를 만듭니다."""
+        if not isinstance(ticket, TicketListTicket):
+            raise KorailInvalidInputError("ticket must be a TicketListTicket")
+        return cls(
+            sale_window_no=_required_text(ticket.sale_window_no, "sale_window_no"),
+            sale_date=_ascii_digits(
+                _required_text(ticket.sale_date, "sale_date"), "sale_date", lengths=frozenset({8})
+            ),
             sale_sequence=_required_text(ticket.sale_sequence, "sale_sequence"),
             return_password=_required_text(ticket.return_password, "return_password"),
         )

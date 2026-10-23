@@ -40,7 +40,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install '.[dev]'
-      - name: Install exact declared dependency lower bounds
+      - name: Install exact declared runtime, backend and mypy lower bounds
         if: matrix.dependencies == 'minimum'
         run: |
           python - <<'PY'
@@ -52,6 +52,8 @@ jobs:
           with open('pyproject.toml', 'rb') as stream:
               config = tomllib.load(stream)
           requirements = config['project']['dependencies'] + config['build-system']['requires']
+          requirements += [text for text in config['project']['optional-dependencies']['dev']
+                           if Requirement(text).name == 'mypy']
           pins = []
           for text in requirements:
               requirement = Requirement(text)
@@ -62,10 +64,10 @@ jobs:
           PY
       - name: Ruff lint
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
-        run: python -m ruff check src checks tests
+        run: python -m ruff check src checks tests docs/griffe_docs.py
       - name: Ruff format check
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
-        run: python -m ruff format --check src checks tests
+        run: python -m ruff format --check src checks tests docs/griffe_docs.py
       - name: Mypy strict
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: python -m mypy
@@ -90,7 +92,7 @@ jobs:
         run: python -m build
       - name: Check distribution metadata and README
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: python -m twine check dist/*
+        run: python -m twine check --strict dist/*
       - name: Install wheel into clean venv and run installed-package checks
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
@@ -145,6 +147,13 @@ jobs:
               shutil.copy2(root / 'tests' / name, tests / name)
           subprocess.check_call([str(python), '-m', 'pytest', '-q', str(tests)], cwd=clean, env=env)
           PY
+      - name: Save validated distributions
+        if: matrix.python == '3.14' && matrix.dependencies == 'current'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: validated-dist
+          path: dist/
+          if-no-files-found: error
 
   maintenance:
     name: Workflow lint and dependency security
@@ -188,8 +197,14 @@ jobs:
         with:
           python-version: '3.14'
           cache: pip
-          cache-dependency-path: docs/requirements.txt
+          cache-dependency-path: |
+            pyproject.toml
+            docs/requirements.txt
       - name: Install documentation tooling
-        run: python -m pip install -r docs/requirements.txt
+        run: python -m pip install -e '.[dev]' -r docs/requirements.txt
+      - name: Run documentation and Griffe regressions
+        run: |
+          python -c "import griffe"
+          python -m pytest tests/test_docs.py --no-cov
       - name: Build the documentation site (warnings fail)
         run: python -m mkdocs build --strict

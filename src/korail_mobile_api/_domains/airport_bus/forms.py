@@ -11,7 +11,14 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass, fields
 
-from ..._core.validation import _DATE_RE, _DIGITS_RE, _TIME_RE, _ascii_digits
+from ..._core.validation import (
+    _DATE_RE,
+    _DIGITS_RE,
+    _TIME_RE,
+    _ascii_digits,
+    _optional_text,
+    _required_text,
+)
 from ..._core.wire import _device_version, _device_version_key, _in_reservation_order, _is_ascii_digits
 from ...config import KorailConfig
 from ...constants import (
@@ -102,6 +109,8 @@ class AirportBusSeatInventoryQuery:
             raise KorailInvalidInputError("passenger_count must be an integer")
         if type(self.is_arrow) is not bool:
             raise KorailInvalidInputError("is_arrow must be a boolean")
+        if self.product_no is not None:
+            _optional_text(self.product_no, "product_no")
         for item in fields(self):
             if item.name not in ("passenger_count", "product_no", "is_arrow"):
                 _text(getattr(self, item.name), item.name)
@@ -254,18 +263,16 @@ def _build_ticket_maas_menu_form(
     pnr_no: str | None,
     ticket_return_numbers: Sequence[str] | None,
 ) -> list[tuple[str, str]]:
-    if not isinstance(pnr_no, str) or not pnr_no.strip():
-        raise KorailInvalidInputError("KORAIL ticket MaaS menu requires a PNR")
+    pnr_no = _required_text(pnr_no, "KORAIL ticket MaaS menu PNR")
     if (
-        ticket_return_numbers is None
-        or isinstance(ticket_return_numbers, str | bytes)
+        isinstance(ticket_return_numbers, (str, bytes))
+        or not isinstance(ticket_return_numbers, Sequence)
         or not ticket_return_numbers
-        or any(not isinstance(number, str) or not number.strip() for number in ticket_return_numbers)
     ):
         raise KorailInvalidInputError("KORAIL ticket MaaS menu requires at least one return number")
     return [
         ("pnrNo", pnr_no),
-        *(("tkRetNo", number) for number in ticket_return_numbers),
+        *(("tkRetNo", _required_text(number, "return number")) for number in ticket_return_numbers),
     ]
 
 

@@ -26,8 +26,9 @@ KorailClient.list_airport_bus_schedules(
 ) -> AirportBusScheduleResponse
 ```
 
-조회 조건은 [`AirportBusScheduleQuery`][korail_mobile_api.AirportBusScheduleQuery]로 만듭니다. 아홉 필드가 모두 필수이며, 라이브러리는 값을 검사하거나 기본값을 채우지 않고 그대로 보냅니다.
-빈 문자열을 넣은 필드는 요청에서 빠집니다. 각 코드의 전체 목록은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
+조회 조건은 [`AirportBusScheduleQuery`][korail_mobile_api.AirportBusScheduleQuery]로 만듭니다. 아홉 인자를 모두 명시하며, 생성할 때 모두 문자열인지 검사합니다.
+`train_no`와 `reservation_sale_division_code`만 빈 문자열로 둘 수 있고 그때는 요청에서 빠집니다. 나머지는 공백뿐인 값도 거절하며 [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError]가 발생합니다.
+날짜·시각의 자릿수나 실제 달력 유효성, 각 코드의 허용값은 검사하지 않으며 기본값도 추측하지 않습니다. 코드의 전체 목록은 확인하지 못했습니다.
 
 | 필드 | 요청 키 | 설명 |
 |---|---|---|
@@ -51,7 +52,8 @@ KorailClient.list_airport_bus_schedules(
 **반환값**
 
 [`AirportBusScheduleResponse`][korail_mobile_api.AirportBusScheduleResponse] — `schedules`에 운행 편이 [`AirportBusSchedule`][korail_mobile_api.AirportBusSchedule] 목록으로 들어 있습니다.
-편마다 운행일, 편 번호, 출발·도착 정류장 코드와 시각, 잔여석 수(`general_remaining_seat_count` 등), 운임 문자열(`received_price`)이 있습니다. 응답의 편 목록(`trainList`)이 없거나 `null`이면 빈 튜플입니다.
+편마다 운행일, 편 번호, 출발·도착 정류장 코드와 시각, 잔여석 수(`general_remaining_seat_count` 등), 운임 문자열(`received_price`)이 있습니다. 성공 응답의 편 목록(`trainList`)이 없거나 `null`이면 빈 튜플입니다.
+`strResult`는 정확히 `SUCC`여야 합니다. `FAIL/WRG000000`도 빈 성공으로 바꾸지 않고 [`KorailNoResultsError`][korail_mobile_api.KorailNoResultsError]로 전달합니다. 다른 메서드의 결과 없음 정책과 구별하세요.
 
 **예외**
 
@@ -104,8 +106,9 @@ KorailClient.get_airport_bus_seat_inventory(
 열차 종류·운행 그룹 코드, 운행일, 편 번호, 출발·도착 정류장 코드와 순서는 [`list_airport_bus_schedules`](#list_airport_bus_schedules)가 반환한 [`AirportBusSchedule`][korail_mobile_api.AirportBusSchedule]의 필드(`settlement_train_class_code`, `train_group_code`, `run_date`, `train_no`, `departure_station_code`, `arrival_station_code`, `departure_run_order`, `arrival_run_order`)에서 옮깁니다.
 [`reserve_airport_bus`](#reserve_airport_bus)은 호차 번호를 항상 `"0001"`로 보내므로 좌석도 같은 호차(`car_no="0001"`)로 조회하세요.
 
-`passenger_count`는 인원 수이며, 이 조회에서는 1~9 범위를 검사하지 않습니다. `product_no`가 `None`(기본값)이면 보내지 않고, `is_arrow`는 `"true"`나 `"false"`로 보냅니다(기본값 `False`).
-[`AirportBusSeatInventoryQuery`][korail_mobile_api.AirportBusSeatInventoryQuery]를 만들 때 `passenger_count`가 `int`가 아니거나 `is_arrow`가 `bool`이 아니면 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
+`passenger_count`는 인원 수이며, 이 저수준 조회에서는 1~9 범위를 검사하지 않습니다. 간편 API `korail.airport_bus.seats()`의 1~9 검사와 다릅니다. `product_no`가 `None`(기본값)이면 보내지 않고, `is_arrow`는 `"true"`나 `"false"`로 보냅니다(기본값 `False`).
+`product_no`는 문자열 또는 `None`만 받습니다. 빈 문자열은 생략하고 공백 문자열은 유지하며, 비문자열은 생성 시 `KorailInvalidInputError`입니다.
+[`AirportBusSeatInventoryQuery`][korail_mobile_api.AirportBusSeatInventoryQuery]를 만들 때 필수 식별 문자열이 비었거나 문자열이 아니면 거절합니다. `passenger_count`는 `bool`을 제외한 `int`, `is_arrow`는 `bool`이어야 하며, 위반하면 [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError]입니다. 날짜·시각의 형식이나 달력 유효성을 추가로 검사하지는 않습니다.
 
 **매개변수**
 
@@ -134,23 +137,12 @@ KorailClient.get_airport_bus_seat_inventory(
 from korail_mobile_api import AirportBusSeatInventoryQuery
 
 bus = schedules.schedules[0]
-seat_query = AirportBusSeatInventoryQuery(
-    train_class_code=bus.settlement_train_class_code,
-    service_code=bus.train_group_code,
-    run_date=bus.run_date,
-    train_no=bus.train_no,
-    car_no="0001",
-    room_class_code="1",
-    departure_station_code=bus.departure_station_code,
-    arrival_station_code=bus.arrival_station_code,
-    seat_attribute_code="015",
-    departure_run_order=bus.departure_run_order,
-    arrival_run_order=bus.arrival_run_order,
-    passenger_count=2,
-)
+seat_query = AirportBusSeatInventoryQuery.from_schedule(bus, passenger_count=2)
 inventory = client.get_airport_bus_seat_inventory(seat_query)
 free = [seat.seat_no for seat in inventory.seats if seat.sale_possible_flag == "Y"]
 ```
+
+`from_schedule()`은 필수 식별값이 없으면 요청 전에 거절하고 공항버스용 호차·객실·좌석 속성을 채웁니다. 다른 값이나 `product_no`·`is_arrow`를 지정하려면 위 필드 설명에 따라 직접 생성할 수 있습니다.
 
 <a id="reserve_limousine"></a>
 
@@ -264,7 +256,9 @@ KorailClient.list_maas_menus(
 
 | 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 응답 파싱 |
+| 조건부: 승차권별 메뉴만 필요 | - | 아니요 | 응답 파싱 |
+
+승차권별 `ticket_return_numbers`는 문자열·bytes가 아닌 `Sequence[str]`(목록·튜플 등)이어야 합니다. 순서·중복을 유지하며 generator·dict·set은 소비·전송하지 않고 거절합니다. 이 분기의 인증 검사가 입력 검사보다 먼저입니다.
 
 **예제**
 

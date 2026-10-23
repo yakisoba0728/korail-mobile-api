@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import random
+import re
 import string
 import threading
 import time
@@ -152,7 +153,7 @@ class DynapathRequestContext:
     device_name: str
     os_version: str
     #: 보낼 요청 본문 바이트입니다. 본문이 없는 요청은 ``b""``입니다.
-    body: bytes = b""
+    body: bytes = field(default=b"", repr=False)
     #: 공통 요청의 ``AppVersion`` 값입니다. 보내지 않는 설정이면 ``None``입니다.
     app_version: str | None = None
 
@@ -210,7 +211,8 @@ class DynapathTokenSettings:
             "os_version",
             "device_model",
         ):
-            if not str(getattr(self, name)).strip():
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"DynaPath {name} must be provided")
         int(self.app_start_ts)
 
@@ -246,6 +248,10 @@ class DynapathConfig:
     os_version: str = KORAIL_DEFAULT_ANDROID_OS_RELEASE
 
     def __post_init__(self) -> None:
+        if not isinstance(self.header_name, str) or not re.fullmatch(
+            r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", self.header_name
+        ):
+            raise ValueError("DynaPath header_name must be a nonempty ASCII HTTP field name")
         if self.enabled and ((self.token_provider is None) == (self.token_settings is None)):
             raise ValueError("enabled DynaPath requires exactly one token provider or token settings")
 

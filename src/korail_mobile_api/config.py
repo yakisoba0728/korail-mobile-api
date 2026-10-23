@@ -47,6 +47,16 @@ def _validate_seconds(name: str, value: object, *, allow_zero: bool) -> None:
         raise ValueError(f"{name} must be a finite number {'>= 0' if allow_zero else '> 0'}")
 
 
+def _validate_device_text(name: str, value: object) -> None:
+    if not isinstance(value, str) or not value.strip() or "\r" in value or "\n" in value:
+        raise ValueError(f"{name} must be a non-empty single-line string")
+
+
+def _validate_device_size(name: str, value: object) -> None:
+    if type(value) is not int or value < 1:
+        raise ValueError(f"{name} must be a positive integer")
+
+
 def _validate_proxy(proxy: object) -> None:
     """URL에 자격 증명이 들어 있을 수 있어 오류 메시지에 URL을 싣지 않습니다."""
     if proxy is None:
@@ -81,7 +91,7 @@ class KorailConfig:
     device: str = KORAIL_DEVICE_ANDROID
     version: str = KORAIL_API_VERSION
     key: str = KORAIL_APP_KEY
-    timeout: float = KORAIL_TIMEOUT_SECONDS
+    timeout: float | None = KORAIL_TIMEOUT_SECONDS
     #: API 요청의 ``User-Agent`` 헤더입니다.
     user_agent: str = KORAIL_API_USER_AGENT
     dynapath: DynapathConfig = field(default_factory=DynapathConfig)
@@ -126,8 +136,7 @@ class KorailConfig:
             not isinstance(self.app_version, str) or not self.app_version.strip()
         ):
             raise ValueError("app_version must be a nonempty string or None")
-        # 타입 선언에는 없지만 None 은 httpx 의 "제한 없음"으로 받아 왔습니다.
-        if self.timeout is not None:  # pyright: ignore[reportUnnecessaryComparison]
+        if self.timeout is not None:
             _validate_seconds("timeout", self.timeout, allow_zero=False)
         _validate_seconds("netfunnel_timeout", self.netfunnel_timeout, allow_zero=False)
         if self.netfunnel_wait_limit is not None:
@@ -167,13 +176,9 @@ class KorailDeviceProfile:
 
     def __post_init__(self) -> None:
         for name in ("device_id", "model", "android_release", "build_id"):
-            value = getattr(self, name)
-            if not isinstance(value, str) or not value.strip() or "\r" in value or "\n" in value:
-                raise ValueError(f"{name} must be a non-empty single-line string")
+            _validate_device_text(name, getattr(self, name))
         for name in ("android_sdk_int", "width", "height"):
-            value = getattr(self, name)
-            if type(value) is not int or value < 1:
-                raise ValueError(f"{name} must be a positive integer")
+            _validate_device_size(name, getattr(self, name))
 
 
 def build_config_from_profile(
@@ -249,12 +254,25 @@ def build_config_from_env() -> KorailConfig:
     로그인 정보나 카드 정보는 환경변수에서 읽지 않습니다.
 
     필요한 환경변수가 없거나 빈 값이면 ``RuntimeError``가 발생합니다. ``KORAIL_DEVICE_WIDTH``, ``KORAIL_DEVICE_HEIGHT``,
-    ``KORAIL_ANDROID_SDK_INT``가 정수가 아니거나 ``KORAIL_PROXY``가 올바른 프록시 URL이 아니면 ``ValueError``가 발생합니다."""
+    ``KORAIL_ANDROID_SDK_INT``가 양의 정수가 아니거나 기기값이 한 줄 문자열이 아니거나
+    ``KORAIL_PROXY``가 올바른 프록시 URL이 아니면 ``ValueError``가 발생합니다."""
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
     device_model = _required_env("KORAIL_DYNAPATH_DEVICE_MODEL")
-    if any(not value.strip() for value in (device_id, os_version, device_model)):
-        raise ValueError("DynaPath device values must not be whitespace")
+    for name, value in (("device_id", device_id), ("android_release", os_version), ("model", device_model)):
+        _validate_device_text(name, value)
+    width = int(os.environ.get("KORAIL_DEVICE_WIDTH", KORAIL_DEFAULT_DEVICE_WIDTH))
+    height = int(os.environ.get("KORAIL_DEVICE_HEIGHT", KORAIL_DEFAULT_DEVICE_HEIGHT))
+    sdk_int = int(os.environ.get("KORAIL_ANDROID_SDK_INT", KORAIL_DEFAULT_ANDROID_SDK_INT))
+    for name, size in (("width", width), ("height", height), ("android_sdk_int", sdk_int)):
+        _validate_device_size(name, size)
+    netfunnel_user_agent = os.environ.get("KORAIL_NETFUNNEL_USER_AGENT")
+    if not netfunnel_user_agent:
+        build_id = _required_env("KORAIL_ANDROID_BUILD_ID")
+        _validate_device_text("build_id", build_id)
+        netfunnel_user_agent = build_dalvik_user_agent(
+            os_release=os_version, device_model=device_model, build_id=build_id
+        )
     advertising_id = os.environ.get("KORAIL_ADVERTISING_ID", "")
     dynapath = DynapathConfig(
         enabled=True,
@@ -274,15 +292,10 @@ def build_config_from_env() -> KorailConfig:
         version=os.environ.get("KORAIL_API_VERSION") or KORAIL_API_VERSION,
         app_version=os.environ.get("KORAIL_APP_VERSION") or KORAIL_APP_VERSION,
         user_agent=os.environ.get("KORAIL_USER_AGENT", KORAIL_API_USER_AGENT),
-        netfunnel_user_agent=os.environ.get("KORAIL_NETFUNNEL_USER_AGENT")
-        or build_dalvik_user_agent(
-            os_release=os_version,
-            device_model=device_model,
-            build_id=_required_env("KORAIL_ANDROID_BUILD_ID"),
-        ),
-        device_width=int(os.environ.get("KORAIL_DEVICE_WIDTH", KORAIL_DEFAULT_DEVICE_WIDTH)),
-        device_height=int(os.environ.get("KORAIL_DEVICE_HEIGHT", KORAIL_DEFAULT_DEVICE_HEIGHT)),
-        android_sdk_int=int(os.environ.get("KORAIL_ANDROID_SDK_INT", KORAIL_DEFAULT_ANDROID_SDK_INT)),
+        netfunnel_user_agent=netfunnel_user_agent,
+        device_width=width,
+        device_height=height,
+        android_sdk_int=sdk_int,
         dynapath=dynapath,
         advertising_id=advertising_id,
         proxy=os.environ.get("KORAIL_PROXY") or None,

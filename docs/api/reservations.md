@@ -64,6 +64,7 @@ KorailClient.reserve(
 **반환값**
 
 [`ReservationHoldResponse`][korail_mobile_api.ReservationHoldResponse] — 만들어진 홀드입니다. 예약번호 `pnr_no`, 결제할 금액 `received_amount`, 결제 기한 `payment_deadline_date`·`payment_deadline_time`, 여정 목록 `journeys`가 들어 있습니다.
+일부 여정에만 정산 좌석이 있거나 선언 여정 수와 실제 행 수가 모순되면 `received_amount=None`이며, 원문·취소 참조는 보존합니다. 총액만 있는 응답 등의 fallback과 완전한 합의 불일치 오류는 [금액 규칙](../guide/payments.md#card-payment)을 따릅니다. 자동 재조회하지 않으며 `payable=True`만으로 카드 결제 가능 금액을 보장하지 않습니다.
 
 **예외**
 
@@ -210,6 +211,7 @@ KorailClient.reserve_merge(
 
 라이브러리는 첫 홀드 요청을 보관하지 않습니다. `standing_hold_train`, `passengers`, `seat_class`, `seat_attribute_code`와 예약 종류 `MERGE_STANDING`으로 첫 홀드와 같은 요청을 다시 만든 뒤 입석 여부와 중간역 값만 바꿔 보냅니다.
 따라서 첫 홀드를 만들 때와 같은 값을 넘기세요. 중간역은 `merge_rows` 첫 행의 도착역이고, 입석 여부는 병합 행의 예약 코드로 정합니다.
+중간역 코드·도착역 construction/run 순서는 ASCII 숫자 문자열이어야 합니다. 다른 타입·공백·비ASCII 숫자는 요청 전에 `KorailInvalidInputError`이며 정상 숫자 문자열의 0 채움은 보존합니다.
 이 메서드는 대기열을 거치지 않습니다.
 
 **매개변수**
@@ -347,6 +349,7 @@ KorailClient.cancel_unpaid_hold(
 
 `check_first`가 `True`(기본값)이면 앱과 같이 취소 가능 여부를 먼저 확인한 뒤 취소 요청을 보냅니다. 확인 요청이 실패하면 예외가 발생하고 취소 요청은 보내지 않습니다.
 `check_first`가 `False`이면 확인 없이 취소 요청만 보냅니다. 어느 요청도 자동으로 다시 보내지 않습니다.
+실제 `bool`만 받으며 문자열·정수 등은 요청 전에 `KorailInvalidInputError`입니다. 로그인 여부를 먼저 검사하므로 무인증이면 `KorailAuthError`가 우선합니다. 확인은 기존처럼 `FAIL` 봉투를 거절하며 미지의 non-FAIL 결과 코드를 새로 실패로 바꾸지 않습니다.
 
 발권된 승차권에는 쓰지 않습니다. 발권된 승차권은 [`refund`](payments.md#refund)로 환불합니다.
 예약 응답을 읽지 못해 홀드 객체가 없으면 [예약 응답을 읽지 못한 홀드 취소](../guide/errors.md#unparsed-hold)를 참고하세요.
@@ -658,7 +661,7 @@ KorailClient.add_to_cart(request: CartAddRequest) -> CartAddResponse
 
 [`CartAddRequest`][korail_mobile_api.CartAddRequest]에 홀드의 `pnr_no`를 넣어 넘깁니다. 요청에는 공통 필드와 PNR만 싣습니다.
 응답의 `discount_additions`에는 서버가 돌려준 승객별 할인 행([`CartDiscountAddition`][korail_mobile_api.CartDiscountAddition])이 들어 있으며, 행이 없으면 빈 튜플입니다.
-할인을 재계산한 홀드는 [`recalculate_price`](payments.md#recalculate_price)에 `add_to_cart=True`를 넘겨 재계산 뒤에 바로 담을 수도 있습니다.
+할인을 재계산한 홀드는 [`recalculate_price`](payments.md#recalculate_price)의 성공 반환값을 먼저 보존하고, 그 PNR로 이 메서드를 따로 호출해 담습니다. 장바구니 실패가 이미 반영된 재계산을 되돌리지는 않습니다.
 
 **매개변수**
 

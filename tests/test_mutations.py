@@ -50,6 +50,7 @@ from korail_mobile_api.constants import KorailReservationJobType as Job
 from korail_mobile_api.constants import KorailSeatClass as Cabin
 from korail_mobile_api.errors import (
     KorailApiError,
+    KorailAuthError,
     KorailInvalidInputError,
     KorailProtocolError,
     KorailSessionExpiredError,
@@ -955,6 +956,22 @@ def test_cancel_skip_check_and_echo_padding(mutation_client) -> None:
     assert len(requests) == 1
 
 
+@pytest.mark.parametrize("check_first", [None, 0, 1, "", "False", [], object()])
+@pytest.mark.parametrize("logged_in", [False, True])
+@pytest.mark.parametrize("reference", [False, True])
+def test_cancel_check_first_requires_a_bool_after_authentication(
+    scripted_client_factory, f8_logged_in_session, check_first, logged_in, reference
+) -> None:
+    client, requests, _ = scripted_client_factory(
+        [BASE], session=f8_logged_in_session if logged_in else None, repeat=True
+    )
+    target = hold().reference if reference else hold()
+    with pytest.raises(KorailInvalidInputError if logged_in else KorailAuthError) as caught:
+        client.cancel_unpaid_hold(target, check_first=check_first)
+    assert caught.value.request_sent is None
+    assert requests == []
+
+
 @pytest.mark.parametrize("journeys", [True, False], ids=["first-journey", "fallbacks"])
 def test_cancel_by_reference_sends_the_hold_bytes(mutation_client, journeys: bool) -> None:
     """3.0 HoldReference: the hold, hold.reference and HoldReference.from_raw(raw) cancel with one identical form,
@@ -1009,6 +1026,40 @@ def test_merge_exact_four_overrides(mutation_client, standing: bool) -> None:
     client, requests = mutation_client([hold_raw()], "POST", ("certification.TicketReservation",), merged)
     client.reserve_merge(train(), merge_rows(standing))
     assert len(requests) == 1  # no hidden first hold/cancellation/inquiry
+
+
+@pytest.mark.parametrize("field", ["arrival_station_code", "arrival_construction_order", "arrival_run_order"])
+@pytest.mark.parametrize("value", [" ", "AB", "١", True, object()])
+def test_merge_intermediate_fields_require_ascii_digits_before_http(mutation_client, field, value) -> None:
+    first, last = merge_rows()
+    client, requests = mutation_client([], "POST", (), {})
+    with pytest.raises(KorailInvalidInputError) as caught:
+        client.reserve_merge(train(), (replace(first, **{field: value}), last))
+    assert caught.value.request_sent is None
+    assert requests == []
+
+
+def test_merge_intermediate_fields_preserve_numeric_padding(mutation_client) -> None:
+    first, last = merge_rows()
+    client, requests = mutation_client(
+        [hold_raw()],
+        "POST",
+        ("certification.TicketReservation",),
+        {**merge_form(), "txtMidRsStnCd": "0009099", "txtMidStnConsOrdr": "0004", "txtMidStnRunOrdr": "0003"},
+    )
+    client.reserve_merge(
+        train(),
+        (
+            replace(
+                first,
+                arrival_station_code="0009099",
+                arrival_construction_order="0004",
+                arrival_run_order="0003",
+            ),
+            last,
+        ),
+    )
+    assert requests[0].content.endswith(b"&txtMidRsStnCd=0009099&txtMidStnConsOrdr=0004&txtMidStnRunOrdr=0003")
 
 
 @pytest.mark.parametrize("settle_mileage", [False, True])
@@ -1206,6 +1257,149 @@ def test_received_amount_never_becomes_partial_sum(mutation_client, variant: str
     assert response.raw == raw
 
 
+@pytest.mark.parametrize(
+    "declared", [None, "001200", "002400"], ids=["no-total", "partial-total", "full-total"]
+)
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize(
+    "seat_data",
+    [
+        {},
+        {"seat_infos": None},
+        {"seat_infos": {}},
+        {"seat_infos": {"seat_info": None}},
+        {"seat_infos": {"seat_info": []}},
+        {"seat_infos": {"seat_info": [{"h_seat_no": "", "h_rcvd_amt": "0"}]}},
+    ],
+    ids=["missing", "null", "empty-object", "null-rows", "empty-rows", "unassigned-zero"],
+)
+def test_incomplete_transfer_settlement_blocks_payment_but_keeps_recovery(
+    mutation_client, declared, reverse, seat_data
+) -> None:
+    raw = hold_raw()
+    raw["h_jrny_cnt"] = "0002"
+    rows = raw["jrny_infos"]["jrny_info"]
+    rows.append({"h_jrny_sqno": "0008", "h_rsv_chg_no": "010", **seat_data})
+    if reverse:
+        rows.reverse()
+    if declared is None:
+        raw.pop("h_tot_rcvd_amt")
+    else:
+        raw["h_tot_rcvd_amt"] = declared
+    first = rows[0]
+    cancel = {
+        **COMMON,
+        "txtPnrNo": PNR,
+        "txtJrnySqno": first["h_jrny_sqno"],
+        "txtJrnyCnt": "0002",
+        "hidRsvChgNo": first["h_rsv_chg_no"],
+    }
+    client, requests = mutation_client(
+        [raw, BASE, BASE],
+        "POST",
+        (
+            "certification.TicketReservation",
+            "reservationCancel.ReservationCancel",
+            "reservationCancel.ReservationCancelChk",
+        ),
+        [reservation_form(transfer=True), cancel, cancel],
+    )
+    response = client.reserve_transfer([train(), train(True)])
+    assert response.received_amount is None
+    assert response.raw == raw and len(response.journeys) == 2
+    assert response.reference == HoldReference.from_raw(raw)
+    with pytest.raises(KorailInvalidInputError) as caught:
+        client.pay_with_card(response, card())
+    assert caught.value.request_sent is None and len(requests) == 1
+    client.cancel_unpaid_hold(response.reference)
+    assert len(requests) == 3
+
+
+@pytest.mark.parametrize(
+    "count,row_count",
+    [("0002", 1), ("0001", 2), ("0003", 2), (3, 2), ("0" * 4301 + "3", 2)],
+    ids=["missing-journey", "extra-journey", "missing-third-journey", "integer-count", "long-padded-count"],
+)
+@pytest.mark.parametrize("seat_rows", [True, False])
+def test_declared_journey_mismatch_has_no_payable_amount(mutation_client, count, row_count, seat_rows) -> None:
+    raw = hold_raw()
+    raw["h_jrny_cnt"] = count
+    first = raw["jrny_infos"]["jrny_info"][0]
+    second = copy.deepcopy(first)
+    second["h_jrny_sqno"] = "0008"
+    if row_count == 2:
+        raw["jrny_infos"]["jrny_info"].append(second)
+    raw["h_tot_rcvd_amt"] = "1200" if row_count == 1 else "2400"
+    if not seat_rows:
+        first.pop("seat_infos")
+        second.pop("seat_infos")
+    client, requests = mutation_client(
+        [raw], "POST", ("certification.TicketReservation",), reservation_form(transfer=True)
+    )
+    response = client.reserve_transfer([train(), train(True)])
+    assert response.received_amount is None
+    assert response.raw == raw and response.reference == HoldReference.from_raw(raw)
+    with pytest.raises(KorailInvalidInputError):
+        client.pay_with_card(response, card())
+    assert len(requests) == 1
+
+
+def test_incomplete_transfer_payment_never_enters_the_payment_queue(f8_client_factory) -> None:
+    raw = hold_raw()
+    raw["h_jrny_cnt"] = "2"
+    raw.pop("h_tot_rcvd_amt")
+    raw["jrny_infos"]["jrny_info"].append({"h_jrny_sqno": "0008"})
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        if request.url.path == "/ts.wseq":
+            return httpx.Response(200, text="200:key=SYNTH-QUEUE")
+        assert request.url.path == ROOT + "certification.TicketReservation"
+        return httpx.Response(200, json=raw)
+
+    client = f8_client_factory(handler)
+    response = client.reserve_transfer([train(), train(True)])
+    with pytest.raises(KorailInvalidInputError):
+        client.pay_with_card(response, card())
+    assert [request.url.params.get("opcode", request.url.path) for request in requests] == [
+        "5101",
+        ROOT + "certification.TicketReservation",
+        "5004",
+    ]
+
+
+@pytest.mark.parametrize("variant", ["complete", "all-no-seats", "all-blank-zero", "total-only"])
+@pytest.mark.parametrize("declared", [None, "002400"])
+def test_complete_or_total_only_transfer_settlement_remains_supported(
+    mutation_client, variant, declared
+) -> None:
+    raw = hold_raw()
+    raw["h_jrny_cnt"] = "0002"
+    rows = raw["jrny_infos"]["jrny_info"]
+    rows.append(copy.deepcopy(rows[0]))
+    rows[1]["h_jrny_sqno"] = "0008"
+    if declared is None:
+        raw.pop("h_tot_rcvd_amt")
+    else:
+        raw["h_tot_rcvd_amt"] = declared
+    if variant == "all-no-seats":
+        rows[0].pop("seat_infos")
+        rows[1]["seat_infos"] = {"seat_info": []}
+    elif variant == "all-blank-zero":
+        for row in rows:
+            row["seat_infos"]["seat_info"] = [{"h_seat_no": "", "h_rcvd_amt": "0"}]
+    elif variant == "total-only":
+        raw.pop("jrny_infos")
+    expected = "2400" if variant == "complete" or declared is not None else None
+    client, requests = mutation_client(
+        [raw], "POST", ("certification.TicketReservation",), reservation_form(transfer=True)
+    )
+    response = client.reserve_transfer([train(), train(True)])
+    assert response.received_amount == expected and response.raw == raw
+    assert len(requests) == 1
+
+
 def test_station_actual_parse_failure_retains_full_raw(mutation_client) -> None:
     case = next(c for c in CASES if c.name == "check_station_ticket_refund")
     raw = verification_raw()
@@ -1222,14 +1416,22 @@ def test_station_verification_no_commonout_envelope_and_conversion(mutation_clie
     case = next(c for c in CASES if c.name == "check_station_ticket_refund")
     raw = verification_raw()
     raw.pop("strResult")
-    client, _ = mutation_client([raw, verification_raw()], "POST", case.routes * 2, case.form)
+    successful = verification_raw()
+    successful["orgtkinfo_list"].append({key: "SYNTH-SECOND" for key in successful["orgtkinfo_list"][0]})
+    client, requests = mutation_client([raw, successful], "POST", case.routes * 2, case.form)
     result = case.invoke(client)
     assert result.str_result is None and result.raw == raw
+    with pytest.raises(KorailInvalidInputError, match="successful verification"):
+        StationRefundExecutionRequest.from_verification(
+            result, customer_phone="00000000000", customer_name="SYNTH-CUSTOMER"
+        )
     verified = case.invoke(client)
+    assert len(verified.original_tickets) == 2
     request = StationRefundExecutionRequest.from_verification(
         verified, customer_phone="00000000000", customer_name="SYNTH-CUSTOMER"
     )
     assert request == execution_request()
+    assert len(requests) == 2
 
 
 @pytest.mark.parametrize("case", CASES, ids=lambda c: c.name)
@@ -1595,6 +1797,44 @@ def test_recalculation_sends_one_request_and_the_caller_adds_the_cart(mutation_c
     assert recalculated.pnr_no is not None
     assert client.add_to_cart(CartAddRequest(pnr_no=recalculated.pnr_no)).h_msg_cd == "SYNTH-CART"
     assert len(requests) == 2
+
+
+@pytest.mark.parametrize("rows", [None, 1, True, object()])
+def test_recalculation_noniterable_rows_raise_input_error_before_http(mutation_client, rows) -> None:
+    client, requests = mutation_client([], "POST", (), {})
+    with pytest.raises(KorailInvalidInputError) as caught:
+        client.recalculate_price(replace(recalc_request(), rows=rows))
+    assert caught.value.request_sent is None
+    assert requests == []
+
+
+@pytest.mark.parametrize("container", [tuple, list, iter])
+def test_recalculation_keeps_existing_row_iterables_and_repeated_fields(mutation_client, container) -> None:
+    client, requests = mutation_client([hold_raw()], "POST", (RECALC_ROUTE,), recalc_form())
+    client.recalculate_price(replace(recalc_request(), rows=container(recalc_request().rows)))
+    assert wire_pairs(requests[0])[-12:] == [
+        ("psg_tp_dv_cd", "1"),
+        ("psg_tp_dv_cd", "3"),
+        ("psrm_cl_cd", "1"),
+        ("psrm_cl_cd", "2"),
+        ("dcnt_knd_cd1", "000"),
+        ("dcnt_knd_cd1", "SYNTH-OLD"),
+        ("hidDscpNo", ""),
+        ("hidDscpNo", "SYNTH-CERT"),
+        ("hidDcntKndCd", ""),
+        ("hidDcntKndCd", "SYNTH-NEW"),
+        ("hidFmlyNo", ""),
+        ("hidFmlyNo", "SYNTH-FAMILY"),
+    ]
+
+
+@pytest.mark.parametrize("held", [None, {}, object()])
+def test_recalculation_factory_rejects_non_hold_without_bare_attribute_error(mutation_client, held) -> None:
+    client, requests = mutation_client([], "POST", (), {})
+    with pytest.raises(KorailInvalidInputError) as caught:
+        client.recalculate_price(PriceRecalculationRequest.for_hold(held, ["000"]))
+    assert caught.value.request_sent is None
+    assert requests == []
 
 
 def test_recalculation_rows_come_from_the_first_journey_seats_like_the_app() -> None:

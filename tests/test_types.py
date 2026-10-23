@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import json
 import pickle
 import pkgutil
+import re
+import subprocess
+import sys
 from collections.abc import Mapping
-from dataclasses import fields, is_dataclass
+from dataclasses import MISSING, fields, is_dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import get_type_hints
+from typing import get_args, get_type_hints
 
 import pytest
 from conftest import wire_form
@@ -29,6 +33,57 @@ DOMAIN_MODULES = [
     for info in pkgutil.walk_packages(_domains.__path__, prefix=_domains.__name__ + ".")
     if not info.ispkg
 ]
+
+REQUIRED_WIRE_MODELS = {
+    name: model
+    for name in api.__all__
+    if inspect.isclass(model := getattr(api, name))
+    and is_dataclass(model)
+    and any("wire" in item.metadata and item.default is MISSING for item in fields(model))
+}
+
+
+def _constructor_values(model: type) -> dict[str, object]:
+    literals = {str: "SYNTHETIC", int: 1, str | None: None, tuple[int, int, int]: (1, 0, 0)}
+    hints = get_type_hints(model)
+    return {
+        item.name: literals[hints[item.name]]
+        for item in fields(model)
+        if item.init and item.default is MISSING and item.default_factory is MISSING
+    }
+
+
+def test_required_wire_constructor_and_reader_contracts() -> None:
+    total = 0
+    for name, model in REQUIRED_WIRE_MODELS.items():
+        assert getattr(importlib.import_module(model.__module__), name) is model
+        values = _constructor_values(model)
+        instance = model(**values)
+        assert pickle.loads(pickle.dumps(instance)) == instance
+        assert model.__dataclass_params__.frozen
+        for item in fields(model):
+            if "wire" not in item.metadata or item.default is not MISSING:
+                continue
+            total += 1
+            parameter = inspect.signature(model).parameters[item.name]
+            assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+            assert parameter.default is inspect.Parameter.empty
+            with pytest.raises(TypeError, match=item.name):
+                model(**{key: value for key, value in values.items() if key != item.name})
+    assert total == 104
+
+    for module in DOMAIN_MODULES:
+        for model in vars(module).values():
+            if not inspect.isclass(model) or not is_dataclass(model):
+                continue
+            hints = get_type_hints(model)
+            for item in fields(model):
+                if "read" not in item.metadata:
+                    continue
+                returned = get_type_hints(item.metadata["read"])["return"]
+                assert set(get_args(returned) or (returned,)) <= set(
+                    get_args(hints[item.name]) or (hints[item.name],)
+                ), (model.__name__, item.name)
 
 
 @pytest.mark.parametrize("module", DOMAIN_MODULES, ids=lambda module: module.__name__.split("_domains.")[1])
@@ -84,6 +139,66 @@ def test_public_raw_fields_expose_objects_not_any() -> None:
     parsed = api.BaseKorailResponse.from_raw(raw)
     assert parsed.raw is raw
     assert api.BaseKorailResponse().raw is not api.BaseKorailResponse().raw
+
+
+@pytest.mark.parametrize("key", [1, None, ("synthetic",)])
+def test_from_raw_rejects_non_string_keys_without_losing_raw(key: object) -> None:
+    raw = {key: "synthetic", "strResult": "SUCC"}
+    with pytest.raises(api.KorailProtocolError) as caught:
+        api.BaseKorailResponse.from_raw(raw)
+    assert caught.value.raw is raw
+    assert caught.value.request_sent is None
+
+
+def test_inherited_from_raw_is_envelope_only_and_wraps_constructor_failure() -> None:
+    raw = {"strResult": "FAIL", "count": "2", "map_version": "synthetic", "nested": {1: ["untouched"]}}
+    response = api.StationInfoResponse.from_raw(raw)
+    assert response.raw is raw and response.str_result == "FAIL"
+    assert response.count == "" and response.map_version is None
+    assert api.RefundCommissionResponse.from_raw(raw)._request_context is None
+    complete = {
+        "strResult": "SUCC",
+        "acepCustMgNo": "TEST-ID",
+        "acepCustNm": "TEST-NAME",
+        "acepCustTeln": "TEST-PHONE",
+        "mbCrdNo": "TEST-CARD",
+    }
+    with pytest.raises(api.KorailProtocolError) as caught:
+        api.DeliveryRecipientResponse.from_raw(complete)
+    assert caught.value.raw is complete
+    assert isinstance(caught.value.__cause__, TypeError)
+    assert caught.value.request_sent is None
+
+
+def test_inherited_from_raw_keeps_envelope_extraction_outside_constructor_catch() -> None:
+    original = TypeError("synthetic envelope extraction")
+    calls = []
+
+    class BrokenEnvelope(dict):
+        def get(self, key, default=None):
+            calls.append(key)
+            raise original
+
+    raw = BrokenEnvelope(strResult="SUCC")
+    with pytest.raises(TypeError) as caught:
+        api.DeliveryRecipientResponse.from_raw(raw)
+    assert caught.value is original and caught.value.__cause__ is None
+    assert calls == ["h_msg_cd"] and raw == {"strResult": "SUCC"}
+
+
+def test_commuter_factory_copies_read_only_sequence_input() -> None:
+    pass_data = api.PassMenuData(commuter_kind_code="TEST-KIND")
+    source = api.CommuterInfoResponse(
+        passenger_options=(api.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE"),)
+    )
+    counts = [1]
+    request = api.CommuterPassengerRequest.from_response(pass_data, source, counts)
+    counts[0] = 2
+    assert request.passenger_counts == (1,)
+    assert request.source is source and request.pass_data is pass_data
+    for invalid in ([True], [-1], ["1"], "1", b"1"):
+        with pytest.raises(api.KorailProtocolError):
+            api.CommuterPassengerRequest.from_response(pass_data, source, invalid)
 
 
 @pytest.mark.parametrize(
@@ -214,18 +329,19 @@ def test_commuter_passenger_request_requires_factory() -> None:
         api.CommuterPassengerRequest()
 
 
-def test_self_seat_change_consumer_type_contract(tmp_path: Path) -> None:
-    mypy = pytest.importorskip("mypy.api")
+@pytest.mark.parametrize("checker", ["mypy", "pyright"])
+def test_public_consumer_type_contract(tmp_path: Path, checker: str) -> None:
+    pytest.importorskip(checker)
+    source = Path(__file__).resolve().parents[1] / "src"
     config = tmp_path / "mypy.ini"
     config.write_text(
-        "[mypy]\nstrict = True\npython_version = 3.11\n"
-        f"mypy_path = {Path(__file__).resolve().parents[1] / 'src'}\n",
+        f"[mypy]\nstrict = True\npython_version = 3.11\nmypy_path = {source}\n",
         encoding="utf-8",
     )
     consumer = tmp_path / "consumer.py"
-    consumer.write_text(
-        """from typing import assert_type
+    positive = """from typing import assert_type
 
+import korail_mobile_api as api
 from korail_mobile_api import KorailSelfSeatChangeRoomClassCode, SelfSeatChangeInfoRequest
 
 server_code: KorailSelfSeatChangeRoomClassCode = "FUTURE"
@@ -233,14 +349,136 @@ for room_code in ("1", "2", server_code, None):
     request = SelfSeatChangeInfoRequest(run_date="20261007", train_no="00001", departure_station_code="TEST-A", arrival_station_code="TEST-B", room_class_code=room_code)
     assert_type(request.room_class_code, str | None)
 
-# Strict mypy checks that these ignores are necessary, proving each argument is rejected.
-SelfSeatChangeInfoRequest(run_date="20261007", train_no="00001", departure_station_code="TEST-A", arrival_station_code="TEST-B", room_class_code=1)  # type: ignore[arg-type]
-SelfSeatChangeInfoRequest(run_date="20261007", train_no="00001", departure_station_code="TEST-A", arrival_station_code="TEST-B", room_class_code=True)  # type: ignore[arg-type]
-SelfSeatChangeInfoRequest(run_date="20261007", train_no="00001", departure_station_code="TEST-A", arrival_station_code="TEST-B", room_class_code=object())  # type: ignore[arg-type]
-""",
-        encoding="utf-8",
+first = api.TrainSummary(train_no="1")
+second = api.TrainSummary(train_no="2")
+assert_type(api.TransferItinerary(first=first, second=second).legs, tuple[api.TrainSummary, api.TrainSummary])
+pass_data = api.PassMenuData(commuter_kind_code="TEST-KIND")
+source = api.CommuterInfoResponse(passenger_options=(api.CommuterPassengerOption(commuter_usage_age_code="TEST-AGE"),))
+for counts in ([1], (1,)):
+    commuter = api.CommuterPassengerRequest.from_response(pass_data, source, counts)
+    assert_type(commuter.passenger_counts, tuple[int, ...])
+api.StationInfoResponse()
+api.SelfCheckInInfoResponse()
+api.SeatInventoryResponse()
+config = api.KorailConfig(timeout=None)
+assert_type(config.timeout, float | None)
+ticket = api.TicketListTicket(sale_window_no="TEST-WINDOW", sale_date="20990102", return_sale_date="0102", sale_sequence="1", return_password="TEST-PASSWORD")
+assert_type(api.OriginalTicketReference.from_ticket(ticket), api.OriginalTicketReference)
+assert_type(api.OriginalTicketReference.from_sale_ticket(ticket), api.OriginalTicketReference)
+hold = api.ReservationHoldResponse()
+reference = api.HoldReference(pnr_no="TEST-PNR", journey_count="1")
+assert_type(hold.reference, api.HoldReference)
+assert_type(api.HoldReference.from_raw({"h_pnr_no": "TEST-PNR", "h_jrny_cnt": "1"}), api.HoldReference)
+korail = api.Korail()
+assert_type(api.Korail.logged_in("TEST-MEMBER", "TEST-PASSWORD", input_flag="4", check_valid_pw="N", cust_id=None, etr_path=None), api.Korail)
+assert_type(api.Korail.logged_in("TEST-MEMBER", "TEST-PASSWORD"), api.Korail)
+assert_type(korail.reservations.cancel(hold), api.BaseKorailResponse)
+assert_type(korail.reservations.cancel(reference, check_first=False), api.BaseKorailResponse)
+for assignments in ([api.KorailSeatAssignment(car_no=1, seat_no="01A")], (api.KorailSeatAssignment(car_no=1, seat_no="01A"),)):
+    assert_type(korail.reservations.create(first, job_type=api.KorailReservationJobType.SEAT_DESIGNATED, seats=assignments, seat_attribute_code="015"), api.ReservationHoldResponse)
+assert_type(korail.reservations.create(first, seats=None, seat_attribute_code=None), api.ReservationHoldResponse)
+"""
+    negative: list[str] = []
+    for name, model in REQUIRED_WIRE_MODELS.items():
+        values = _constructor_values(model)
+        arguments = ", ".join(f"{key}={value!r}" for key, value in values.items())
+        positive += f"api.{name}({arguments})\n"
+        for item in fields(model):
+            if "wire" in item.metadata and item.default is MISSING:
+                arguments = ", ".join(f"{key}={value!r}" for key, value in values.items() if key != item.name)
+                negative.append(f"api.{name}({arguments})")
+    assert len(negative) == 104
+    negative.extend(
+        f'SelfSeatChangeInfoRequest(run_date="20261007", train_no="00001", departure_station_code="TEST-A", arrival_station_code="TEST-B", room_class_code={value})'
+        for value in ("1", "True", "object()")
     )
-    stdout, stderr, status = mypy.run(
-        ["--config-file", str(config), "--cache-dir", str(tmp_path / "mypy-cache"), str(consumer)]
+    negative.append('api.CommuterPassengerRequest.from_response(pass_data, source, ["1"])')
+    negative.extend(
+        [
+            "api.OriginalTicketReference.from_sale_ticket(object())",
+            'api.Korail.logged_in("TEST-MEMBER", "TEST-PASSWORD", input_flag=1)',
+            'api.Korail.logged_in("TEST-MEMBER", "TEST-PASSWORD", check_valid_pw="invalid")',
+            'api.Korail.logged_in("TEST-MEMBER", "TEST-PASSWORD", cust_id=1)',
+            'api.Korail.logged_in("TEST-MEMBER", "TEST-PASSWORD", etr_path=1)',
+            'korail.reservations.cancel(reference, check_first="False")',
+            "korail.reservations.cancel(object())",
+            'korail.reservations.create(first, seats=["01A"])',
+            "korail.reservations.create(first, seat_attribute_code=1)",
+        ]
     )
-    assert status == 0, stdout + stderr
+    positive_lines = len(positive.splitlines())
+    consumer.write_text(positive + "\n".join(negative) + "\n", encoding="utf-8")
+    expected = {(consumer.name, line) for line in range(positive_lines + 1, positive_lines + 1 + len(negative))}
+    readers = tmp_path / "readers.py"
+    reader_lines = [
+        "from collections.abc import Callable, Mapping",
+        "from korail_mobile_api._core import parsing",
+    ]
+    for model in REQUIRED_WIRE_MODELS.values():
+        hints = get_type_hints(model)
+        for item in fields(model):
+            if "wire" not in item.metadata or item.default is not MISSING:
+                continue
+            read = item.metadata["read"]
+            alias = f"readers_{len(reader_lines)}"
+            reader_lines.append(f"import {read.__module__} as {alias}")
+            reader_lines.append(
+                f"check_{len(reader_lines)}: Callable[[Mapping[str, object], str, str], "
+                f"{inspect.formatannotation(hints[item.name])}] = {alias}.{read.__name__}"
+            )
+    reader_lines.append('wrong: int = parsing.wire("wrong", parsing.required_str, default="")')
+    expected.add((readers.name, len(reader_lines)))
+    reader_lines.append('required: str = parsing.wire("required", parsing.required_str)')
+    expected.add((readers.name, len(reader_lines)))
+    readers.write_text("\n".join(reader_lines) + "\n", encoding="utf-8")
+    if checker == "mypy":
+        from mypy import api as mypy
+
+        stdout, stderr, status = mypy.run(
+            [
+                "--config-file",
+                str(config),
+                "--cache-dir",
+                str(tmp_path / "mypy-cache"),
+                "--no-pretty",
+                "--no-error-summary",
+                str(consumer),
+                str(readers),
+            ]
+        )
+        actual = {(name, int(line)) for name, line in re.findall(r"([^/\n]+\.py):(\d+): error:", stdout)}
+        assert status == 1 and not stderr, stdout + stderr
+        assert actual == expected, stdout
+    else:
+        config = tmp_path / "pyrightconfig.json"
+        config.write_text(
+            json.dumps(
+                {
+                    "include": [str(consumer), str(readers)],
+                    "extraPaths": [str(source)],
+                    "pythonVersion": "3.11",
+                    "typeCheckingMode": "strict",
+                    "reportPrivateUsage": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pyright",
+                "--project",
+                str(config),
+                "--outputjson",
+                "--pythonpath",
+                sys.executable,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        diagnostics = json.loads(result.stdout)["generalDiagnostics"]
+        actual = {(Path(item["file"]).name, item["range"]["start"]["line"] + 1) for item in diagnostics}
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert actual == expected, result.stdout

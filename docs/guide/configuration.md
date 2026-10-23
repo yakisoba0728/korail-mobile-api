@@ -41,7 +41,7 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 | `version` | `str` | `"250601003"` | 공통 필드 `Version`의 값입니다. |
 | `app_version` | `str` \| `None` | `"7.0.8"` | 별도 공통 필드 `AppVersion`의 값입니다. `None`이면 이 필드만 생략합니다. |
 | `key` | `str` | `"korail1234567890"` | 공통 필드 `Key`의 값입니다. |
-| `timeout` | `float` | `60.0` | API 요청의 제한 시간(초)입니다. 0보다 큰 유한한 수여야 하며, `None`이면 httpx 제한 시간 없이 보냅니다. |
+| `timeout` | `float` \| `None` | `60.0` | API 요청의 제한 시간(초)입니다. 0보다 큰 유한한 수여야 하며, `None`이면 httpx 제한 시간 없이 보냅니다. |
 | `user_agent` | `str` | `"korailtalk"` | API 요청의 `User-Agent` 헤더입니다. |
 | `dynapath` | [`DynapathConfig`][korail_mobile_api.DynapathConfig] | SDK 2.0.1 `2!` 진단 | DynaPath 토큰 설정입니다. [DynaPath](#dynapath)를 참고하세요. |
 | `device_width` | `int` | `1440` | 공통 코드 조회(로그인 포함)의 `deviceWidth` 값입니다. |
@@ -82,7 +82,7 @@ with KorailClient(KorailConfig(app_version="7.0.10", version="250722001")) as cl
 ```
 
 [`build_config_from_env`](#from-env)를 쓴다면 `KORAIL_APP_VERSION`·`KORAIL_API_VERSION` 환경변수로 같은 값을 넣을 수 있습니다.
-서버가 `-8204`로 응답하면 [`KorailAppUpdateRequiredError`][korail_mobile_api.KorailAppUpdateRequiredError]가 발생하며 서버 메시지는 그대로 남습니다.
+서버가 실패 코드 `-8204`로 응답하면 로그인과 실패를 예외로 분류하는 경로에서는 [`KorailAppUpdateRequiredError`][korail_mobile_api.KorailAppUpdateRequiredError]입니다. 카드 결제 등 FAIL 모델 반환 경로에서는 결과 필드를 확인하세요([오류 처리](errors.md#app-update)). 서버 메시지는 그대로 남습니다.
 [정적 검토 범위와 미확인 항목](../verification-7010.md)도 참고하세요.
 
 ### 기기값 프로파일
@@ -121,6 +121,7 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 
 `DynapathConfig(enabled=True, ...)`를 `dynapath`로 넘기면 그 설정을 그대로 씁니다.
 켜진 `DynapathConfig`에는 `token_settings`와 `token_provider` 중 정확히 하나를 넣어야 하며, 그렇지 않으면 `ValueError`가 발생합니다.
+`header_name`은 켜짐 여부와 관계없이 비어 있지 않은 ASCII HTTP field-name token이어야 합니다. 공백·구분자·비ASCII·제어문자가 있거나 문자열이 아니면 설정 생성 시 `ValueError`입니다. 정상 custom 이름은 그대로 보냅니다.
 
 | `DynapathConfig` 필드 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
@@ -134,7 +135,7 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 | `device_name` | `str` | `"SM-S948N"` | `token_provider`에 넘기는 기기 이름입니다. |
 | `os_version` | `str` | `"17"` | `token_provider`에 넘기는 안드로이드 버전입니다. |
 
-명시적으로 v1을 사용할 때의 [`DynapathTokenSettings`][korail_mobile_api.DynapathTokenSettings]는 다섯 값을 반드시 받습니다. 비어 있거나 공백뿐이면 `ValueError`가 발생하며, `app_start_ts`는 정수로 읽을 수 있어야 합니다.
+명시적으로 v1을 사용할 때의 [`DynapathTokenSettings`][korail_mobile_api.DynapathTokenSettings]는 다섯 값을 실제 문자열로 받습니다. 문자열이 아니거나 비어 있거나 공백뿐이면 `ValueError`가 발생하며, `app_start_ts`는 정수로 읽을 수 있어야 합니다.
 나머지 필드에는 라이브러리 기본값이 있으며, 바꾸면 앱과 다른 토큰이 됩니다.
 
 | 필드 | 뜻 |
@@ -145,9 +146,10 @@ DynaPath는 앱이 보호하는 경로에 붙이는 토큰 헤더(`x-dynapath-m-
 | `os_version` | 안드로이드 버전입니다. 예: `"17"` |
 | `device_model` | 기기 모델명입니다. 예: `"SM-S948N"` |
 
-`token_provider`는 토큰을 붙이는 경로의 요청마다 [`DynapathRequestContext`][korail_mobile_api.DynapathRequestContext](`method`, `path`, `url`, `device`, `version`, `key`, `user_agent`, `device_name`, `os_version`)를 받아 토큰 문자열을 돌려주는 함수입니다.
-`None`을 돌려주면 헤더를 붙이지 않습니다. 함수가 예외를 발생시키면 요청을 보내지 않고 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]를 발생시킵니다.
-문자열이 아니거나 ASCII가 아닌 값을 돌려줘도 요청을 보내지 않고 `KorailProtocolError`를 발생시킵니다.
+`token_provider`는 토큰을 붙이는 경로의 요청마다 [`DynapathRequestContext`][korail_mobile_api.DynapathRequestContext]를 받아 토큰 문자열을 돌려주는 함수입니다. 메서드·경로·URL·기기·버전 외에 보낼 본문 바이트(`body`)와 요청 앱 버전(`app_version`)도 읽을 수 있습니다. 본문에는 로그인·카드 정보가 들어갈 수 있으니 문맥 전체를 로그로 남기지 마세요.
+`url`은 query·인코딩·base 경로·기본 port 정규화까지 반영한 실제 준비된 요청 URL이고 `body`도 같은 Request의 바이트입니다. 경로 적용 판단에는 계속 논리 `path`를 씁니다. 공급자는 대기열 진입 뒤 한 번 실행하며, 닫힌 클라이언트나 구성할 수 없는 URL에서는 호출하지 않습니다.
+`None`이면 헤더를 생략하고 `""`이면 빈 헤더를 붙입니다. 함수 실패, 비문자열·비ASCII 반환, ASCII 제어문자(`0x00..0x1f`, `0x7f`, 탭 포함)는 API 요청 전에 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]입니다.
+공백을 포함한 printable ASCII 토큰은 그대로 유지하며 자동 재호출하지 않습니다. `body`는 `repr()`에서만 숨기고 속성·`asdict`·pickle은 가리지 않습니다.
 
 ### 끄기
 
@@ -302,7 +304,7 @@ v1 전용 `KORAIL_DYNAPATH_AS_VALUE`는 더 이상 읽지 않습니다. 계정 I
 | `KORAIL_API_VERSION` | 아니요 | `KorailConfig` 기본값(`"250601003"`) | `version`(공통 필드 `Version`) |
 
 두 버전 환경변수는 `build_config_from_env()`만 읽으며 `KorailConfig()`나 `KorailClient()`는 읽지 않습니다. 이 함수는 위 필수 기기 환경변수도 요구하므로, 버전만 바꾸려면 [`KorailConfig(app_version=..., version=...)`](#request-version)를 쓰세요.
-필수 환경변수가 없거나 비어 있으면 `RuntimeError`가 발생합니다. 정수 필드에 숫자가 아닌 값이나 올바르지 않은 프록시 URL을 넣으면 `ValueError`가 발생합니다.
+필수 환경변수가 없거나 비어 있으면 `RuntimeError`가 발생합니다. 기기 ID·모델·OS와 fallback UA에 쓰는 build ID는 공백뿐이거나 CR/LF가 든 값을 거절하며, Unicode 사실값은 유지합니다. 크기·SDK는 기존 `int(...)` 변환 뒤 양수여야 합니다. 위반하거나 올바르지 않은 프록시 URL을 넣으면 `ValueError`입니다. 비어 있지 않은 custom `KORAIL_NETFUNNEL_USER_AGENT`를 쓰면 build ID는 요구하거나 검사하지 않습니다.
 대기열 설정과 `lang`처럼 표에 없는 필드는 기본값을 씁니다. 바꾸려면 `dataclasses.replace`를 씁니다.
 
 ```sh

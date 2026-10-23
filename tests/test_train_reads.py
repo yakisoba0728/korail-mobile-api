@@ -1349,6 +1349,58 @@ def test_nested_parser_raw_promotes_partial_context(rig, monkeypatch):
     assert error.value.parser_raw is partial
 
 
+@pytest.mark.parametrize("method", ["search_trains", "search_transfer_trains"])
+@pytest.mark.parametrize("parser_name", ["parse_train_rows", "parse_train_search_metadata"])
+def test_search_parser_failure_is_sent_after_queue_release(rig, monkeypatch, method, parser_name):
+    from korail_mobile_api import client as client_module
+
+    client, requests, _ = rig([SEARCH])
+    events = []
+    partial = {"synthetic": "partial"}
+    original = KorailProtocolError("synthetic parser failure", raw=partial)
+    cause = ValueError("synthetic cause")
+    original.__cause__ = cause
+
+    def queued(gate, send):
+        events.append("admitted")
+        try:
+            return send()
+        finally:
+            events.append("released")
+
+    def parser(raw):
+        assert events == ["admitted", "released"]
+        raise original
+
+    monkeypatch.setattr(client, "_queued", queued)
+    monkeypatch.setattr(client_module, parser_name, parser)
+    with pytest.raises(KorailProtocolError) as caught:
+        getattr(client, method)(QUERY)
+    assert caught.value is original and caught.value.__cause__ is cause
+    assert caught.value.raw == SEARCH and caught.value.parser_raw is partial
+    assert caught.value.request_sent is True and len(requests) == 1
+    assert not getattr(caught.value, "__notes__", None)
+
+
+@pytest.mark.parametrize("container", [tuple, list])
+def test_search_keeps_valid_sequences_booleans_and_server_delegated_counts(rig, container):
+    client, requests, _ = rig([SEARCH])
+    client.search_trains(
+        replace(
+            QUERY,
+            connection_station_codes=container(["0050", "0050"]),
+            passengers=-1,
+            child_passengers=12,
+            include_srt=False,
+            include_nearby_stations=True,
+        )
+    )
+    form = dict(wire_pairs(requests[0]))
+    assert form["txtPsgFlg_1"] == "-1" and form["txtPsgFlg_2"] == "12"
+    assert form["chtnCnt"] == "2" and form["chtnRsStnCd1"] == form["chtnRsStnCd2"] == "0050"
+    assert form["ebizCrossCheck"] == "N" and form["adjStnScdlOfrFlg"] == "Y"
+
+
 @pytest.mark.parametrize("bad", [True, [], {}, 1.5])
 def test_optional_merge_flag_is_lenient_and_raw_survives(bad, rig):
     """MergeSeatsCOutTrnInfos.java:25-26,54-61,85 optional merge flag; TrainScheduleOutTrainInfos.java:25-26,78

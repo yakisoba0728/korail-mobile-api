@@ -1,15 +1,14 @@
-"""Refactor oracle: the exact requests v2.6.1 sent for the smoke scenarios, in order.
+"""Refactor oracle: normalized v2.6.1 smoke requests, in observed request order.
 
-Captured once from the SDK itself at tag ``pre-3.0-overhaul`` (4412c93), so it proves only that a
-change kept the wire bytes. It is not app or server evidence. Never regenerate it to make a failing
-change pass; an intended wire change edits the affected entries by hand and cites its evidence.
-
-Capture (only on that tag): ``.venv/bin/python tests/test_wire_equivalence.py``.
+Captured once from the SDK at tag ``pre-3.0-overhaul`` (4412c93), not from the app or server.
+The pin preserves decoded body pairs, not raw encoding, full query order, ports or raw headers.
+Never edit or regenerate it; new byte contracts use independent literal expectations below.
 """
 
 from __future__ import annotations
 
-import json
+import ast
+import hashlib
 import sys
 import time
 from collections.abc import Iterator
@@ -20,6 +19,7 @@ from urllib.parse import parse_qsl
 
 import httpx
 import pytest
+from conftest import synthetic_config
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -187,12 +187,82 @@ def test_pin_covers_every_scenario() -> None:
     assert set(_load_pin()) == {scenario for scenario, _, _ in scenarios()} | REMOVED
 
 
-if __name__ == "__main__":
-    captured = {scenario: run_scenario(name, overrides) for scenario, name, overrides in scenarios()}
-    PIN_PATH.write_text(
-        '"""Captured by test_wire_equivalence.py at tag pre-3.0-overhaul (4412c93). Do not regenerate."""\n\n'
-        "import json\n\n"
-        f"WIRE_PIN = json.loads(r'''{json.dumps(captured, ensure_ascii=False, indent=1)}''')\n",
-        encoding="utf-8",
+def test_wire_oracle_has_no_write_entrypoint() -> None:
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    assert not any(
+        isinstance(node, ast.If)
+        and any(isinstance(child, ast.Name) and child.id == "__name__" for child in ast.walk(node.test))
+        for node in tree.body
     )
-    print(f"captured {len(captured)} scenarios")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            assert not (isinstance(node.func, ast.Name) and node.func.id == "open")
+            assert not (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"write_text", "write_bytes", "open", "rename", "replace", "unlink"}
+            )
+    assert hashlib.sha256(PIN_PATH.read_bytes()).hexdigest() == (
+        "2cfbda0d65b926435d9b0076fab4dfa8e6d306ce4ce4016e8e84f38089196cb4"
+    )
+
+
+def test_public_common_codes_keep_literal_body_and_origin(scripted_client_factory) -> None:
+    """Canonical byte contract added independently of the normalized historical capture."""
+    client, requests, pending = scripted_client_factory(
+        [{"strResult": "SUCC"}],
+        config=synthetic_config(
+            base_url="https://api.example.invalid:8443",
+            device="SYNTHETIC-DEVICE",
+            version="SYNTHETIC-VERSION",
+            app_version="SYNTHETIC-APP",
+            key="",
+            lang="",
+            device_width=0,
+            device_height=1,
+            android_sdk_int=2,
+        ),
+    )
+    client.get_common_codes(["한 글+%&=\n", "", "A B", "C+D"])
+    assert not pending and len(requests) == 1
+    request = requests[0]
+    assert str(request.url) == "https://api.example.invalid:8443/classes/com.korail.mobile.common.code.do"
+    assert (request.url.scheme, request.url.host, request.url.port) == ("https", "api.example.invalid", 8443)
+    assert request.headers["host"] == "api.example.invalid:8443"
+    assert request.content == (
+        b"Device=SYNTHETIC-DEVICE&Version=SYNTHETIC-VERSION&AppVersion=SYNTHETIC-APP"
+        b"&code=%ED%95%9C+%EA%B8%80%2B%25%26%3D%0A&code=&code=A+B&code=C%2BD"
+        b"&deviceWidth=0&deviceHeight=1&OSVersion=2"
+    )
+    assert request.url.query == b""
+
+
+def test_public_commuter_menu_keeps_literal_query_and_empty_body(scripted_client_factory) -> None:
+    """HTTPX 0.28.0 switched QueryParams from its %20 encoder to stdlib's + encoder."""
+    client, requests, pending = scripted_client_factory(
+        [{"strResult": "SUCC"}],
+        config=synthetic_config(
+            base_url="https://api.example.invalid:8443",
+            device="SYNTHETIC-DEVICE",
+            version="SYNTHETIC-VERSION",
+            key="",
+        ),
+    )
+    client.get_commuter_kind_menu("한 글+%&=")
+    assert not pending and len(requests) == 1
+    request = requests[0]
+    assert request.method == "GET"
+    assert request.url.port == 8443
+    assert request.url.path == "/classes/com.korail.mobile.push.cmtrKnd.do"
+    httpx_version = tuple(int(part) for part in httpx.__version__.split(".")[:2])
+    if httpx_version < (0, 28):
+        expected_query = (
+            b"Device=SYNTHETIC-DEVICE&Version=SYNTHETIC-VERSION&Key="
+            b"&cmtrKndCd=%ED%95%9C%20%EA%B8%80%2B%25%26%3D"
+        )
+    else:
+        expected_query = (
+            b"Device=SYNTHETIC-DEVICE&Version=SYNTHETIC-VERSION&Key=&cmtrKndCd=%ED%95%9C+%EA%B8%80%2B%25%26%3D"
+        )
+    assert request.url.query == expected_query
+    assert request.content == b""
+    assert "content-type" not in request.headers

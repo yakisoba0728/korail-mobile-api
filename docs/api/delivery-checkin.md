@@ -116,7 +116,10 @@ KorailClient.get_delivery_recipient(
 **예제**
 
 ```python
-# reference: N카드 2인 승차권의 OriginalTicketReference (sale_date는 YYYYMMDD)
+from korail_mobile_api import OriginalTicketReference
+
+# ticket: 목록에서 직접 고른 N카드 2인 승차권
+reference = OriginalTicketReference.from_sale_ticket(ticket)
 recipient = client.get_delivery_recipient(reference)
 print(recipient.acceptance_customer_name, recipient.member_card_no)
 ```
@@ -165,7 +168,9 @@ KorailClient.list_pbp_acceptances(
 **예제**
 
 ```python
-# references: 전달한 승차권들의 OriginalTicketReference 목록 (sale_date는 YYYYMMDD)
+from korail_mobile_api import OriginalTicketReference
+
+references = [OriginalTicketReference.from_sale_ticket(ticket) for ticket in selected_tickets]
 spec = client.list_pbp_acceptances(references)
 for ticket in spec.tickets:
     for journey in ticket.journeys:

@@ -221,7 +221,7 @@ class CommuterPassengerRequest:
         cls,
         pass_data: PassMenuData,
         source: CommuterInfoResponse,
-        passenger_counts: tuple[int, ...],
+        passenger_counts: Sequence[int],
     ) -> CommuterPassengerRequest:
         """초기 조회 응답과 승객 종류별 인원으로 인원 조건 조회 입력을 만들고 검증합니다."""
         instance = object.__new__(cls)
@@ -400,10 +400,6 @@ def build_discount_card_extension_query(
     return query
 
 
-# N카드 홀드는 기본 승객(어른 1명)으로 만든 폼의 승객 행 하나를 N카드 행으로 대체합니다.
-_PASSENGER_ROW_KEYS = frozenset({"txtCompaCnt1", "txtPsgTpCd1", "txtDiscKndCd1"})
-
-
 def build_discount_card_reservation_form(
     config: KorailConfig,
     train: TrainSummary,
@@ -412,23 +408,14 @@ def build_discount_card_reservation_form(
 ) -> dict[str, str]:
     """N카드 좌석 홀드 폼을 만듭니다. 생성만으로 예약하거나 결제하지 않습니다."""
     form = build_reservation_form(config, train)
-    rebuilt: dict[str, str] = {}
-    for name, value in form.items():
-        if name == "txtTotPsgCnt":
-            rebuilt[name] = "1"
-            rebuilt["txtCompaCnt1"] = "1"
-            rebuilt["txtPsgTpCd1"] = "1"
-            rebuilt["txtDiscKndCd1"] = KORAIL_DISCOUNT_CARD_DISCOUNT_CODE
-            rebuilt["txtCardNo_1"] = _required_mutation_text(
-                card_no,
-                field="card_no",
-            )
-            continue
-        if name in _PASSENGER_ROW_KEYS:
-            continue
-        rebuilt[name] = value
-    rebuilt["txtMenuId"] = KORAIL_DISCOUNT_CARD_MENU_ID
-    return _in_reservation_order(rebuilt)
+    form.update(
+        {
+            "txtMenuId": KORAIL_DISCOUNT_CARD_MENU_ID,
+            "txtDiscKndCd1": KORAIL_DISCOUNT_CARD_DISCOUNT_CODE,
+            "txtCardNo_1": _required_mutation_text(card_no, field="card_no"),
+        }
+    )
+    return _in_reservation_order(form)
 
 
 def build_product_cancel_query(detail: ProductDetailResponse) -> dict[str, str]:

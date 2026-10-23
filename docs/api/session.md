@@ -34,9 +34,10 @@ KorailClient.login(
 
 `input_flag`를 지정하지 않으면 로그인 ID의 형식으로 종류를 정합니다. `@`가 들어 있으면 이메일(`"5"`), 11자리 숫자이면 전화번호(`"4"`), 그 밖의 숫자이면 회원번호(`"2"`)입니다.
 숫자만으로 된 값도 이메일도 아닌 ID(하이픈이 든 전화번호, 앞뒤 공백, 전각 숫자 등)는 요청을 보내기 전에 거절합니다.
+명시적 `input_flag`로 형식 추론을 건너뛰어도 ID의 문자열·UTF-8 인코딩 검사는 첫 서비스 요청 전에 적용합니다.
 
-성공 여부는 결과 코드(`IRZ000001` 또는 `S200`)와 세션 쿠키(`JSESSIONID`)로 판정합니다.
-성공하면 세션을 클라이언트에 보관하고 반환합니다. 실패하면 세션을 보관하지 않으며, 웹 단계가 필요한 경우를 빼면 쿠키도 비웁니다.
+성공 여부는 결과 코드(`IRZ000001` 또는 `S200`)와 사용 가능한 세션 쿠키(`JSESSIONID`)로 판정합니다. 쿠키 jar가 설정된 `base_url`·prefix의 대표 인증 조회인 `list_tickets` URL(`/classes/com.korail.mobile.myTicket.MyTicketNewList.do`)에 보낼 비어 있지 않은 값이 있어야 합니다. 로그인 전용·무관한 Path의 쿠키만 있으면 거절하며, 정상 다중 Path 쿠키는 허용합니다. 추가 HTTP·공급자 호출 없이 로컬에서 판단하므로 모든 API 경로나 서버 세션 유효성을 보장하지 않습니다.
+성공하면 세션을 클라이언트에 보관하고 반환합니다. 실패·중단(`KeyboardInterrupt`·`SystemExit` 포함) 시 웹 continuation을 빼면 세션·pending·쿠키를 정리하고 원래 예외를 유지합니다. 동시 정리 실패는 note로 붙이며 실제 cookie clear가 실패하면 쿠키가 남을 수 있으므로 클라이언트 교체를 고려하세요.
 휴면 계정 해제나 비밀번호 변경처럼 웹 화면에서 처리해야 하는 경우에는 [`KorailAuthContinuationRequired`][korail_mobile_api.KorailAuthContinuationRequired]가 발생하며, 라이브러리는 그 웹 단계를 진행하지 않습니다.
 
 **매개변수**
@@ -103,6 +104,7 @@ KorailClient.logout() -> None
 서버가 실패(`FAIL`)로 응답해도 예외를 발생시키지 않습니다.
 다만 결과 코드가 `P058`이면 [`KorailSessionExpiredError`][korail_mobile_api.KorailSessionExpiredError]가, 네트워크 오류나 읽을 수 없는 응답이면 해당 예외가 발생합니다. 이때도 로컬 세션은 이미 비워져 있습니다.
 서버 쪽 세션이 실제로 끝났는지는 보장하지 않습니다. 연결 풀은 닫지 않으므로 [`close`](#close)를 따로 호출하세요.
+동시에 정리가 실패해도 원래 요청 예외를 유지하고 note를 붙입니다. 원래 예외가 없는 성공 경로의 정리 실패는 그대로 발생합니다.
 
 **매개변수**
 

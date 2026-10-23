@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""연결 정리는 모두 시도하고, 먼저 발생한 오류를 유지합니다."""
+"""세션·연결 정리는 모두 시도하고, 먼저 발생한 오류를 유지합니다."""
 
 from collections.abc import Callable
 
@@ -17,7 +17,7 @@ def _close_connections(*closers: Callable[[], None], primary: BaseException | No
                 error = cleanup_error
             elif cleanup_error is not error:
                 try:
-                    error.add_note(f"Connection cleanup also failed: {cleanup_error!r}")
+                    error.add_note(f"Cleanup also failed: {cleanup_error!r}")
                     for note in getattr(cleanup_error, "__notes__", ()):
                         error.add_note(note)
                 except BaseException:

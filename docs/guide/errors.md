@@ -85,6 +85,15 @@ Exception
 | `display_message` | `str` \| `None` | 읽을 서버 메시지를 우선하고, 비어 있으면 앱 사전의 한국어 안내를 표시합니다. 태그·스크립트·스타일은 제외하고 줄바꿈 태그는 개행으로 바꿉니다. 원문은 보존합니다. |
 | `raw` | `object` \| `None` | 서버가 보낸 응답 원문입니다. JSON이면 읽은 값(보통 `dict`), JSON이 아니면 `bytes`, 대기열 응답이면 `str`입니다. |
 | `parser_raw` | `object` \| `None` | 응답을 읽다가 멈췄을 때 파서가 보던 부분 원문입니다. 이때 `raw`에는 받은 응답 전체가 들어 있습니다. |
+| `request_sent` | `bool` \| `None` | HTTP 전송 계층에 넘긴 뒤 전송·응답 해석에 실패하면 `True`입니다. 서버 처리 성공을 뜻하지 않으며, `None`만으로 미전송을 단정할 수는 없습니다. |
+
+`raw`는 복구 자료이지 전송 여부 표식이 아닙니다. 예를 들어 HTTP 200으로 JSON `null`을 받으면 `raw=None`이면서 `request_sent=True`일 수 있습니다.
+입력 거절인 `KorailInvalidInputError`는 요청 전 오류이며 `request_sent=None`입니다. 반면 정상적으로 받은 서버 실패 예외도 이 속성이 `None`일 수 있으므로 예외 종류와 함께 확인하세요.
+페이지·쪽 크기 등 정수 입력을 십진 문자열로 바꾸다가 Python의 변환 한도를 넘으면 `KorailInvalidInputError`이며 원래 `ValueError`를 `__cause__`에 보존합니다. 거대 숫자를 오류 메시지에 넣거나 전역 한도를 바꾸지 않으며, 새 페이지 범위 제한도 아닙니다. 이 거절은 HTTP·토큰 공급자·대기열 진입 전에 발생합니다.
+`PaidTicket.from_refund_detail`와 `StationRefundExecutionRequest.from_verification`에 기대한 응답 모델이 아닌 값을 넘겨도 요청 전 `KorailInvalidInputError`입니다. 정상 모델의 subclass와 기존 필드·날짜·첫 원표 선택 규칙은 유지하며, 팩토리가 자동 조회·환불을 실행하지 않습니다.
+typed 조회의 수신 후 도메인 파싱 실패도 `request_sent=True`이며 전체 `raw`·부분 `parser_raw`·원래 cause를 보존합니다. 순수 파서나 `from_raw()` 직접 호출에는 전송 표식을 붙이지 않습니다.
+
+`display_message`·`resolve_error_message`는 HTML-safe 마크업이 아닌 일반 텍스트입니다. 텍스트 경로로 출력하고, HTML 문맥에서는 호출자가 이스케이프하세요. 비교식이나 문자 참조로 된 태그 모양도 텍스트로 남을 수 있습니다.
 
 예외마다 채워지는 속성은 다음과 같습니다.
 
@@ -118,6 +127,8 @@ finally:
 - 표의 결과 코드가 와도 `strResult`가 `SUCC`이면 예외가 아닙니다.
 - 실패를 응답 모델로 돌려주는 메서드(예: [`pay_with_card`](../api/payments.md#pay_with_card))는 이 분류를 거치지 않습니다. 각 메서드 설명에 표시했습니다.
 - 이 분류는 라이브러리가 정한 것입니다. 앱이 같은 코드에서 같은 화면을 보여 준다는 뜻은 아닙니다.
+
+결과 없음도 메서드별 계약입니다. `list_reservations`의 `FAIL/P100`, `list_discount_coupons`·`get_pass_schedule`의 `FAIL/WRG000000`은 빈 응답 모델로 반환하되 실패 봉투와 원문을 보존합니다. 반면 `list_airport_bus_schedules`의 `FAIL/WRG000000`은 `KorailNoResultsError`입니다. 결과 코드만 보고 모든 조회를 같은 빈 목록으로 처리하지 마세요.
 
 | 예외 | 결과 코드 |
 |---|---|
@@ -165,7 +176,8 @@ finally:
 
 ### 앱 업데이트 요구(`-8204`) {#app-update}
 
-서버가 `-8204`("원활한 예매 및 결제 서비스를 위해 최신 버전으로 업데이트해 주세요")로 응답하면 로그인을 포함한 모든 경로에서 `KorailAppUpdateRequiredError`가 발생합니다.
+서버가 실패 코드 `-8204`("원활한 예매 및 결제 서비스를 위해 최신 버전으로 업데이트해 주세요")로 응답하면 로그인과 실패를 예외로 분류하는 경로에서는 `KorailAppUpdateRequiredError`가 발생합니다.
+`pay_with_card`와 `get_guide_seat_condition`처럼 실패 모델을 반환하는 경로는 `-8204`도 `h_msg_cd`에 남기므로 `str_result`와 함께 확인하세요. `logout`은 세션 만료 이외의 `FAIL`을 예외로 바꾸지 않습니다. 이 안내는 기존 정책을 설명하며 새 예외를 추가하지 않습니다.
 `-8204`는 앱에서 확인한 리터럴이 아니라 [#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)에서 관측된 서버 코드이며, 서버 메시지는 예외에 그대로 남습니다.
 네트워크 대역 차단(`-8202` 등, `KorailDynaPathError`)과 다른 응답이며, 프록시나 네트워크를 바꿔 해결된다는 근거는 없습니다.
 요청 버전을 바꿔 시도하는 방법과 한계는 [요청 버전](configuration.md#request-version)에 있습니다. 이 예외도 자동 재시도하지 않습니다.
@@ -297,7 +309,7 @@ tickets = read_with_relogin(client.list_tickets)
 | 예외 | 요청 | 할 일 |
 |---|---|---|
 | `KorailNetFunnelError`, `KorailQueueRejectedError` | 보내지 않았습니다. | 대기열 상황을 보고 다시 호출할지 정합니다. |
-| `KorailProtocolError`(요청 전 입력 검사) | 보내지 않았습니다. | 입력을 고친 뒤 호출합니다. |
+| `KorailInvalidInputError` | 보내지 않았습니다. | 입력을 고친 뒤 호출합니다. |
 | `KorailAuthError`(로그인하지 않음) | 보내지 않았습니다. | 로그인한 뒤 호출합니다. |
 | `KorailProtocolError`(응답을 읽지 못함) | 보냈고 응답을 받았습니다. | 서버에서 처리됐을 수 있습니다. `raw`와 예약 내역으로 결과를 확인합니다. |
 | `KorailDynaPathError` | 보냈고 차단 코드가 든 응답을 받았습니다. | 서버에서 처리됐는지 알 수 없으므로 예약 내역으로 결과를 확인합니다. |
@@ -306,13 +318,13 @@ tickets = read_with_relogin(client.list_tickets)
 | `KorailSessionExpiredError` | 보냈고 서버가 세션 만료로 응답했습니다. | 다시 로그인한 뒤 결과를 확인하고 다시 호출할지 정합니다. |
 
 결과는 결제 전 홀드라면 [`list_reservations`](../api/reservations.md#list_reservations), 발권된 승차권이라면 [`list_tickets`](../api/account.md#list_tickets)로 확인합니다.
-아래 예제는 예약 전에 살아 있는 홀드의 PNR을 기록해 두고, 예약이 불확실하게 끝나면 새 PNR이 생겼는지 비교합니다. 요청 전 입력 검사에서 난 `KorailProtocolError`는 `raw`가 `None`이므로 구분할 수 있습니다.
+아래 예제는 예약 전에 살아 있는 홀드의 PNR을 기록해 두고, 예약이 불확실하게 끝나면 새 PNR이 생겼는지 비교합니다. 입력 거절은 `KorailInvalidInputError`로 구분하고, 전송·해석 실패는 `request_sent`를 확인합니다. `raw=None`만으로 상태 확인을 건너뛰지 않습니다.
 
 !!! warning "실제로 처리됩니다"
     이 예제의 `reserve()`는 실제로 좌석을 점유하는 홀드를 만듭니다. 결제하지 않을 홀드는 [`cancel_unpaid_hold`](../api/reservations.md#cancel_unpaid_hold)로 취소하세요. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
 
 ```python
-from korail_mobile_api import KorailProtocolError, KorailTransportError
+from korail_mobile_api import KorailInvalidInputError, KorailProtocolError, KorailTransportError
 
 
 def held_pnrs():
@@ -324,9 +336,11 @@ train = next(t for t in client.search_trains(query).trains if t.general_reservat
 before = held_pnrs()
 try:
     hold = client.reserve(train)
+except KorailInvalidInputError:
+    raise  # 예약 입력을 거절했으며 예약 요청은 보내지 않았습니다.
 except (KorailTransportError, KorailProtocolError) as error:
-    if isinstance(error, KorailProtocolError) and error.raw is None:
-        raise  # 요청 전 입력 검사에서 거절돼 요청을 보내지 않았습니다.
+    if error.request_sent is not True:
+        raise  # 전송 표식이 없는 오류는 원인별로 확인하며 미전송이라고 단정하지 않습니다.
     created = held_pnrs() - before
     if created:
         print("홀드가 만들어졌습니다. 다시 예약하지 마세요:", sorted(created))
@@ -348,7 +362,7 @@ except (KorailTransportError, KorailProtocolError) as error:
 
 ## 예약 응답을 읽지 못한 홀드 취소 {#unparsed-hold}
 
-예약 응답을 읽지 못해 `KorailProtocolError`가 나면 홀드는 서버에 이미 만들어졌을 수 있습니다. 예약번호(PNR)는 예외의 `raw`에 남습니다.
+예약 응답을 읽지 못해 `KorailProtocolError`가 나면 홀드는 서버에 이미 만들어졌을 수 있습니다. 응답에 예약번호(PNR)가 있으면 예외의 `raw`에 남습니다. JSON `null` 등 식별자가 없는 응답은 이 방법으로 복구할 수 없으므로 예약 내역에서 대상을 확인하세요.
 같은 상세를 읽는 [`get_reservation_hold`](../api/reservations.md#get_reservation_hold)도 같은 이유로 실패할 수 있습니다.
 [`HoldReference.from_raw`][korail_mobile_api.HoldReference]로 `raw`의 예약번호(`h_pnr_no`)와 여정 수(`h_jrny_cnt`)를 읽어 [`cancel_unpaid_hold`](../api/reservations.md#cancel_unpaid_hold)에 넘깁니다.
 첫 여정의 순번·변경 번호는 `raw`에서 읽을 수 있을 때만 쓰고, 없으면 홀드로 취소할 때와 같은 대체값을 보냅니다. 두 값이 없으면 `from_raw`가, 형식이 맞지 않으면 `cancel_unpaid_hold`가 요청 전에 거절합니다.

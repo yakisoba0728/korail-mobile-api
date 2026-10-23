@@ -24,6 +24,7 @@ from ..errors import (
     _is_json_object,
     classify_app_error,
 )
+from .cleanup import _close_connections
 from .crypto import transform_login_password
 from .http import KorailHttpClient
 from .parsing import _optional_scalar_string
@@ -146,8 +147,8 @@ class KorailSessionClient:
         except KorailAuthContinuationRequired as exc:
             self.pending = exc
             raise
-        except Exception:
-            self.clear_session()
+        except BaseException as error:
+            _close_connections(self.clear_session, primary=error)
             raise
 
     def _login(
@@ -164,6 +165,10 @@ class KorailSessionClient:
         # 서비스 확인과 키 요청을 보내기 전에 입력을 검사합니다.
         if not isinstance(member_no, str):
             raise KorailInvalidInputError("KORAIL login member_no must be a str")
+        try:
+            member_no.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise KorailInvalidInputError("KORAIL login member_no cannot be encoded as UTF-8") from exc
         resolved_input_flag = input_flag or infer_login_input_flag(member_no)
         if not isinstance(password, str):
             raise KorailInvalidInputError("KORAIL login password must be a str")
@@ -220,10 +225,16 @@ class KorailSessionClient:
                 message=response.h_msg_txt,
                 raw=response.raw,
             )
-        jsessionid = next(
-            (cookie.value for cookie in self.http.cookies.jar if cookie.name == "JSESSIONID" and cookie.value),
-            None,
+        # 로그인 전용 Path가 아닌, 설정된 승차권 목록 URL에 jar가 보낼 쿠키를 확인합니다.
+        request = self.http._client.build_request(
+            "POST", "/classes/com.korail.mobile.myTicket.MyTicketNewList.do"
         )
+        jsessionid = None
+        for item in request.headers.get("cookie", "").split(";"):
+            name, _, value = item.strip().partition("=")
+            if name == "JSESSIONID" and value:
+                jsessionid = value
+                break
         if not jsessionid:
             raise KorailAuthError(
                 "KORAIL login did not return a usable session",
@@ -253,7 +264,10 @@ class KorailSessionClient:
                     build_cache_query(),
                     raise_on_fail=False,
                 )
-        finally:
+        except BaseException as error:
+            _close_connections(self.clear_session, primary=error)
+            raise
+        else:
             self.clear_session()
 
     def clear_session(self) -> None:

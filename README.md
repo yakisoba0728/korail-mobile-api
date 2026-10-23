@@ -41,7 +41,7 @@ pip install korail-mobile-api
 pip install --force-reinstall "git+https://github.com/yakisoba0728/korail-mobile-api@main"
 ```
 
-`main`의 패키지 버전 문자열은 아직 배포판과 같아서 `--force-reinstall`이 필요합니다. SOCKS 프록시를 쓰려면 `korail-mobile-api[socks]`로 설치하세요.
+현재 개발 버전은 `3.0.0.dev0`이며 배포판 2.6.2와 다릅니다. `--force-reinstall`은 같은 개발 버전의 다른 커밋을 다시 설치할 때도 반영하기 위한 것입니다([개발 버전 설치](https://yaki.kr/korail-mobile-api/getting-started/#development-version)). SOCKS 프록시를 쓰려면 `korail-mobile-api[socks]`로 설치하세요.
 
 ## 빠르게 써보기
 
@@ -116,7 +116,7 @@ N카드 일부 기능, 셀프 체크인 좌석 확인·등록·취소, 역에서
 ## 자주 묻는 질문
 
 **모든 요청이 `-8204`로 실패해요.** 2026-10-21부터 보고된 앱 업데이트 안내 응답입니다([#32](https://github.com/yakisoba0728/korail-mobile-api/issues/32)). 네트워크 차단(`-8202` 등)과 다르며,
-로그인을 포함한 모든 경로에서 `KorailAppUpdateRequiredError`로 분류하고 서버 메시지를 남깁니다. 위 현재 상태를 참고하세요.
+로그인과 실패를 예외로 분류하는 경로에서는 `KorailAppUpdateRequiredError`이며 서버 메시지를 남깁니다. 카드 결제처럼 FAIL 모델을 반환하는 메서드는 `str_result`·`h_msg_cd`를 확인해야 합니다([오류 처리](https://yaki.kr/korail-mobile-api/guide/errors/#app-update)). 위 현재 상태를 참고하세요.
 
 **클라우드 서버에서는 로그인이 막혀요.** KORAIL은 데이터센터·VPN IP 대역의 요청을 막습니다. `KorailDynaPathError`(HTTP 403, `-8202` 등)가 나면
 요청 형식이 아니라 네트워크 문제일 가능성이 큽니다. `KorailConfig(proxy="socks5://...")`로 KORAIL 요청만 본인이 관리하는 다른 네트워크로 보낼 수 있습니다([프록시](https://yaki.kr/korail-mobile-api/guide/configuration/#proxy)).

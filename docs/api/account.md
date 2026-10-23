@@ -15,13 +15,14 @@
 |---|---|---|
 | `return_sale_date` | `MMDD` (4자리) | [`get_ticket_receipt`](#get_ticket_receipt), [`get_original_tickets`](#get_original_tickets), [`get_delay_certificate`](#get_delay_certificate), [`get_delay_return_receipt`](#get_delay_return_receipt), [`get_refund_fee`](payments.md#get_refund_fee), [`get_refund_ticket_detail`](payments.md#get_refund_ticket_detail) |
 | `sale_date` | `YYYYMMDD` (8자리) | [`get_delivery_recipient`](delivery-checkin.md#get_delivery_recipient), [`list_pbp_acceptances`](delivery-checkin.md#list_pbp_acceptances) |
+| 미확인 | 미확인 | [`get_commuter_info`](passes.md#get_commuter_info)의 원표 단계, [`extend_discount_card`](passes.md#extend_discount_card). 두 날짜 중 하나를 추측해서 선택하지 않습니다. |
 
 [`get_ticket_receipt`](#get_ticket_receipt)는 네 값을 키워드 인자로 따로 받고, 나머지 메서드는 [`OriginalTicketReference`][korail_mobile_api.OriginalTicketReference]에 담아 받습니다.
-[`get_commuter_info`](passes.md#get_commuter_info)는 [`CommuterTicketInquiryRequest`][korail_mobile_api.CommuterTicketInquiryRequest]의 `original_ticket`에 담아 받습니다. 이 단계에 `sale_date`와 `return_sale_date` 중 어느 값을 넣어야 하는지는 확인하지 못했습니다. 라이브러리는 넣은 값을 그대로 보냅니다.
-`OriginalTicketReference`는 네 값이 비어 있지 않은지만 검사하고 판매일의 자릿수는 검사하지 않습니다.
+[`get_commuter_info`](passes.md#get_commuter_info)는 [`CommuterTicketInquiryRequest`][korail_mobile_api.CommuterTicketInquiryRequest]의 `original_ticket`에 담아 받습니다. 이 단계와 N카드 연장에 `sale_date`와 `return_sale_date` 중 어느 값을 넣어야 하는지는 확인하지 못했습니다. 라이브러리는 넣은 값을 그대로 보냅니다. `from_ticket()`의 MMDD 선택을 이 미확인 경로의 근거로 삼지 마세요.
+`OriginalTicketReference`를 직접 만들면 네 값이 비어 있지 않은지만 검사하고 판매일의 자릿수는 검사하지 않습니다.
 [`get_ticket_receipt`](#get_ticket_receipt)를 뺀 메서드는 판매일 필드를 잘못 골라도 요청 전에 거절하지 않고 그대로 보내므로, 위 표에 맞는 필드를 넣으세요.
 `TicketListTicket`의 필드는 응답에 없으면 `None`이며, `None`이나 빈 문자열을 넣으면 `OriginalTicketReference`를 만들 때 [`KorailProtocolError`][korail_mobile_api.KorailProtocolError]가 발생합니다.
-`OriginalTicketReference.from_ticket(ticket)`은 `return_sale_date`(`MMDD`)를 판매일로 넣어 만듭니다. `YYYYMMDD`를 받는 두 메서드에는 아래처럼 직접 만드세요.
+`OriginalTicketReference.from_ticket(ticket)`은 `return_sale_date`(`MMDD`)를 판매일로 넣습니다. `YYYYMMDD`를 받는 두 메서드에는 `from_sale_ticket(ticket)`을 쓰세요. 이 팩토리는 `ticket.sale_date`가 ASCII 숫자 8자리인지 검사해 그대로 복사하며 달력 유효성·서버 수용은 보장하지 않습니다. 두 팩토리는 날짜를 추측하거나 서로 변환하지 않습니다.
 
 ```python
 from korail_mobile_api import OriginalTicketReference
@@ -29,12 +30,7 @@ from korail_mobile_api import OriginalTicketReference
 tickets = client.list_tickets()
 ticket = tickets.reservations[0].tickets[0]
 reference = OriginalTicketReference.from_ticket(ticket)  # MMDD를 받는 메서드용
-sale_reference = OriginalTicketReference(  # YYYYMMDD를 받는 두 메서드용
-    sale_window_no=ticket.sale_window_no,
-    sale_date=ticket.sale_date,
-    sale_sequence=ticket.sale_sequence,
-    return_password=ticket.return_password,
-)
+sale_reference = OriginalTicketReference.from_sale_ticket(ticket)  # YYYYMMDD를 받는 두 메서드용
 ```
 
 <a id="get_ticket_list"></a>

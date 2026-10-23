@@ -28,7 +28,7 @@ pip install korail-mobile-api
 pip install --force-reinstall "git+https://github.com/yakisoba0728/korail-mobile-api@main"
 ```
 
-`main`의 패키지 버전 문자열은 아직 배포판과 같을 수 있으므로 `--force-reinstall`로 다시 설치합니다. 2.x 코드를 옮기는 방법은 [3.0으로 옮기기](migration-3.0.md)에 있습니다.
+현재 `main`의 패키지 버전은 `3.0.0.dev0`이며 배포판 2.6.2와 다릅니다. 개발 중에는 여러 커밋이 같은 개발 버전을 쓸 수 있어 `--force-reinstall`로 다시 설치합니다. 재현이 필요하면 `@main` 대신 확인할 커밋을 지정하세요. 2.x 코드를 옮기는 방법은 [3.0으로 옮기기](migration-3.0.md)에 있습니다.
 
 저장소를 내려받았다면 저장소 루트에서 설치할 수도 있습니다.
 
@@ -123,7 +123,7 @@ with KorailClient() as client:
 
 직통 조회에서는 다음 페이지가 있어도 `next_page()`가 `None`일 수 있습니다.
 이때는 `result.next_query_from_last_departure(query)`로 마지막 열차의 출발일·출발 시각부터 조회할 조건을 만들 수 있습니다.
-마지막 열차가 다시 포함될 수 있으니 열차 번호로 중복을 거르세요. 자세한 내용은 [열차 조회](guide/trains.md)를 참고하세요.
+마지막 열차가 다시 포함될 수 있습니다. 열차 번호만 같다고 다른 날짜·구간의 행까지 합치지 마세요. 복합 식별자와 조회 상한을 적용하는 [`korail.trains.iter_search`](guide/convenience.md#필요한-만큼-이어-읽기)를 우선 사용하거나 [열차 조회](guide/trains.md#next-page)의 기준을 따르세요.
 
 ## 로그인
 

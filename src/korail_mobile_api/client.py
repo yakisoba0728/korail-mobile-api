@@ -16,6 +16,7 @@ from ._core.http import Form, FormValue, KorailHttpClient
 from ._core.netfunnel import KorailNetFunnelClient, KorailNetFunnelGateName
 from ._core.parsing import _preserve_read_raw
 from ._core.session import KorailSessionClient
+from ._core.validation import _is_sequence, _required_text
 from ._domains.airport_bus.forms import (
     AirportBusScheduleQuery,
     AirportBusSeatInventoryQuery,
@@ -273,7 +274,6 @@ from ._domains.trains.forms import (
     build_seat_inventory_form,
     build_train_schedule_form,
     build_train_search_form,
-    validate_train_search_query,
 )
 from ._domains.trains.models import (
     FreeSeatCarResponse,
@@ -311,6 +311,7 @@ from .constants import KorailLoginInputFlag, KorailReservationJobType, KorailRoo
 from .errors import (
     KorailApiError,
     KorailAuthError,
+    KorailInvalidInputError,
     KorailNoDirectTrainError,
     KorailProtocolError,
     KorailSessionExpiredError,
@@ -318,6 +319,27 @@ from .errors import (
 )
 
 T = TypeVar("T")
+
+
+@_preserve_read_raw
+def _parse_received_response(
+    raw: Mapping[str, object],
+    parser: Callable[[Mapping[str, object]], T],
+) -> T:
+    """수신한 응답의 파싱 실패에 전체 원문과 전송 표시를 보존합니다."""
+    try:
+        return parser(raw)
+    except KorailProtocolError as error:
+        error.request_sent = True
+        raise
+    except KorailApiError:
+        raise
+    except Exception as error:
+        wrapped = KorailProtocolError(
+            f"KORAIL response was received but could not be parsed: {type(error).__name__}", raw=raw
+        )
+        wrapped.request_sent = True
+        raise wrapped from error
 
 
 def _note_possible_processing(error: KorailApiError) -> None:
@@ -411,8 +433,8 @@ class KorailClient:
     def _run_read(self, operation: Callable[[], T]) -> T:
         try:
             return operation()
-        except KorailSessionExpiredError:
-            self.clear_session()
+        except KorailSessionExpiredError as error:
+            _close_connections(self.clear_session, primary=error)
             raise
 
     def _queued(self, gate: KorailNetFunnelGateName, send: Callable[[], T]) -> T:
@@ -454,7 +476,7 @@ class KorailClient:
     ) -> T:
         """자동 재로그인·재전송은 하지 않습니다."""
         return self._run_read(
-            lambda: parser(
+            lambda: _parse_received_response(
                 self.http.post_form(
                     route,
                     form,
@@ -463,7 +485,8 @@ class KorailClient:
                     raise_on_fail=raise_on_fail,
                     omit_empty_fields=omit_empty_fields,
                     form_encoded=form_encoded,
-                ).raw
+                ).raw,
+                parser,
             )
         )
 
@@ -478,14 +501,15 @@ class KorailClient:
         omit_empty_fields: bool = False,
     ) -> T:
         return self._run_read(
-            lambda: parser(
+            lambda: _parse_received_response(
                 self.http.get_json(
                     route,
                     params,
                     include_common=include_common,
                     require_envelope=require_envelope,
                     omit_empty_fields=omit_empty_fields,
-                ).raw
+                ).raw,
+                parser,
             )
         )
 
@@ -509,32 +533,10 @@ class KorailClient:
     ) -> T:
         """파싱 실패만으로 서버 변경 여부를 알 수 없으므로 상태 확인 없이 재전송하지 마십시오."""
         try:
-            return self._parse_mutation_response(self._run_read(send).raw, parser)
+            return _parse_received_response(self._run_read(send).raw, parser)
         except (KorailTransportError, KorailProtocolError) as error:
             _note_possible_processing(error)
             raise
-
-    @staticmethod
-    @_preserve_read_raw
-    def _parse_mutation_response(
-        raw: Mapping[str, object],
-        parser: Callable[[Mapping[str, object]], T],
-    ) -> T:
-        """POST·GET 변경 및 환불 검증의 파싱 오류에 전체 응답을 보존합니다. 재전송하지 않습니다."""
-        try:
-            return parser(raw)
-        except KorailProtocolError as error:
-            error.request_sent = True
-            raise
-        except KorailApiError:
-            raise
-        except Exception as error:
-            # 패키지 밖 예외도 원문을 붙인 KorailProtocolError로 감싸며 재전송하지 않습니다.
-            wrapped = KorailProtocolError(
-                f"KORAIL response was received but could not be parsed: {type(error).__name__}", raw=raw
-            )
-            wrapped.request_sent = True
-            raise wrapped from error
 
     def list_seat_cars(
         self,
@@ -662,13 +664,14 @@ class KorailClient:
         """계정의 지연할인권 목록을 조회합니다."""
         self._require_session()
         return self._run_read(
-            lambda: parse_delay_discount_ticket_response(
+            lambda: _parse_received_response(
                 self.http.post_query(
                     "/classes/com.korail.mobile.passCard.DelayDiscountView",
                     build_delay_discount_ticket_form(departure_date_to),
                     omit_empty_fields=True,
                     require_envelope=False,
-                ).raw
+                ).raw,
+                parse_delay_discount_ticket_response,
             )
         )
 
@@ -701,6 +704,8 @@ class KorailClient:
     ) -> MileageHistoryResponse:
         """마일리지 적립/사용 내역 한 페이지를 조회합니다."""
         self._require_session()
+        if not isinstance(request, MileageHistoryRequest):
+            raise KorailInvalidInputError("request must be a MileageHistoryRequest")
         return self._post_read(
             "/classes/com.korail.mobile.mlg.amtSpec.do",
             build_mileage_history_form(request),
@@ -1103,6 +1108,8 @@ class KorailClient:
     ) -> SelfSeatChangeInfoResponse:
         """자율 좌석·열차 변경으로 갈 수 있는 승차역과 변경 사유를 조회합니다."""
         self._require_session()
+        if not isinstance(request, SelfSeatChangeInfoRequest):
+            raise KorailInvalidInputError("request must be a SelfSeatChangeInfoRequest")
         return self._post_read(
             "/classes/com.korail.mobile.self.seatChgInfo.do",
             build_self_seat_change_info_form(request),
@@ -1134,7 +1141,9 @@ class KorailClient:
     def get_reservation_hold(self, pnr_no: str) -> ReservationHoldResponse:
         """이미 잡힌 예약을 PNR 로 조회해 카드 결제용 홀드로 가져옵니다. 결제는 하지 않습니다."""
         detail = self.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no=pnr_no))
-        return parse_existing_reservation_hold_response(detail.raw, pnr_no=pnr_no)
+        return _parse_received_response(
+            detail.raw, lambda raw: parse_existing_reservation_hold_response(raw, pnr_no=pnr_no)
+        )
 
     def get_refund_fee(
         self,
@@ -1412,10 +1421,10 @@ class KorailClient:
             peak_season=peak_season,
         )
         return TrainSearchResult(
-            trains=parse_train_rows(response.raw),
+            trains=_parse_received_response(response.raw, parse_train_rows),
             response=response,
             raw=response.raw,
-            metadata=parse_train_search_metadata(response.raw),
+            metadata=_parse_received_response(response.raw, parse_train_search_metadata),
         )
 
     def _search_transfer_trains(
@@ -1433,13 +1442,13 @@ class KorailClient:
             use_special_schedule=use_special_schedule,
             peak_season=peak_season,
         )
-        trains = parse_train_rows(response.raw)
+        trains = _parse_received_response(response.raw, parse_train_rows)
         return TransferSearchResult(
             itineraries=pair_transfer_itineraries(trains),
             trains=trains,
             response=response,
             raw=response.raw,
-            metadata=parse_train_search_metadata(response.raw),
+            metadata=_parse_received_response(response.raw, parse_train_search_metadata),
         )
 
     def _post_schedule_view(
@@ -1451,19 +1460,32 @@ class KorailClient:
         use_special_schedule: bool = False,
         peak_season: bool = False,
     ) -> BaseKorailResponse:
-        validate_train_search_query(query)
-        departure_name = self._resolve_station_reference(query.departure_station)
-        arrival_name = self._resolve_station_reference(query.arrival_station)
+        if not isinstance(query, TrainSearchQuery):
+            raise KorailInvalidInputError("query must be a TrainSearchQuery")
+        if not _is_sequence(query.connection_station_codes):
+            raise KorailInvalidInputError("connection_station_codes must be a sequence of non-empty strings")
+        for name, value in (
+            ("include_srt", query.include_srt),
+            ("include_nearby_stations", query.include_nearby_stations),
+            ("use_special_schedule", use_special_schedule),
+            ("peak_season", peak_season),
+        ):
+            if type(value) is not bool:
+                raise KorailInvalidInputError(f"{name} must be a bool")
         current = self.session.current
         form = build_train_search_form(
             self.config,
             query,
-            departure_name=departure_name,
-            arrival_name=arrival_name,
+            departure_name=query.departure_station,
+            arrival_name=query.arrival_station,
             member_card_no=current.member_card_no if current else None,
             continuation=continuation,
             transfer=transfer,
         )
+        _required_text(query.departure_station, "departure_station")
+        _required_text(query.arrival_station, "arrival_station")
+        form["txtGoStart"] = self._resolve_station_reference(query.departure_station)
+        form["txtGoEnd"] = self._resolve_station_reference(query.arrival_station)
         route = (
             "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
             if use_special_schedule
@@ -1684,6 +1706,8 @@ class KorailClient:
 
         서버 상태를 바꾸므로 실패해도 다시 보내지 말고 예약 내역을 확인하십시오."""
         self._require_session("cancellation requires")
+        if type(check_first) is not bool:
+            raise KorailInvalidInputError("check_first must be a bool")
         form = build_unpaid_reservation_cancel_form(self.config, hold)
         if check_first:
             self._mutation(
@@ -1754,7 +1778,7 @@ class KorailClient:
         return self._post_read(
             "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
             build_station_refund_verification_form(request),
-            parser=lambda raw: self._parse_mutation_response(raw, parse_station_refund_verification_response),
+            parser=parse_station_refund_verification_response,
         )
 
     def refund_station_ticket(

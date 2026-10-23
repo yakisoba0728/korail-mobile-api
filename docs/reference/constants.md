@@ -4,6 +4,8 @@
 
 ::: korail_mobile_api.KorailSeatClass
 
+::: korail_mobile_api.KorailReserveOption
+
 ::: korail_mobile_api.KorailRoomClassCode
 
 ::: korail_mobile_api.KorailLoginInputFlag

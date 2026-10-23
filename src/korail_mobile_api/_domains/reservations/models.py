@@ -382,8 +382,9 @@ class ReservationHoldResponse(BaseKorailResponse):
     total_fare: str | None = wire("h_tot_fare")
     #: 앱이 표시하는 합계 금액(``h_tot_prc``)입니다. 결제에는 ``received_amount``를 쓰세요.
     total_price: str | None = wire("h_tot_prc")
-    #: 결제할 금액입니다. 좌석별 금액(``h_rcvd_amt``)의 합이며, 응답의 총액(``h_tot_rcvd_amt``)과 다르면 응답을 읽을 때
-    #: ``KorailProtocolError``가 발생합니다. 좌석 행이 없으면 응답의 총액을 쓰고, 좌석 금액을 읽을 수 없으면 ``None``입니다.
+    #: 각 응답 여정의 정산 좌석 금액 합입니다. 일부 여정만 정산 좌석이 있거나 선언 여정 수와 행 수가 모순되면
+    #: ``None``이며 원문·취소 참조는 보존합니다. 완전한 좌석 합과 유효한 명시 총액이 다르면 ``KorailProtocolError``입니다.
+    #: 여정 행이 없거나 모두 정산 좌석이 없으면 유효한 명시 총액을 쓰고, 금액을 읽을 수 없으면 ``None``입니다.
     received_amount: str | None = None
     journeys: tuple[ReservationJourney, ...] = ()
     total_discount_amount: str | None = wire("h_tot_dcnt_amt")

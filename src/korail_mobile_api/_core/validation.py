@@ -31,7 +31,10 @@ def _int_text(value: int, name: str) -> str:
     """앱 DTO 는 String 이고 범위 검사가 없어 값의 판정은 서버에 맡깁니다."""
     if type(value) is not int:
         raise KorailInvalidInputError(f"{name} must be an integer")
-    return str(value)
+    try:
+        return str(value)
+    except ValueError as exc:
+        raise KorailInvalidInputError(f"{name} cannot be converted to a decimal string") from exc
 
 
 def _required_text(value: str | None, name: str) -> str:

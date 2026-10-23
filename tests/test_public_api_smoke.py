@@ -558,7 +558,7 @@ def _f8_handler(
         assert request.url.scheme == "https"
         assert request.url.host == expected["host"]
         assert request.url.path == expected["path"]
-        # test_wire_equivalence.py pins these calls' query and form bytes in order.
+        # test_wire_equivalence.py compares normalized requests, including ordered body pairs.
         opcode = request.url.params.get("opcode")
         seen.append(opcode or request.url.path)
         payload = expected["response"]
@@ -580,7 +580,7 @@ def test_f8_all_public_methods(method_name: str, f8_client_factory: Callable[...
     """NetworkApi.java:87-811; PushService.java:16-17; Netfunnel.java:610-664,848-880.
 
     Each call asserts the HTTP method/path, typed result, and all 5101/API/5004 events, not just mocked
-    method invocations; test_wire_equivalence.py pins the same calls' query/form bytes.
+    method invocations; test_wire_equivalence.py compares the same calls' normalized query/form pairs.
     Fixtures freeze the baseline; they do not prove protected fields or live acceptance.
     """
     case = F8_CASE_DATA[method_name]

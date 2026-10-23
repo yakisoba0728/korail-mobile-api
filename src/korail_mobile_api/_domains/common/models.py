@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Self
 
-from ..._core.parsing import _envelope, defaulted_str, required_str, wire
+from ..._core.parsing import _response_fields, defaulted_str, required_str, wire
 from ...errors import KorailProtocolError, _is_json_object, resolve_error_message
 
 
@@ -49,19 +49,20 @@ class BaseKorailResponse:
     def from_raw(cls, raw: object) -> Self:
         """봉투 세 필드를 그대로 옮겨 담아 응답을 만듭니다.
 
-        성공·실패는 판정하지 않습니다. ``raw``가 JSON 객체가 아니거나 봉투 필드가 문자열·정수·``null``이 아니면
-        ``KorailProtocolError``가 발생합니다."""
+        성공·실패와 도메인 필드는 읽지 않습니다. JSON 객체·봉투 타입이 잘못됐거나 하위 클래스 생성에 도메인 필드가 더
+        필요하면 ``KorailProtocolError``가 발생합니다."""
         if not _is_json_object(raw):
             error = KorailProtocolError("KORAIL response must be a JSON object")
             error.raw = raw
             raise error
-        envelope = _envelope(raw)
-        return cls(
-            h_msg_cd=envelope["h_msg_cd"],
-            h_msg_txt=envelope["h_msg_txt"],
-            str_result=envelope["strResult"],
-            raw=raw,
-        )
+        values = _response_fields(raw)
+        try:
+            return cls(**values)
+        except TypeError as exc:
+            raise KorailProtocolError(
+                f"KORAIL {cls.__name__}.from_raw only constructs envelope fields; use a typed client read",
+                raw=raw,
+            ) from exc
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -105,8 +106,8 @@ class UuidResponse(BaseKorailResponse):
 class KorailStation:
     """역 코드·이름과 역별 안내 정보를 담습니다."""
 
-    code: str = wire("stn_cd", defaulted_str)
-    name: str = wire("stn_nm", defaulted_str)
+    code: str = field(metadata={"wire": "stn_cd", "read": defaulted_str})
+    name: str = field(metadata={"wire": "stn_nm", "read": defaulted_str})
     longitude: str | None = wire("longitude")
     latitude: str | None = wire("latitude")
     group: str | None = wire("group")

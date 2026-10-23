@@ -14,8 +14,17 @@ RESULT_CODE = re.compile(r"(?:[A-Z]{1,4}[0-9]{3,7}|S-ERR[0-9]{6}|SUPDATE|SEMGTK|
 SUFFIXES = {"EN": "en", "JP": "ja", "CN": "zh"}
 
 
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate message asset key: {key}")
+        result[key] = value
+    return result
+
+
 def build_catalog(source: bytes, *, app_version: str) -> dict[str, object]:
-    asset = json.loads(source)
+    asset = json.loads(source, object_pairs_hook=_unique_object)
     if not isinstance(asset, dict) or not all(
         isinstance(key, str) and isinstance(value, str) for key, value in asset.items()
     ):

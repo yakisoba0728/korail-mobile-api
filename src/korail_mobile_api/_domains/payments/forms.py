@@ -94,6 +94,8 @@ class StationRefundExecutionRequest:
 
         확인 응답이 성공(``"SUCC"``)이 아니거나 원표가 없거나 옮겨 담을 값이 비어 있으면 ``KorailInvalidInputError``가
         발생합니다."""
+        if not isinstance(verification, StationRefundVerificationResponse):
+            raise KorailInvalidInputError("verification must be a StationRefundVerificationResponse")
         if verification.str_result != "SUCC" or not verification.original_tickets:
             raise KorailInvalidInputError(
                 "KORAIL station refund requires a successful verification with an original ticket"
@@ -219,6 +221,8 @@ class PaidTicket:
 
         ``train_no``를 주지 않으면 첫 여정의 열차 번호를 씁니다. 상세 응답에 PNR, 판매일, 원표 창구번호·일련번호·반환
         비밀번호 중 빈 값이 있으면 ``KorailInvalidInputError``가 발생합니다."""
+        if not isinstance(detail, RefundTicketDetailResponse):
+            raise KorailInvalidInputError("detail must be a RefundTicketDetailResponse")
         candidate_parts = {
             "pnr_no": detail.pnr_no,
             "sale_date": detail.sale_date,
@@ -599,8 +603,9 @@ def build_refund_form(
     # 승차권 상세 화면은 위 필드만 채우고 나머지는 null 입니다.
     if commission.ticket_return_times_division_code:
         form["tk_ret_tms_dv_cd"] = commission.ticket_return_times_division_code
-    if ticket.train_no:
-        form["trnNo"] = ticket.train_no
+    train_no = _optional_text(ticket.train_no, "PaidTicket.train_no")
+    if train_no:
+        form["trnNo"] = train_no
     # 앱은 사용 가능 마일리지가 수수료 이상일 때만 마일리지 정산을 묻습니다. 보호된 진행 플래그 비교값은 보지 않습니다.
     if settle_mileage and _app_integer(commission.usable_mileage) < _app_integer(commission.refund_fee):
         raise KorailInvalidInputError(
@@ -609,7 +614,7 @@ def build_refund_form(
     form["pbpAcepTgtFlg"] = pbp_flag
     for key, coordinate in (("latitude", latitude), ("longitude", longitude)):
         if coordinate is not None:
-            form[key] = str(coordinate)
+            form[key] = _optional_text(coordinate, key)
     return form
 
 
@@ -665,7 +670,10 @@ def build_price_recalculation_form(
     if not isinstance(request, PriceRecalculationRequest):
         raise KorailInvalidInputError("KORAIL price recalculation requires an exact PriceRecalculationRequest")
     pnr_no = _required_mutation_text(request.pnr_no, field="pnr_no", context="price recalculation")
-    rows = tuple(request.rows)
+    try:
+        rows = tuple(request.rows)
+    except TypeError as exc:
+        raise KorailInvalidInputError("KORAIL price recalculation requires iterable passenger rows") from exc
     if not rows or len(rows) > KORAIL_MAX_PASSENGERS_PER_RESERVATION:
         raise KorailInvalidInputError(
             f"KORAIL price recalculation needs 1 to {KORAIL_MAX_PASSENGERS_PER_RESERVATION} passenger rows"

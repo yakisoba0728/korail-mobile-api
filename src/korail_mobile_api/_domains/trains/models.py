@@ -196,7 +196,7 @@ class TrainSummary:
 
     # 식별값은 후속 예약 때 서버가 다시 검증합니다(실서버 관측).
 
-    train_no: str = wire("h_trn_no", _train_no)
+    train_no: str = field(metadata={"wire": "h_trn_no", "read": _train_no})
     train_group_code: str | None = wire("h_trn_gp_cd", _or_alias("trnGpCd"), default=None)
     departure_station_code: str | None = wire("h_dpt_rs_stn_cd", _or_alias("dptRsStnCd"), default=None)
     arrival_station_code: str | None = wire("h_arv_rs_stn_cd", _or_alias("arvRsStnCd"), default=None)
@@ -326,7 +326,7 @@ class TrainSummary:
 class SeatAttribute:
     """좌석 속성 코드와 표시 이름을 담습니다."""
 
-    name: str = wire("seatAttNm", defaulted_str)
+    name: str = field(metadata={"wire": "seatAttNm", "read": defaulted_str})
     code: str | None = wire("seatAttCd")
 
 
@@ -365,17 +365,17 @@ class PhysicalSeat:
     ``KorailSeatAssignment.from_inventory()``로 좌석 지정 입력으로 바꿀 수 있습니다. ``floor``는 앱이 읽지 않는 값이며
     응답에 없으면 ``None``입니다."""
 
-    seat_no: str = wire("seat_no", defaulted_str)
-    sale_possible: str = wire("sale_psb_flg", defaulted_str)
-    direction_code: str = wire("dir_seat_att_cd", defaulted_str)
-    other_attribute_code: str | None = wire("etc_seat_att_cd", nullable_str)
-    requested_attribute_code: str = wire("rq_seat_att_cd", defaulted_str)
-    floor: str | None = wire("floor", nullable_str)
-    specification: str = wire("seat_spec", defaulted_str)
-    sequence_no: str = wire("sqr_no", defaulted_str)
-    message_code: str = wire("intg_msg_cd", defaulted_str)
-    message: str = wire("intg_msg", defaulted_str)
-    visual_message_division_code: str | None = wire("vz_msg_dv_cd", nullable_str)
+    seat_no: str = field(metadata={"wire": "seat_no", "read": defaulted_str})
+    sale_possible: str = field(metadata={"wire": "sale_psb_flg", "read": defaulted_str})
+    direction_code: str = field(metadata={"wire": "dir_seat_att_cd", "read": defaulted_str})
+    other_attribute_code: str | None = field(metadata={"wire": "etc_seat_att_cd", "read": nullable_str})
+    requested_attribute_code: str = field(metadata={"wire": "rq_seat_att_cd", "read": defaulted_str})
+    floor: str | None = field(metadata={"wire": "floor", "read": nullable_str})
+    specification: str = field(metadata={"wire": "seat_spec", "read": defaulted_str})
+    sequence_no: str = field(metadata={"wire": "sqr_no", "read": defaulted_str})
+    message_code: str = field(metadata={"wire": "intg_msg_cd", "read": defaulted_str})
+    message: str = field(metadata={"wire": "intg_msg", "read": defaulted_str})
+    visual_message_division_code: str | None = field(metadata={"wire": "vz_msg_dv_cd", "read": nullable_str})
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -537,7 +537,7 @@ class TransferItinerary:
     second: TrainSummary
 
     @property
-    def legs(self) -> tuple[TrainSummary, ...]:
+    def legs(self) -> tuple[TrainSummary, TrainSummary]:
         """두 열차 구간을 응답에서 묶인 원래 순서대로 반환합니다."""
         return (self.first, self.second)
 

@@ -14,6 +14,8 @@
 - 조회 결과를 옮기는 팩토리: `OriginalTicketReference.from_ticket`(원표 반환일을 판매일로 사용), `FreeSeatCarRequest.from_train`, `MergeSeatsInquiryRequest.from_train`, `AirportBusSeatInventoryQuery.from_schedule`.
 - 간편 API: `korail.tickets.all(page_no, *, mode, boarding_date_from, boarding_date_to)`, `korail.tickets.detail`, `KorailClient.login`과 같은 키워드 옵션을 받는 `Korail.login`.
 - `DynapathRequestContext`의 `body`(보낼 본문 바이트)와 `app_version`.
+- `OriginalTicketReference.from_sale_ticket(ticket)`: 전체 `sale_date`의 ASCII 8자리를 그대로 복사해 수령자·PBP 조회에 사용합니다. 기존 `from_ticket`은 MMDD 원표 반환일을 계속 사용하며 날짜 역할을 자동 선택하지 않습니다.
+- `Korail.logged_in`의 네 로그인 옵션 전달, `reservations.cancel`의 `HoldReference`·`check_first=True`, `reservations.create`의 `seats`·`seat_attribute_code` 전달. 기존 기본값·명시적 지정좌석 예약 종류·요청 횟수와 무재시도 정책을 유지합니다.
 
 ### 변경
 
@@ -22,10 +24,13 @@
 - 모델 이름: 공개 `Limousine*` 클래스 7개는 `AirportBus*`, `TrainSearchQuery.departure_station_code`·`arrival_station_code`는 `departure_station`·`arrival_station`입니다. 같은 전송 키를 읽는 응답 필드는 한 이름을 써서 응답 모델 25개의 필드 47개 이름이 바뀌었습니다(예: `TrainSearchMetadata.product_no` → `goods_no`, `TrainScheduleStop.planned_departure_time` → `departure_time`, `ProductReservation.payment_deadline` → `settlement_deadline`).
 - 공개 입력·응답 모델과 설정 dataclass는 모두 `frozen=True, kw_only=True`라 키워드 인자로만 만듭니다. `raw`는 선언한 모델의 마지막 필드이며 `repr()`에 나오지 않습니다(비교 제외는 같음). `KorailSession.jsessionid`, 입력 모델의 반환 비밀번호·이름·전화번호·생년월일·고객번호, `DynapathTokenSettings.device_id`, `KorailConfig.advertising_id`도 `repr()`에서 숨깁니다.
 - 2.x에서 pickle한 응답·입력 모델, `KorailConfig`(안의 `DynapathConfig` 포함), `KorailDeviceProfile`은 읽을 수 없습니다. 예외 pickle은 생성자를 거치지 않는 형식으로 바뀌었고 2.x가 만든 pickle도 읽습니다.
-- 요청 전 입력 거절은 `KorailInvalidInputError`입니다. 입력 모델·폼 검사, 로그인 입력, `refund`의 수수료 응답 검사, 간편 API가 직접 내던 `ValueError`가 해당하며 메시지는 같습니다. 간편 API에서 인자 타입이 틀리면 계속 `TypeError`입니다.
+- 요청 전 입력 거절은 `KorailInvalidInputError`입니다. 입력 모델·폼 검사, 로그인 입력, `refund`의 수수료 응답 검사, 간편 API가 직접 내던 `ValueError`가 해당합니다. 없는 키워드 등 Python 호출 시그니처 위반은 계속 `TypeError`입니다.
 - 만들 때 거절하는 입력 모델: `PassScheduleRequest`(`None`·비문자열 필드), `CardPayment`(카드 형식, `card_type`은 `str`), `PaidTicket`(필수 식별자 다섯), `FreeSeatCarRequest`·`MergeSeatsInquiryRequest`(열차 식별값), `AirportBusScheduleQuery`·`AirportBusSeatInventoryQuery`(필수 식별값), `PriceFareQuoteRequest`(`goods_no` 일관성). 올바른 입력의 요청 바이트는 같습니다.
 - 요청 전 검사 추가: `get_train_schedule`·`list_seat_cars`·`get_seat_inventory`는 비었거나 `None`인 열차 번호·운행일·역 코드·운행 순서를, `list_tickets`의 `boarding_date_from`·`boarding_date_to`는 빈 문자열이나 ASCII 숫자 8자리가 아닌 값을 거절합니다.
 - DynaPath 헤더는 `DynapathConfig.allowlist_paths`만으로 정합니다. 기본 목록에서 요청 바이트는 같습니다.
+- 잘못된 동적 입력의 조기 거절: 검색 query·환승역 Sequence·실제 bool 옵션, 취소 `check_first` bool, 병합 중간역 ASCII 숫자 문자열, 환불 열차번호·좌표 문자열, MaaS 반환번호 Sequence, 버스 상품번호 문자열을 검사합니다. 정상 목록의 순서·중복, 빈 선택값 생략, 저수준 인원 범위 정책은 유지합니다. 환불 숫자 좌표의 문서 밖 자동 문자열화는 제거했습니다.
+- DynaPath header 이름은 nonempty ASCII HTTP field-name token, 공급자 토큰은 CTL 없는 ASCII 문자열 또는 None이어야 합니다. None 생략·빈 header·printable ASCII는 유지합니다. v1 필수값의 실제 문자열과 env 기기값·양수 크기도 기존 profile 의미에 맞춰 검사하며 Unicode 사실값·custom UA의 build ID 생략을 유지합니다.
+- 필수 모델 생성자 인자 누락을 mypy·Pyright도 거절하도록 표준 dataclass metadata로 표현합니다. runtime 생성자·기본값·필드 순서·pickle 경로는 유지합니다. `TransferItinerary.legs`는 두 원소 튜플, commuter factory는 `Sequence[int]`를 받아 튜플로 보관합니다. `timeout`의 기존 None 허용도 annotation에 반영합니다.
 
 ### 제거
 
@@ -38,6 +43,15 @@
 
 ### 수정
 
+- 페이지·쪽 크기의 거대 정수 문자열 변환 실패를 원래 `ValueError` cause가 있는 요청 전 `KorailInvalidInputError`로 처리합니다. 값 노출·전역 한도 변경·새 페이지 범위 제한은 없습니다. `PaidTicket.from_refund_detail`·`StationRefundExecutionRequest.from_verification`도 잘못된 응답 모델을 bare `AttributeError` 대신 같은 입력 오류로 거절합니다.
+- 문서의 미전송 판정을 `raw=None` 대신 입력 거절 유형과 `request_sent`로 구분하고, 재계산한 최신 홀드를 선택 장바구니 호출 전에 보존합니다. 실제 문서 블록을 합성 실패 응답으로 실행하는 회귀를 추가했습니다.
+- 일부 여정만 정산 좌석이 있거나 선언 여정 수와 행 수가 모순된 홀드는 부분합 대신 `received_amount=None`입니다. raw·PNR·취소 참조와 total-only/all-no-settlement 유효 총액 fallback을 보존하며 자동 재조회하지 않습니다. 완전한 좌석 합과 명시 총액의 모순은 계속 오류입니다.
+- 수신 후 도메인 파싱 실패의 sent/raw/cause 표시와 JSON decoder ValueError·RecursionError cause를 보존합니다. 순수 파서·요청 전 거절은 network-neutral이며 queue 반납 시점·상태 우선순위·변경 무재전송은 유지합니다. 공급자는 준비된 실제 URL·본문을 한 번 읽고 closed/invalid URL에서는 호출되지 않습니다.
+- 로그인 중단 시 정리와 login/logout/세션 만료의 원예외 보존을 보완합니다. JSESSIONID는 대표 ticket-list URL에 적용되는 nonempty 값을 요구하고 정상 다중 Path를 허용합니다. 추가 요청이나 모든 API·원격 인증 보장은 없습니다.
+- 직접 입력의 문자열 아닌 객체 키를 즉시 검사하되 중첩 raw는 재귀 검사하지 않습니다. 상속 `from_raw`는 envelope-only이며 필수 도메인 인자가 부족하면 원래 TypeError를 cause로 가진 ProtocolError입니다. `ProductDetailResponse.detail_raw`·`DynapathRequestContext.body`는 repr에서만 숨깁니다.
+- 오류 표시의 미완결 비교식·블록 시작 경계를 보존하고 build-time 메시지 입력의 중복 키를 거절합니다. catalog literal은 바꾸지 않았으며 표시 텍스트는 HTML sanitizer 결과가 아닙니다.
+- CI가 설치 검증한 동일 배포 파일을 수동 게시 workflow에 전달하고 별도 재빌드를 제거합니다. normalized wire pin의 재생성 진입점을 없애고 독립 literal byte 회귀와 Griffe docs-job 회귀를 추가합니다. mypy 선언 하한을 설정 오류 코드를 지원하는 1.18.1로 맞춥니다.
+- `-8204` 안내를 기존 FAIL 모델 반환 정책과 구분하고 개발 버전 설치·공항버스 검증·MaaS 인증·판매일 식별자 설명을 바로잡습니다. 생성 문서의 `next_page()`와 코드 들여쓰기를 보존하고 SVG 예제·예약 전략 레퍼런스를 보완합니다. 런타임 오류 정책과 날짜별 기록은 바꾸지 않습니다.
 - `cancel_unpaid_hold`는 검사한 여정 수를 그대로 보냅니다. 이전에는 `" 1"`을 공백째 보냈습니다.
 - `get_common_codes`는 `bytes`와 문자열이 아닌 항목을 거절합니다. 이전에는 바이트마다 `code`로 보냈습니다.
 - `list_tickets`는 `date` 객체 같은 값을 거절합니다. 이전에는 `2026-07-01` 형태로 보냈습니다.
@@ -48,7 +62,7 @@
 ### 안전·검증 한계
 
 - 3.0.0은 배포 전이며 실서버에서 검증하지 않았습니다. 모든 변경은 합성 응답과 소켓 차단 환경에서만 검사했고 새 실서버 요청은 하지 않았습니다.
-- 이름과 인자만 바뀐 메서드는 같은 입력에서 2.6.1과 같은 요청(본문·헤더·순서·횟수)을 보냅니다. 이는 SDK에서 캡처한 요청과의 비교(`tests/test_wire_equivalence.py`)이며 앱이나 서버의 근거가 아닙니다. 요청 전에 새로 거절하는 입력과 위 수정 항목은 예외입니다.
+- 이름과 인자만 바뀐 메서드는 같은 입력에서 2.6.1 캡처의 정규화된 URL·본문 필드·헤더·순서·횟수와 비교합니다(`tests/test_wire_equivalence.py`). 이는 SDK 캡처와의 비교이며 모든 인코딩 변형의 바이트 동일성이나 앱·서버 수용의 증거는 아닙니다. 요청 전에 새로 거절하는 입력과 위 수정 항목은 예외입니다.
 - 기본 요청 버전(`AppVersion=7.0.8`·API `Version=250601003`)은 그대로입니다. 2026-10-21부터 보고된 `-8204`(GitHub #32)에 대해 2026-10-23 배포된 2.6.2의 기본 설정으로 로그인 없는 열차 조회가 성공한 기록과 범위는 [실서버 확인 현황](https://yaki.kr/korail-mobile-api/status/)에 있습니다.
 - `repr()`에서 숨기는 것은 출력뿐입니다. 속성 값, `raw`, `dataclasses.asdict()`, pickle은 가리지 않습니다.
 - `request_sent`가 `True`인 상태 변경 실패는 서버에서 처리됐을 수 있습니다. 라이브러리는 다시 보내지 않으며, 호출자가 상태를 확인한 뒤에 정해야 합니다.

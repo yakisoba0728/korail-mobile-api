@@ -21,8 +21,8 @@
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -e '.[dev]' -r docs/requirements.txt
-.venv/bin/python -m ruff check src checks tests
-.venv/bin/python -m ruff format --check src checks tests
+.venv/bin/python -m ruff check src checks tests docs/griffe_docs.py
+.venv/bin/python -m ruff format --check src checks tests docs/griffe_docs.py
 .venv/bin/python -m mypy
 .venv/bin/python -m pyright
 .venv/bin/actionlint -shellcheck= -pyflakes=
@@ -33,15 +33,23 @@ git diff --check
 
 전체 테스트에는 원래의 두 오프라인 검사, 공개 API 목록, 문서 시그니처·예제, 실제 패키지 빌드와
 배포 파일 내용 검사가 포함됩니다. 테스트는 소켓을 차단하고 가짜 응답만 사용합니다.
+문서 의존성을 설치한 CI docs job은 `import griffe`를 먼저 확인하고 `pytest tests/test_docs.py --no-cov`를 strict build 전에 실행합니다. 따라서 runtime-only 환경에서 선택적으로 생략되는 Griffe 회귀도 문서 gate에서는 반드시 실행됩니다.
 
-CI는 Python 3.11·3.12·3.13·3.14와 Python 3.11의 선언된 최소 의존성 조합을 검사합니다.
+CI는 Python 3.11·3.12·3.13·3.14와 Python 3.11의 선언된 런타임·빌드 backend·mypy 하한 조합을 검사합니다.
+개발 mypy 하한은 선택 오류 코드(`exhaustive-match` 포함)를 지원하는 `1.18.1`입니다.
+설정 파싱의 stderr와 활성화된 코드 목록도 검사하므로, 비치명적 설정 오류로 검사가 조용히 빠지지 않아야 합니다.
+다른 개발·전이 의존성까지 모두 최저 버전으로 고정하는 검사는 아닙니다.
 actionlint는 수동 게시·문서 배포 워크플로까지 검사합니다. 주간 실행과 Dependabot은 자동 배포를 하지 않습니다. Trivy는 현재 해석된 런타임 의존성·비밀·설정의 HIGH/CRITICAL을 검사하며, 수정본이 없는 취약점은 gate에서 제외합니다. 최소 의존성 조합 전체에 대한 보안 보증은 아닙니다.
 빌드한 wheel을 별도 가상환경에 설치해 import·버전·의존성과 두 오프라인 검사(`checks/contract_api.py`, `checks/netfunnel_offline.py`)를 확인합니다.
 이어서 `tests/`의 `conftest.py`, `test_public_api_smoke.py`, `test_7010_contract.py`, `test_dynapath_diagnostic.py`, `test_auth_transport.py`,
 `test_facade.py`, `test_proxy.py`, `test_refund_binding.py`, `test_convenience_reads.py`, `test_wire_equivalence.py`, `_wire_pin.py`를
 checkout 밖으로 복사해 설치된 패키지로 실행합니다. 이 목록은 `.github/workflows/ci.yml`에 이름으로 적혀 있으므로 파일 이름을 바꾸면 함께 고쳐야 합니다.
 `conftest.py`의 소켓 차단 코드(`_F8_SOCKET_GUARD`)도 설치 환경에 똑같이 넣습니다.
-배포 워크플로는 지정한 태그에서 이 CI를 다시 실행하고 모두 통과해야 업로드합니다.
+기존 `_wire_pin.py`는 SDK의 정규화된 요청 캡처이며 수정·재생성하지 않습니다. 별도 literal 본문·쿼리·origin 회귀가
+원시 표현을 보완하며, 앱·서버 호환을 증명하지는 않습니다.
+Python 3.14/current 조합 한 곳에서 빌드·`twine check --strict`·설치 wheel 검사가 모두 성공한 **그 `dist/`**를
+`validated-dist` artifact로 저장합니다. 배포 워크플로는 지정한 태그에서 전체 재사용 CI(모든 matrix·보안·문서)를
+통과한 뒤 같은 실행의 artifact를 내려받아 게시하며, 별도 게시용 재빌드는 하지 않습니다.
 
 ## 배포 파일 만들기
 
@@ -75,7 +83,8 @@ gh workflow run publish.yml --ref v2.6.2
 ```
 
 이 마지막 명령은 실제 PyPI 업로드를 시작합니다. 워크플로는 태그 이름과 패키지 버전 일치를 검사하고,
-CI·빌드·`twine check --strict`를 거친 뒤 PyPI Trusted Publishing으로 업로드합니다.
+CI에서 빌드·`twine check --strict`·설치 검증한 동일한 배포 파일을 PyPI Trusted Publishing으로 업로드합니다.
+로컬에서 위 명령으로 만든 파일을 업로드하거나, 검증 뒤 새 파일을 빌드하는 경로는 아닙니다.
 PyPI의 게시자 설정은 이 저장소의 `publish.yml`과 `pypi` 환경에 연결돼 있어야 합니다.
 이미 게시한 버전 번호는 새 파일을 올리는 데 재사용할 수 없습니다.
 

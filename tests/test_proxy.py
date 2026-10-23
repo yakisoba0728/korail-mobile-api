@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import os
 import sys
+from typing import get_type_hints
 
 import httpx
 import pytest
@@ -316,6 +317,47 @@ def test_environment_device_dimensions_keep_defaults_and_integer_policy(
         build_config_from_env()
 
 
+@pytest.mark.parametrize("name", ["KORAIL_DEVICE_WIDTH", "KORAIL_DEVICE_HEIGHT", "KORAIL_ANDROID_SDK_INT"])
+@pytest.mark.parametrize("value", ["0", "-5"])
+def test_environment_rejects_nonpositive_device_sizes(device_env, name, value):
+    device_env.setenv(name, value)
+    with pytest.raises(ValueError, match="positive integer"):
+        build_config_from_env()
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "KORAIL_DYNAPATH_DEVICE_ID",
+        "KORAIL_DYNAPATH_OS_VERSION",
+        "KORAIL_DYNAPATH_DEVICE_MODEL",
+        "KORAIL_ANDROID_BUILD_ID",
+    ],
+)
+@pytest.mark.parametrize("control", ["\r", "\n"])
+def test_environment_rejects_multiline_device_facts(device_env, name, control):
+    device_env.setenv(name, "synthetic" + control + "fact")
+    with pytest.raises(ValueError, match="single-line") as caught:
+        build_config_from_env()
+    assert "synthetic" not in str(caught.value)
+
+
+def test_environment_keeps_unicode_facts_and_custom_user_agent_build_escape(device_env):
+    device_env.setenv("KORAIL_DYNAPATH_DEVICE_ID", "합성-설치")
+    device_env.setenv("KORAIL_DYNAPATH_DEVICE_MODEL", "모델 9")
+    device_env.setenv("KORAIL_DYNAPATH_OS_VERSION", "안드로이드 16")
+    device_env.setenv("KORAIL_NETFUNNEL_USER_AGENT", "synthetic-custom-agent")
+    device_env.delenv("KORAIL_ANDROID_BUILD_ID")
+    config = build_config_from_env()
+    profile = KorailDeviceProfile(
+        device_id="합성-설치", model="모델 9", android_release="안드로이드 16", build_id="빌드"
+    )
+    assert config.dynapath == build_config_from_profile(profile).dynapath
+    assert config.netfunnel_user_agent == "synthetic-custom-agent"
+    device_env.setenv("KORAIL_ANDROID_BUILD_ID", "unused\nbuild")
+    assert build_config_from_env() == config
+
+
 @pytest.mark.parametrize(
     "field, value",
     [
@@ -338,6 +380,7 @@ def test_config_rejects_unusable_durations(field: str, value: object) -> None:
 
 
 def test_config_keeps_documented_duration_escapes() -> None:
-    assert KorailConfig(timeout=None).timeout is None  # type: ignore[arg-type]
+    assert get_type_hints(KorailConfig)["timeout"] == float | None
+    assert KorailConfig(timeout=None).timeout is None
     assert KorailConfig(netfunnel_wait_limit=0).netfunnel_wait_limit == 0
     assert KorailConfig(netfunnel_wait_limit=None).netfunnel_wait_limit is None

@@ -15,6 +15,7 @@ DTO 필드는 선언 순서로 평탄화하고 배열은 1기반 인덱스를 �
 두 순서 정정은 앱 근거와의 정합성 수정으로, 보호된 최종 map과 서버 순서 민감성·실서버 영향은 미확인입니다.
 빈 문자열을 생략하는 기본 규칙과 빈 값을 명시적으로 보내야 하는 운임 조회 등 예외를 구분합니다.
 `lang=None`이면 언어값을 추측하지 않고 생략합니다.
+GET·query-POST 쿼리의 공백 표현은 지원 HTTPX의 직렬화를 따릅니다(0.28.0 전 `%20`, 0.28.0부터 `+`). raw-query 회귀는 버전별 literal 계약이며 모든 지원 버전의 같은 원시 바이트를 주장하지 않습니다.
 폼에 들어갈 값이 `None`인 요청 필드는 `key=`로 보내지 않고 요청 전에 `KorailProtocolError`로 거절합니다.
 `""`은 생략합니다. `lang=None`처럼 폼을 만들기 전에 생략을 정한 선택값은 이 규칙과 별개입니다.
 숫자 입력은 ASCII 숫자만 받습니다. `²`·`١`·전각 `１` 같은 유니코드 숫자는 요청 전에 거절합니다.
@@ -37,7 +38,8 @@ API User-Agent는 운영 관측값 `korailtalk`, 대기열 User-Agent는 기기 
 `timeout`은 0보다 큰 유한한 수 또는 `None`(httpx 제한 시간 없음, 기존과 같음), `netfunnel_timeout`은 0보다 큰 유한한 수,
 `netfunnel_wait_limit`은 `None` 또는 0 이상의 유한한 수여야 하며, 아니면 설정 생성 시 `ValueError`입니다.
 httpx가 해석하지 못하는 대기열 URL은 `httpx.InvalidURL`을 그대로 전파하지 않고 `KorailTransportError`로 처리합니다.
-DynaPath `token_provider`가 문자열이 아니거나 ASCII가 아닌 값을 돌려주면 아무것도 보내지 않고 `KorailProtocolError`입니다.
+DynaPath `token_provider`가 비문자열·비ASCII·ASCII CTL(`0x00..0x1f`, `0x7f`, 탭 포함)을 돌려주면 API 요청 전 `KorailProtocolError`입니다. None은 생략하고 빈 문자열·printable ASCII는 그대로 유지합니다. header 이름은 설정 생성 시 nonempty ASCII HTTP field-name token인지 검사합니다.
+provider의 URL·본문은 같은 준비된 Request의 실제 값이며 논리 path로 적용 여부를 판단합니다. closed/invalid URL은 provider를 소비하지 않고, provider는 queue admission 뒤 실행합니다.
 DynaPath 차단 판정 경로는 내장 목록이 아니라 `config.dynapath.allowlist_paths`이며 사용자 지정 목록도 그대로 따릅니다.
 
 네트워크 단계 실패의 `KorailTransportError.__cause__`(httpx 예외)는 예외 종류·객체를 유지하되, 붙은 요청에는
@@ -59,11 +61,12 @@ DynaPath 차단 판정 경로는 내장 목록이 아니라 `config.dynapath.all
 `KorailProtocolError`입니다. 선택 목록은 해당 DTO·파서의 빈 목록 규칙을 따릅니다.
 Python의 정수 문자열 변환 한도를 넘는 봉투 값도 `KorailProtocolError`로 처리하고 원문을 남깁니다.
 
-`BaseKorailResponse.from_raw`는 객체·봉투 타입을 검사하되 성공·실패를 판정하지 않습니다.
+`BaseKorailResponse.from_raw`는 문자열 키 dict의 봉투만 구성하며 성공·실패·도메인 필드를 파싱하지 않습니다. 상속한 factory의 생성자 필수 도메인 인자가 부족하면 raw와 원래 TypeError cause를 가진 ProtocolError입니다. 직접 생성자의 TypeError·시그니처는 그대로입니다. mapping guard는 바로 아래 문자열 키만 확인하고 중첩 unknown raw는 재귀 검사하지 않습니다.
 `_core.http.parse_base_response`는 `FAIL` 또는 필수 `strResult`의 누락을 실패로 봅니다.
 `null`·빈 문자열·미지의 결과 코드를 임의로 `FAIL`로 바꾸지는 않습니다.
-서버 코드 `-8204`(#32 관측값, 앱 리터럴 아님)는 로그인을 포함한 모든 경로에서 `KorailAppUpdateRequiredError`이며
-서버 메시지를 보존합니다. `SUPDATE`와 같은 하위 예외이고 자동 재시도나 버전 자동 변경으로 이어지지 않습니다.
+서버 실패 코드 `-8204`(#32 관측값, 앱 리터럴 아님)는 로그인과 실패를 예외로 분류하는 경로에서 `KorailAppUpdateRequiredError`이며
+서버 메시지를 보존합니다. `pay_with_card`·`get_guide_seat_condition`은 `-8204`도 FAIL 모델로 반환하고, `logout`은 세션 만료 외의 FAIL을 예외로 바꾸지 않습니다.
+분류할 때는 `SUPDATE`와 같은 하위 예외이고 자동 재시도나 버전 자동 변경으로 이어지지 않습니다.
 CommonOut 경로의 `FAIL/P058` 또는 결과 누락/P058은 `raise_on_fail=False`여도 세션 만료이며,
 성공 봉투의 P058만으로 만료되지 않습니다(`CommonOut.java:361,426–438,455–463`).
 공항버스처럼 정확한 SUCC를 요구하는 파서는 별도 규칙을 유지합니다.
@@ -103,6 +106,8 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 관측된 성공 코드와 JSESSIONID를 요구합니다. 휴면 해제·비밀번호 변경은
 `KorailAuthContinuationRequired`와 `session.pending`에 남기며 웹 조치를 자동으로 이어 가지 않습니다.
 일반 실패는 세션·쿠키를 비우지만 이 웹 단계에서는 응답 쿠키를 보존합니다.
+ID의 UTF-8 검사는 첫 요청 전이며, 중단 예외도 continuation 이외에는 세션·pending·쿠키를 정리합니다. 정리 실패는 원래 예외를 가리지 않고 note로 남깁니다.
+사용 가능한 JSESSIONID는 설정된 base URL·prefix의 대표 list_tickets URL에 jar가 보낼 nonempty 값입니다. 정상 다중 Path는 유지하며 모든 API 경로·원격 세션 유효성을 보장하지 않습니다. 이 판단에는 추가 HTTP/provider 호출이 없습니다.
 
 `close`는 연결만 닫습니다. `clear_session`은 로컬 상태만 폐기합니다.
 `logout`은 서버 요청이 실패해도 로컬 상태를 정리하며 서버 무효화 성공을 보장하지 않습니다.
@@ -123,6 +128,7 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 같은 요청입니다(`tests/test_mutations.py::test_cancel_by_reference_sends_the_hold_bytes`·`test_hold_reference_needs_a_pnr_and_journey_count`).
 
 카드 결제액은 홀드 `received_amount`이며 기준 운임이나 `total_price`로 대체하지 않습니다.
+새 홀드에서 일부 응답 여정만 정산 좌석을 제공하거나 읽을 수 있는 선언 여정 수와 행 수가 다르면 received_amount=None이며 raw·PNR·취소 참조는 보존합니다. 각 여정의 정산 좌석 합과 유효 명시 총액이 다르면 기존 ProtocolError입니다. 여정 행 자체가 없거나 모두 정산 좌석이 없을 때의 유효 총액 fallback은 유지하며 자동 재조회하지 않습니다. payable=True는 금액 완전성 보장이 아닙니다.
 카드 거절은 FAIL 모델입니다. 환불은 성공한 수수료 응답을 명시적으로 받아 승차권 한 장씩 수행합니다.
 `get_refund_fee` 반환 시 응답에 비공개 조회 문맥을 연결하고 `repr`에서 숨깁니다.
 `refund`는 그 문맥과 환불 대상의 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호 일치를 요구합니다.

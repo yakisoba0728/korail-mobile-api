@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import inspect
+import pickle
 import time
 from collections import Counter, UserDict
 from copy import deepcopy
-from dataclasses import dataclass, field, is_dataclass, replace
+from dataclasses import asdict, dataclass, field, is_dataclass, replace
 from dataclasses import fields as dataclass_fields
 from typing import Any
 
@@ -16,6 +17,8 @@ from conftest import synthetic_config, wire_pairs
 import korail_mobile_api as api
 from korail_mobile_api import KorailSession
 from korail_mobile_api._core.parsing import (
+    _all_mappings,
+    _is_mapping,
     defaulted_str,
     nullable_str,
     optional_bool,
@@ -943,6 +946,15 @@ def test_account_read_contract(entry: Case, lang: str | None, make_client) -> No
     for path, expected in entry.checks:
         assert attr_path(result, path) == expected, (entry.method, path, entry.source)
     if entry.method == "list_pbp_acceptances":
+        ticket = result.tickets[0]
+        journey = ticket.journeys[0]
+        seat = journey.seats[0]
+        assert isinstance(ticket, api.PbpAcceptanceTicket)
+        assert isinstance(journey, api.PbpAcceptanceJourney)
+        assert isinstance(seat, api.PbpAcceptanceSeat)
+        assert ticket.raw is result.raw["tkList"][0]
+        assert journey.raw is ticket.raw["jrnyList"][0]
+        assert seat.raw is journey.raw["seatList"][0]
         assert [v for k, v in wire_pairs(request) if k == "tkRetNo"] == [
             v for k, v in entry.fields if k == "tkRetNo"
         ]
@@ -1686,7 +1698,7 @@ def test_wire_reader_kinds_follow_the_documented_table(read, missing, null, wron
 def test_wire_fields_keep_constructor_defaults_and_raw_rules() -> None:
     @dataclass(frozen=True)
     class Synthetic:
-        required: str = wire("req", required_str)
+        required: str = field(metadata={"wire": "req", "read": required_str})
         optional: str | None = wire("opt")
         raw: dict[str, object] = field(default_factory=dict)
 
@@ -1698,7 +1710,66 @@ def test_wire_fields_keep_constructor_defaults_and_raw_rules() -> None:
     assert copied == row and copied is not row
     assert Synthetic(required="x").optional is None
     with pytest.raises(TypeError):
-        Synthetic()  # required at runtime, although type checkers see a default
+        Synthetic()  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("mapping", [dict, UserDict])
+def test_mapping_guards_check_string_keys_without_recursing(mapping) -> None:
+    nested = {1: ["kept as an unknown raw value"]}
+    valid = mapping({"synthetic": nested})
+    invalid = mapping({1: "not a JSON object key"})
+    assert _is_mapping(valid) and _all_mappings([valid])
+    assert not _is_mapping(invalid) and not _all_mappings([valid, invalid])
+    assert valid["synthetic"] is nested
+
+
+def test_strict_and_lenient_parser_rows_keep_independent_mapping_policies() -> None:
+    from korail_mobile_api._domains.common.parsers import parse_station_data_response
+    from korail_mobile_api._domains.tickets.parsers import parse_ticket_list_response
+    from korail_mobile_api._domains.trains.parsers import parse_train_rows
+
+    nested = {1: ["untouched raw"]}
+    train = UserDict({"h_trn_no": "TEST-TRAIN", "extra": nested})
+    invalid = {1: "not a string key", "h_trn_no": "INVALID-TRAIN"}
+    ticket = {"jrn_info": [train, invalid]}
+    raw = {"strResult": "SUCC", "pnr_list": [{"ticket_list": [ticket]}]}
+    parsed = parse_ticket_list_response(raw)
+    assert parsed.raw is raw
+    assert len(parsed.reservations[0].tickets[0].trains) == 1
+    assert parsed.reservations[0].tickets[0].trains[0].raw is train
+    assert parsed.reservations[0].tickets[0].trains[0].raw["extra"] is nested
+    for rows in ([train], [train, invalid]):
+        strict_raw = {"trn_infos": {"trn_info": rows}}
+        if len(rows) == 1:
+            result = parse_train_rows(strict_raw)
+            assert isinstance(result[0], api.TrainSummary)
+            assert result[0].raw is not train and result[0].raw["extra"] is nested
+        else:
+            with pytest.raises(KorailProtocolError) as caught:
+                parse_train_rows(strict_raw)
+            assert caught.value.raw is strict_raw
+    station = UserDict({"stn_cd": "TEST-STATION", "stn_nm": "TEST-NAME", "extra": nested})
+    stations = parse_station_data_response({"stns": {"stn": [station]}})
+    assert isinstance(stations.stations[0], api.KorailStation)
+    assert stations.stations[0].raw is not station and stations.stations[0].raw["extra"] is nested
+    with pytest.raises(KorailProtocolError):
+        parse_station_data_response({"stns": {"stn": [station, invalid]}})
+
+
+def test_product_detail_raw_is_hidden_but_preserved(make_client) -> None:
+    marker = "SYNTHETIC-HIDDEN-DETAIL"
+    payload = success(
+        mainInfo={"strVrRsvNo": "TEST-RESERVATION", "strGdSqno": "TEST-GOODS", "unmodeled": {"secret": marker}}
+    )
+    client, calls = make_client(payload)
+    detail = client.get_product_detail("TEST-RESERVATION")
+    assert len(calls) == 1
+    assert marker not in repr(detail)
+    assert detail.detail_raw is detail.raw["mainInfo"]
+    assert detail.detail_raw["unmodeled"] == {"secret": marker}
+    assert asdict(detail)["detail_raw"] == payload["mainInfo"]
+    restored = pickle.loads(pickle.dumps(detail))
+    assert restored.detail_raw == detail.detail_raw and restored.detail_raw is restored.raw["mainInfo"]
 
 
 @pytest.mark.parametrize("container", [None, [], "invalid", {}, {"psg_info": None}, {"psg_info": {}}])

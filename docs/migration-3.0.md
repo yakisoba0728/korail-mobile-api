@@ -1,7 +1,7 @@
 # 3.0으로 옮기기
 
 3.0은 2.x와 호환되지 않는 변경을 한 번에 모은 판입니다. 옛 이름의 별칭은 두지 않으므로 아래 표에 따라 코드를 고치세요.
-이름과 인자만 바뀐 메서드는 같은 입력에서 2.6.1과 같은 요청(본문·헤더·순서·횟수)을 보냅니다. 이는 합성 응답으로 비교한 결과이며 실서버 확인이 아닙니다.
+이름과 인자만 바뀐 메서드는 같은 입력에서 2.6.1 캡처의 정규화된 URL·본문 필드·헤더·순서·횟수와 비교했습니다. 합성 응답으로 검사한 범위이며 모든 인코딩 변형의 바이트 동일성이나 실서버 수용의 증거는 아닙니다.
 날짜가 붙은 검증 기록([실서버 확인 현황](status.md)의 날짜별 절, `verification-*` 문서)은 당시 이름을 그대로 둡니다. 그 기록의 옛 메서드 링크는 새 이름의 절로 이어집니다.
 
 ## 메서드 이름 {#methods}
@@ -70,8 +70,11 @@ fee = client.get_refund_fee(reference)
 | `korail.tickets.all(*, page_no=1)` | `korail.tickets.all(page_no=1, *, mode="1", boarding_date_from="", boarding_date_to="")` |
 | 없음 | `korail.tickets.detail(ticket, *, from_purchase_history=False)` — [`get_refund_ticket_detail`](api/payments.md#get_refund_ticket_detail)을 호출합니다. |
 | `korail.login(member_no, password)` | `korail.login(member_no, password, *, input_flag=None, check_valid_pw="Y", cust_id="", etr_path="")` — [`KorailClient.login`](api/session.md#login)과 같은 옵션입니다. |
+| `Korail.logged_in(member_no, password, ...)` | 기존 설정·transport 옵션에 `input_flag=None`, `check_valid_pw="Y"`, `cust_id=""`, `etr_path=""` 전달을 추가합니다. |
+| `korail.reservations.cancel(hold)` | `HoldReference`도 받으며 `check_first=True`가 기본입니다. `False`이면 확인만 생략하고 실제 취소를 한 번 보냅니다. |
+| `korail.reservations.create(train, ...)` | `seats=None`, `seat_attribute_code=None`을 기존 `reserve` 규칙대로 전달합니다. 지정 좌석은 `SEAT_DESIGNATED`를 명시해야 합니다. |
 
-간편 API가 직접 거절하던 `ValueError`는 이제 `KorailInvalidInputError`입니다([예외](#errors)). 인자 타입이 틀리면 계속 `TypeError`입니다.
+간편 API가 직접 거절하던 `ValueError`는 이제 `KorailInvalidInputError`입니다([예외](#errors)). 잘못된 역 값도 조회 전 이 예외로 거절하며, 없는 키워드 등 Python 호출 시그니처 위반은 계속 `TypeError`입니다. 추가 요청·자동 재로그인·좌석 조회·재시도는 하지 않습니다([편의 흐름](guide/convenience.md)).
 
 ```text
 hold = korail.reservations.find(pnr)
@@ -123,6 +126,7 @@ client.extend_discount_card(
 
 - [`HoldReference`][korail_mobile_api.HoldReference]`(*, pnr_no, journey_count, journey_sequence=None, change_no=None)`: [`cancel_unpaid_hold`](api/reservations.md#cancel_unpaid_hold)가 홀드 대신 받습니다. `hold.reference`로 얻거나, 응답을 읽지 못한 예약의 원문에서 `HoldReference.from_raw(error.raw)`로 만듭니다. `from_raw`는 PNR(`h_pnr_no`)과 여정 수(`h_jrny_cnt`)만 요구합니다. 같은 값이면 홀드로 취소할 때와 같은 요청을 보냅니다.
 - `OriginalTicketReference.from_ticket(ticket)`: 승차권 목록의 한 장에서 원표 반환일(`return_sale_date`, `MMDD`)을 판매일로 넣습니다. `YYYYMMDD`를 받는 두 메서드는 [승차권 식별자 이어 쓰기](api/account.md#ticket-identifiers)를 참고하세요.
+- `OriginalTicketReference.from_sale_ticket(ticket)`: `TicketListTicket.sale_date`를 ASCII 숫자 8자리 그대로 복사해 `YYYYMMDD`를 받는 수령자·PBP 조회에 씁니다. 기존 `from_ticket`의 MMDD 의미는 유지하며 날짜 변환·미확인 경로 선택은 하지 않습니다.
 - `AirportBusSeatInventoryQuery.from_schedule(schedule, *, passenger_count=1)`: 조회한 운행 편의 식별값을 좌석 조회 입력으로 옮깁니다([아래 예](#response-attributes)).
 - `DynapathRequestContext`에 보낼 본문 바이트 `body`와 `app_version`이 들어갑니다. 직접 만든 `token_provider`가 읽을 수 있습니다.
 - `FreeSeatCarRequest.from_train(train)`, `MergeSeatsInquiryRequest.from_train(train, *, selected_station_name=None, room_class_code="1", seat_attribute_code=None, passenger_count=1)`: 조회한 열차의 값을 복사하고 빠진 값은 거절합니다.
@@ -159,6 +163,8 @@ from korail_mobile_api import KorailDeviceProfile, MileageHistoryRequest, TrainS
 - [`KorailInvalidInputError`][korail_mobile_api.KorailInvalidInputError]: 요청 전 입력 검사에서 거절하면 모두 이 예외입니다. `KorailProtocolError`이자 `ValueError`이므로 기존 `except KorailProtocolError`와 `except ValueError`도 잡습니다.
 - `request_sent`: 모든 라이브러리 예외에 있습니다. 요청을 HTTP 전송 계층에 넘긴 뒤 전송이나 응답 해석에 실패했으면 `True`이고, 상태를 바꾸는 메서드에서는 서버가 처리했을 수 있다는 note가 붙습니다. 요청 전에 거절했으면 `None`입니다. `True`이면 다시 보내기 전에 상태를 확인하세요.
 - [`KorailTransportError`][korail_mobile_api.KorailTransportError]`.status_code`: 2xx가 아닌 HTTP 응답의 상태 코드입니다. 네트워크 단계에서 실패했으면 `None`입니다.
+- `BaseKorailResponse.from_raw`와 상속 factory는 문자열 키 `dict`의 봉투만 구성합니다. 도메인 필드를 파싱하지 않으며 필수 도메인 인자가 더 필요한 하위 클래스는 원래 `TypeError`를 cause로 가진 `KorailProtocolError`입니다. 직접 생성자나 typed client 조회의 계약과 구별하세요.
+- 일부 여정만 정산 좌석을 제공하거나 선언 여정 수와 행 수가 모순되면 새 홀드의 `received_amount=None`입니다. 원문·취소 참조는 보존하고 부분합을 청구하지 않습니다. 총액만 있는 응답 등의 fallback은 [결제 금액 규칙](guide/payments.md#card-payment)을 따릅니다.
 
 ```python
 from korail_mobile_api import KorailApiError, KorailInvalidInputError, KorailTransportError
@@ -273,9 +279,12 @@ seat_query = AirportBusSeatInventoryQuery.from_schedule(bus)
 ### 키워드 생성과 `repr` {#dataclasses}
 
 - 모든 입력·응답 모델과 설정 dataclass(`KorailConfig`, `KorailDeviceProfile`, `DynapathConfig`, `DynapathTokenSettings`, `DynapathRequestContext`)는 `frozen=True, kw_only=True`입니다. 위치 인자로 만들면 `TypeError`입니다. 키워드 생성과 `dataclasses.replace()`는 그대로 씁니다.
+- 단, 팩토리 전용 `CommuterPassengerRequest`는 직접 생성하거나 `dataclasses.replace()`로 바꿀 수 없습니다. 변경하려면 `from_response(pass_data, source, counts)`를 다시 호출하세요.
+- 기존 필수 생성자 인자 누락은 mypy·Pyright도 거절합니다. 실행 시 시그니처·기본값·필드 순서·nullable 읽기 규칙은 바꾸지 않았습니다. `TransferItinerary.legs`는 정확한 두 원소 튜플이며, commuter factory의 `counts`는 `Sequence[int]`(목록·튜플 등)를 받아 튜플로 보관합니다.
 - `raw`는 그 필드를 선언한 모델에서 마지막 필드가 됐고 `repr()`에 나오지 않습니다. 비교(`==`)에서 빠지는 것은 같습니다. 응답 모델의 `raw`는 `BaseKorailResponse`에 선언돼 있어 `dataclasses.fields()` 순서에서 봉투 필드 바로 뒤에 그대로 있습니다.
 - 호출자가 넣는 비밀값도 `repr()`에서 숨깁니다: `KorailSession.jsessionid`, `OriginalTicketReference.return_password`, `PaidTicket.return_password`, `StationRefundExecutionRequest`의 `original_return_password`·`customer_phone`·`customer_name`, `StationRefundVerificationRequest.customer_name`, `RefundCompanion`의 `name`·`certificate_no`, `PriceRecalculationRequest.non_member_no`, `DynapathTokenSettings.device_id`, `KorailConfig.advertising_id`. 이미 숨기던 `CardPayment`의 모든 필드, `PaidTicket`의 원표 반환일·동반자 필드, `KorailDeviceProfile.device_id`, `KorailConfig.proxy`도 그대로 숨깁니다.
 - 숨기는 것은 `repr()`·`str()` 출력뿐입니다. 속성 값, `raw` 내용, `dataclasses.asdict()`, pickle은 가리지 않으므로 로그에 남기지 마세요.
+- `ProductDetailResponse.detail_raw`와 `DynapathRequestContext.body`도 `repr`에서 숨기며 실제 원문·본문과 직렬화 결과는 유지합니다.
 
 ```text
 query = TrainSearchQuery("서울", "부산", departure_date, "090000")

@@ -7,7 +7,9 @@
 앱의 일반 결과 메시지 사전입니다. 사전에 있다는 이유만으로 실패나 재시도를 판정하지 않습니다."""
 
 import copyreg
+import re
 from functools import cache
+from html import unescape
 from html.parser import HTMLParser
 from importlib.resources import files
 from json import loads
@@ -64,7 +66,9 @@ class _PlainMessage(HTMLParser):
             return
         if tag in {"script", "style"}:
             self.ignored_tag = tag
-        elif tag == "br":
+        elif tag == "br" or (
+            tag in {"p", "div", "li", "tr"} and self.parts and not self.parts[-1].endswith("\n")
+        ):
             self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
@@ -84,7 +88,11 @@ def _plain_text(message: str | None) -> str | None:
         return None
     parser = _PlainMessage()
     parser.feed(message)
-    parser.close()
+    # close()는 미완결 비교식을 버릴 수 있어 공개 위치 정보로 남은 텍스트를 읽습니다.
+    line, column = parser.getpos()
+    tail = message.split("\n", line - 1)[-1][column:]
+    if tail and not re.match(r"<(?:[!?]|(?:script|style)(?:[\t\n\r\f />]|$))", tail, re.IGNORECASE):
+        parser.handle_data(unescape(tail))
     return "".join(parser.parts).strip() or None
 
 
@@ -97,6 +105,7 @@ def resolve_error_message(
     """표시할 메시지를 서버 원문 → 앱 사전 순으로 선택해 일반 텍스트로 반환합니다.
 
     줄바꿈 태그를 개행으로 바꾸고 태그·스크립트·스타일을 표시에서 제외합니다. 원본 객체는 바꾸지 않습니다.
+    HTML-safe 마크업이 아니므로 텍스트로 출력하고 HTML 문맥에서는 호출자가 이스케이프해야 합니다.
     ``P058``에 읽을 메시지가 없으면 SDK의 세션 만료 안내를 반환합니다. 이것만으로 세션을 지우지는 않습니다.
     알 수 없는 코드에 읽을 서버 메시지도 없으면 ``None``입니다. 언어 규칙은 ``get_error_message``와 같습니다."""
     locale = _language(language)
@@ -112,8 +121,8 @@ def resolve_error_message(
 
 
 def _is_json_object(value: object) -> TypeGuard[dict[str, object]]:
-    """JSON 객체(dict)인지 봅니다. 타입 검사기가 ``isinstance`` 만으로는 키·값 타입을 모르므로 둡니다."""
-    return isinstance(value, dict)
+    """바로 아래 키가 모두 문자열인 dict인지 확인하며 중첩 원문은 검사하지 않습니다."""
+    return isinstance(value, dict) and all(isinstance(key, str) for key in cast(dict[object, object], value))
 
 
 # 타입 스텁에 없는 이름입니다. pickle 은 이 함수를 NEWOBJ 로 기록해 __init__ 없이 복원합니다.

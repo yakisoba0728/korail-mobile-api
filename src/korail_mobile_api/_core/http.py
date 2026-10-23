@@ -29,7 +29,7 @@ from ..errors import (
     classify_app_error,
 )
 from .dynapath import DYNAPATH_REQUIRED_PATHS, DynapathRequestContext, DynapathTokenGenerator
-from .parsing import _envelope
+from .parsing import _response_fields
 from .wire import _device_version_key
 
 #: 폼·쿼리 값입니다. 목록은 같은 키를 반복해 보냅니다.
@@ -60,13 +60,7 @@ def parse_base_response(
     """FAIL 또는 CommonOut 기본 실패만 P058 만료로 판정합니다. 옵션별 계약은 checks/BEHAVIOR.md 참고."""
     if not _is_json_object(data):
         raise KorailProtocolError("KORAIL response must be a JSON object", raw=data)
-    envelope = _envelope(data)
-    response = BaseKorailResponse(
-        h_msg_cd=envelope["h_msg_cd"],
-        h_msg_txt=envelope["h_msg_txt"],
-        str_result=envelope["strResult"],
-        raw=data,
-    )
+    response = BaseKorailResponse(**_response_fields(data))
     missing_result = "strResult" not in data
     failed = response.str_result == "FAIL" or (require_result and missing_result)
     if common_out is None:
@@ -97,9 +91,11 @@ def _dynapath_block_payload(payload: object) -> dict[str, object] | None:
 
 def _decode_response(response: httpx.Response, *, path: str, block_paths: AbstractSet[str]) -> object:
     """판정 순서: DynaPath 차단(보호 경로, 상태 코드와 무관) → 2xx 가 아닌 상태 → JSON 오류."""
+    decode_error: ValueError | RecursionError | None = None
     try:
         payload, decoded = response.json(), True
-    except ValueError:
+    except (ValueError, RecursionError) as error:
+        decode_error = error
         payload, decoded = None, False
     if path in block_paths:
         blocked_payload = _dynapath_block_payload(payload)
@@ -112,9 +108,11 @@ def _decode_response(response: httpx.Response, *, path: str, block_paths: Abstra
             f"KORAIL HTTP {response.status_code} for {response.request.method} {response.request.url.path}",
             status_code=response.status_code,
             raw=payload if decoded else response.content,
-        )
+        ) from decode_error
     if not decoded:
-        raise KorailProtocolError("KORAIL response body was not valid JSON", raw=response.content)
+        raise KorailProtocolError(
+            "KORAIL response body was not valid JSON", raw=response.content
+        ) from decode_error
     return payload
 
 
@@ -199,7 +197,7 @@ class KorailHttpClient:
         _reject_none(fields, path)
         return fields
 
-    def _dynapath_headers(self, method: str, path: str, body: bytes) -> dict[str, str]:
+    def _dynapath_headers(self, request: httpx.Request, path: str) -> dict[str, str]:
         dynapath = self.config.dynapath
         if not dynapath.enabled:
             if path in DYNAPATH_REQUIRED_PATHS:
@@ -212,16 +210,16 @@ class KorailHttpClient:
         if path not in dynapath.allowlist_paths:
             return {}
         context = DynapathRequestContext(
-            method=method,
+            method=request.method,
             path=path,
-            url=f"{self.config.base_url.rstrip('/')}/{path.lstrip('/')}",
+            url=str(request.url),
             device=self.config.device,
             version=self.config.version,
             key=self.config.key,
             user_agent=self.config.user_agent,
             device_name=dynapath.device_name,
             os_version=dynapath.os_version,
-            body=body,
+            body=request.content,
             app_version=self.config.app_version,
         )
         try:
@@ -236,8 +234,14 @@ class KorailHttpClient:
         if token is None:
             return {}
         # 헤더에 실을 수 없는 값은 httpx 의 날 예외 대신 요청 전에 거절합니다.
-        if not isinstance(token, str) or not token.isascii():
-            raise KorailProtocolError("KORAIL DynaPath token provider must return an ASCII str or None")
+        if (
+            not isinstance(token, str)
+            or not token.isascii()
+            or any(ord(char) < 32 or ord(char) == 127 for char in token)
+        ):
+            raise KorailProtocolError(
+                "KORAIL DynaPath token provider must return an ASCII str or None, without control characters"
+            )
         return {dynapath.header_name: token}
 
     def _exchange(
@@ -252,7 +256,6 @@ class KorailHttpClient:
         require_envelope: bool,
     ) -> BaseKorailResponse:
         """유일한 전송 경로입니다. 본문을 먼저 만든 뒤 그 바이트로 DynaPath 헤더를 정하고 한 번만 보냅니다."""
-        headers.update(self._dynapath_headers(method, path, content or b""))
         if self._client.is_closed:
             raise KorailProtocolError(f"KORAIL client is closed; {method} {path} was not sent")
         try:
@@ -260,6 +263,7 @@ class KorailHttpClient:
         except httpx.InvalidURL as exc:
             # URL 을 만들지 못했으므로 아무것도 나가지 않았습니다(request_sent 는 None).
             raise KorailTransportError(f"KORAIL transport failed for {method} {path}") from exc
+        request.headers.update(self._dynapath_headers(request, path))
         try:
             try:
                 response = self._client.send(request)
@@ -267,7 +271,6 @@ class KorailHttpClient:
                 redact_failed_request(exc)
                 raise KorailTransportError(f"KORAIL transport failed for {method} {path}") from exc
             payload = _decode_response(response, path=path, block_paths=self.config.dynapath.allowlist_paths)
-            # 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다.
             common_out = path not in _NON_COMMON_OUT_READ_PATHS
             return parse_base_response(
                 payload,

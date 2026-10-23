@@ -25,7 +25,7 @@ with Korail() as korail:
 
 시간대가 없는 `datetime`은 한국 시각(KST)으로 읽고, 시간대가 있는 값은 KST로 변환합니다. 이미 지난 시각은 요청 전에 거절합니다. 시각을 생략하면 현재 KST를 사용합니다. 결과는 기존 `TrainSearchResult`이며 한 페이지씩 옵니다. `result.next_page()`가 값을 돌려주면 같은 조건과 `continuation=...`으로 다음 페이지를 조회하세요. 2.6.2부터 이때 첫 페이지의 `depart_after`를 그대로 넘겨야 하며, 생략하면 `ValueError`입니다. 그 사이 시각이 지나도 이어보기 요청은 이미 지난 시각으로 거절하지 않습니다. `next_page()`가 `None`이어도 더 조회해야 하는 경우에는 [원래 조회 API의 마지막 열차 시각 방식](trains.md#next-page)을 사용합니다.
 
-기본적으로 첫 검색에서 역 목록을 가져와 역 이름·코드를 확인한 후 클라이언트 수명 동안 캐시합니다. 이 목록은 한 번만 받아 간편 API와 `korail.client`가 함께 쓰며, 승객 구성은 역 목록을 받기 전에 검사합니다. 잘못된 역은 검색 요청 전에 `ValueError`로 거절하고 가까운 역 이름을 제안합니다. 이 추가 조회가 필요 없으면 `Korail(validate_stations=False)`로 생성하세요. 역 목록은 `korail.stations.all(refresh=True)`로 갱신할 수 있습니다.
+기본적으로 첫 검색에서 역 목록을 가져와 역 이름·코드를 확인한 후 클라이언트 수명 동안 캐시합니다. 이 목록은 한 번만 받아 간편 API와 `korail.client`가 함께 쓰며, 승객 구성·잘못된 역 타입·빈 필수 문자열은 역 목록을 받기 전에 검사합니다. 정상 문자열의 미등록 역은 목록 조회 후 `KorailInvalidInputError`(`ValueError`)로 거절하고 가까운 역 이름을 제안합니다. `korail.stations.find("")`는 조회 없이 `None`입니다. 이 추가 조회가 필요 없으면 `Korail(validate_stations=False)`로 생성하세요. 역 목록은 `korail.stations.all(refresh=True)`로 갱신할 수 있습니다.
 
 `include_nearby_stations=True`는 인접역 일정 표시 필드 `adjStnScdlOfrFlg=Y`를 보냅니다. 기본값은 이전과 같은 `N`입니다. 2026-09-28 실서버에서 두 값 모두 검색 성공 응답을 받았지만, 결과에 미치는 효과는 확인하지 못했습니다.
 
@@ -109,6 +109,8 @@ with Korail.logged_in(input("회원번호·전화번호·이메일: "), getpass(
 `korail.tickets.detail(reference)`는 원표 식별자로 [`get_refund_ticket_detail`](../api/payments.md#get_refund_ticket_detail)을 호출합니다.
 `korail.login(...)`은 `KorailClient.login`과 같은 키워드 옵션을 받습니다. 세 가지 모두 3.0에서 추가했습니다.
 
+`Korail.logged_in`도 `input_flag=None`, `check_valid_pw="Y"`, `cust_id=""`, `etr_path=""`를 같은 세션의 `login`에 전달합니다. 기존 설정·transport 옵션은 유지하며 추가 요청이나 자동 재로그인은 하지 않습니다.
+
 `logged_in`은 로그인에 실패하면 연결을 닫고 원래 오류를 발생시킵니다. `with`가 끝나면 HTTP 연결을 닫지만 서버 로그아웃을 자동 요청하지는 않습니다. 로그아웃이 필요하면 예제처럼 명시적으로 호출하세요.
 
 ## 예약과 결제 전 확인
@@ -117,6 +119,10 @@ with Korail.logged_in(input("회원번호·전화번호·이메일: "), getpass(
 `train`은 그 블록에서 조회해 고른 열차이고, `card`는 준비한 `CardPayment`입니다.
 
 `korail.reservations.create(train)`은 실제 홀드를 만듭니다. 예약 상세가 필요하면 `korail.reservations.detail(hold)`을 별도로 호출하세요. 예약 성공 직후 자동 상세 조회는 하지 않습니다. `korail.reservations.cancel(hold)`은 실제 취소이고, `korail.reservations.pay(hold, card)`는 실제 카드 청구입니다. `korail.tickets.refund_quote(ticket)`는 수수료 조회이며, `korail.tickets.refund(ticket, commission=fee)`는 실제 환불입니다. 각 메서드는 기존 클라이언트의 입력 검증과 응답 모델을 그대로 사용합니다. 자세한 주의사항은 [예약](reservations.md)과 [결제·환불](payments.md)에 있습니다.
+
+`korail.reservations.cancel(hold_or_reference, *, check_first=True)`는 홀드와 `HoldReference`를 받습니다. 기본은 가능 여부 확인 뒤 실제 취소(두 요청)이며, `check_first=False`는 확인만 생략하고 실제 취소를 한 번 보냅니다. `check_first`는 실제 `bool`이어야 합니다. `hold.reference`나 `HoldReference.from_raw(error.raw)`의 복구 참조도 사용할 수 있지만 결제용 홀드로 승격되지는 않습니다. 실패 시 재전송하지 말고 상태를 확인하세요.
+
+승차권 목록의 식별자는 목적에 맞는 팩토리로 옮깁니다. `OriginalTicketReference.from_ticket(ticket)`은 `MMDD` 원표 반환일, `from_sale_ticket(ticket)`은 `YYYYMMDD` 판매일을 사용합니다. 두 값의 소비자와 미확인 경로는 [승차권 식별자](../api/account.md#ticket-identifiers)를 따르며 자동으로 날짜를 선택하지 않습니다.
 
 `korail.tickets.refund_quote(ticket, *, companion=RefundCompanion())`는 동반자 정보도 받습니다(2.x 이름은 `refund_fee`).
 조회의 `ticket`은 `OriginalTicketReference`이고 환불 입력은 `PaidTicket.from_refund_detail(detail)`로 만듭니다.
@@ -142,6 +148,7 @@ print(hold.received_amount)
 ```
 
 기본 예약은 일반실이고, `seat_class=KorailSeatClass.SPECIAL`로 특실을 직접 지정할 수 있습니다. 즉시 예약에서는 `option`으로 가용 객실을 고를 수도 있습니다.
+`create(..., seats=..., seat_attribute_code=...)`는 기존 `client.reserve`의 지정 좌석·속성 옵션을 그대로 전달합니다. 지정 좌석은 `job_type=KorailReservationJobType.SEAT_DESIGNATED`를 명시해야 하며 `seats`만으로 예약 종류를 추측하지 않습니다. [좌석 조회·지정 순서](reservations.md#seat-designated)를 따르세요. 자동 좌석 조회·다른 객실 재시도는 하지 않습니다.
 아래 코드는 앞 예제의 예약 호출을 대체합니다. 검색과 `passengers`는 그대로 두고 두 예약 예제를 연달아 실행하지 마세요.
 
 ```python

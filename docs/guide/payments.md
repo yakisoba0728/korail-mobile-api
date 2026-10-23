@@ -102,14 +102,13 @@ from korail_mobile_api import CartAddRequest, PriceRecalculationRequest
 request = PriceRecalculationRequest.for_hold(hold, [input("요청할 할인 코드: ")])
 recalculated = client.recalculate_price(request)
 print(hold.received_amount, "->", recalculated.received_amount)
+hold = recalculated  # 선택 단계가 실패해도 최신 홀드를 유지합니다
 cart = client.add_to_cart(CartAddRequest(pnr_no=recalculated.pnr_no))  # 선택: 앱처럼 장바구니에 담습니다
 print(cart.str_result, cart.h_msg_cd)
-
-hold = recalculated  # 결제는 재계산된 홀드로 합니다
 ```
 
 !!! warning "실제로 처리됩니다"
-    `recalculate_price`를 호출하면 서버에 있는 홀드의 할인과 결제 금액이 바뀌고, `add_to_cart=True`이면 장바구니에도 추가됩니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
+    `recalculate_price`는 서버에 있는 홀드의 할인과 결제 금액을 바꾸고, 별도 `add_to_cart`는 장바구니를 바꿉니다. 두 요청은 독립된 변경입니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
 
 ## 카드 결제 {#card-payment}
 
@@ -130,10 +129,10 @@ hold = recalculated  # 결제는 재계산된 홀드로 합니다
 검사는 형식과 유효기간만 확인하며, 카드를 실제로 쓸 수 있는지는 확인하지 않습니다.
 
 청구 금액은 홀드의 `received_amount`입니다. `total_price`는 앱이 화면에 표시하는 합계이며 결제에 쓰지 않습니다.
-라이브러리는 홀드 응답에 좌석별 받을 금액이 있으면 그 합을 `received_amount`로 씁니다.
-그 합이 응답의 총 받을 금액(`h_tot_rcvd_amt`)과 다르면 홀드를 읽는 단계에서 `KorailProtocolError`를 발생시킵니다. 총 받을 금액은 모델 필드로 노출되지 않으며 `total_price`와 다른 값입니다.
-좌석 행이 없으면 총 받을 금액을 `received_amount`로 쓰며, 총 받을 금액도 없으면 `None`입니다.
-좌석 행 중 금액이 숫자가 아닌 행이 있으면 `received_amount`는 `None`이 되고, 결제는 요청 전에 거절됩니다.
+라이브러리는 응답의 각 여정에 정산 좌석이 있고 그 금액을 읽을 수 있을 때 좌석 합을 `received_amount`로 씁니다. 좌석번호 없는 0원 행은 정산 좌석에서 제외합니다.
+일부 여정에만 정산 좌석이 있거나, 읽을 수 있는 선언 여정 수와 실제 행 수가 다르면 부분합을 결제액으로 승격하지 않고 `received_amount=None`으로 둡니다. 명시 총액이 부분합과 같아도 마찬가지입니다. 홀드의 원문·PNR·취소 참조는 보존하며 자동 재조회하지 않습니다. `payable=True`만으로 금액이 완전하다고 판단하지 마세요.
+모든 여정에 정산 좌석이 있을 때 그 합이 응답의 유효한 총 받을 금액(`h_tot_rcvd_amt`)과 다르면 홀드를 읽는 단계에서 `KorailProtocolError`입니다. 총 받을 금액은 모델 필드로 노출되지 않으며 `total_price`와 다른 값입니다.
+여정 행 자체가 없거나 모든 여정에 정산 좌석이 없는 경우는 기존처럼 유효한 총 받을 금액을 쓸 수 있습니다(선언 여정 수와 존재하는 행 수의 모순이 없어야 함). 총액도 없거나 좌석 금액을 읽을 수 없으면 `None`이고, 카드 결제는 대기열·결제 요청 전에 거절됩니다.
 
 ```python
 from getpass import getpass
@@ -156,7 +155,7 @@ else:
 
 ### 카드 거절 확인 {#card-decline}
 
-`pay_with_card`는 카드 거절을 포함해 세션 만료(`P058`)를 뺀 모든 실패를 예외 없이 [`ReservationPaymentResponse`][korail_mobile_api.ReservationPaymentResponse]로 반환합니다.
+`pay_with_card`는 정상적으로 해석할 수 있는 실패 봉투를 카드 거절·앱 업데이트 요구(`-8204`)까지 [`ReservationPaymentResponse`][korail_mobile_api.ReservationPaymentResponse]로 반환합니다. 세션 만료(`P058`)는 예외이며, 전송·응답 해석 실패도 예외입니다.
 이때 `str_result`는 `"FAIL"`(또는 `strResult`가 없으면 `None`)이고, 사유는 `h_msg_cd`와 `h_msg_txt`에 들어 있습니다.
 반환값을 받았다는 것만으로 결제가 끝났다고 판단하지 말고 `str_result`가 `"SUCC"`인지 확인하세요.
 결제 응답에는 PNR이 없으므로 이후 단계에서는 `hold.pnr_no`를 씁니다.
@@ -184,12 +183,7 @@ from korail_mobile_api import OriginalTicketReference
 
 tickets = client.list_tickets()
 ticket = next(t for reservation in tickets.reservations for t in reservation.tickets if t.pnr_no == hold.pnr_no)
-reference = OriginalTicketReference(
-    sale_window_no=ticket.sale_window_no,
-    sale_date=ticket.return_sale_date,
-    sale_sequence=ticket.sale_sequence,
-    return_password=ticket.return_password,
-)
+reference = OriginalTicketReference.from_ticket(ticket)
 ```
 
 ## 상세와 수수료 조회 {#commission}
@@ -311,3 +305,16 @@ finally:
 ```
 
 `logout()`이 예외를 발생시켜도 `close()`는 실행되도록 `finally`에 둡니다.
+앞의 블록들은 필요한 작업을 고르는 예제입니다. 스크립트에서는 마지막 정리 블록에 도달하기 전에 실패할 수 있으므로, 로그인과 선택한 작업 전체를 아래 수명 범위 안에 넣으세요. 모든 예약·결제·환불 블록을 연달아 실행하라는 뜻은 아닙니다.
+
+```python
+from korail_mobile_api import KorailClient
+
+with KorailClient() as client:
+    try:
+        ...  # 로그인한 뒤 필요한 조회·변경 블록만 이 위치에서 실행합니다.
+    finally:
+        client.logout()
+```
+
+`with`는 중간 작업과 로그아웃이 실패해도 연결을 닫습니다. 홀드 취소나 환불은 정리 동작에 자동으로 넣지 말고, 대상을 확인한 뒤 별도로 결정하세요.

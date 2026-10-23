@@ -12,6 +12,7 @@ import pytest
 from conftest import synthetic_config, wire_form
 
 from korail_mobile_api import (
+    KorailInvalidInputError,
     KorailProtocolError,
     KorailTransportError,
     OriginalTicketReference,
@@ -19,6 +20,7 @@ from korail_mobile_api import (
     RefundCommissionResponse,
     RefundCompanion,
     RefundTicketDetailResponse,
+    RefundTicketJourney,
     TicketResource,
 )
 from korail_mobile_api._domains.payments.parsers import parse_refund_commission_response
@@ -126,6 +128,44 @@ def test_matching_lookup_and_refund_make_exactly_two_http_requests(binding_clien
     assert wire_form(requests[1])["tk_ret_tms_dv_cd"] == ["SYNTH-TIMES"]
     assert raw == unchanged
     assert commission.raw == unchanged
+
+
+@pytest.mark.parametrize("field", ["train_no", "latitude", "longitude"])
+@pytest.mark.parametrize("value", [("SYNTH-A", "SYNTH-B"), ["SYNTH-A"], True, 0, 1.5, object()])
+def test_refund_optional_scalars_reject_non_strings_locally(binding_client, field, value):
+    client, requests = binding_client()
+    commission = client.get_refund_fee(_reference())
+    supplied = _ticket(train_no=value) if field == "train_no" else _ticket()
+    options = {} if field == "train_no" else {field: value}
+    with pytest.raises(KorailInvalidInputError) as caught:
+        client.refund(supplied, commission=commission, **options)
+    assert caught.value.request_sent is None
+    assert len(requests) == 1
+    assert commission.raw == _fee_raw()
+    _assert_private_error(caught.value, "SYNTH-A", "SYNTH-B")
+
+
+@pytest.mark.parametrize(
+    "train_no,latitude,longitude,suffix",
+    [
+        ("90001", None, None, b"&trnNo=90001"),
+        ("", "", "", b""),
+        ("00090001", "-0.00", "127.000", b"&trnNo=00090001&latitude=-0.00&longitude=127.000"),
+    ],
+)
+def test_refund_optional_strings_preserve_bytes_and_blank_omission(
+    binding_client, train_no, latitude, longitude, suffix
+):
+    client, requests = binding_client()
+    commission = client.get_refund_fee(_reference())
+    client.refund(_ticket(train_no=train_no), commission=commission, latitude=latitude, longitude=longitude)
+    assert requests[1].content == (
+        b"Device=AD&Version=250601003&AppVersion=7.0.8&Key=SYNTH-KEY"
+        b"&txtPnrNo=SYNTH-PNR-A&h_orgtk_sale_dt=20991019&h_orgtk_sale_wct_no=SYNTH-WINDOW-A"
+        b"&h_orgtk_sale_sqno=SYNTH-SEQUENCE-A&h_orgtk_ret_pwd=SYNTH-PASSWORD-A&h_mlg_stl=N"
+        b"&tk_ret_tms_dv_cd=SYNTH-TIMES" + suffix
+    )
+    assert len(requests) == 2
 
 
 @pytest.mark.parametrize("limit", [640, 0], ids=["minimum-limit", "disabled-limit"])
@@ -312,7 +352,10 @@ def test_direct_responses_cannot_forge_binding_from_server_raw(binding_client, s
 
 
 @pytest.mark.parametrize("original_date", ["1017", None], ids=["original-date", "missing-original-date"])
-def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion(binding_client, original_date):
+@pytest.mark.parametrize("train_no", [None, "90003"], ids=["first-journey", "explicit-train"])
+def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion(
+    binding_client, original_date, train_no
+):
     """MyTicketDetailViewModel.java:277,1521 (7.0.6, field by field): the fee lookup uses the original return date,
     the refund the current sale date; a reissued ticket's sale_date differs from the original's."""
     companion = RefundCompanion(name="SYNTH-COMPANION-A", certificate_no="20991231")
@@ -326,6 +369,8 @@ def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion
         original_return_password="SYNTH-PASSWORD-A",
         companion_name=companion.name,
         companion_birth_date=companion.certificate_no,
+        journeys=(RefundTicketJourney(train_no="90001"), RefundTicketJourney(train_no="90002")),
+        pbp_acceptance_target_flag="SYNTH-PBP",
     )
     client, requests = binding_client()
     commission = client.get_refund_fee(_reference(), companion=companion)
@@ -336,17 +381,25 @@ def test_from_detail_preserves_current_sale_date_and_maps_original_and_companion
         assert len(requests) == 1
         return
 
-    ticket = PaidTicket.from_refund_detail(detail)
+    ticket = (
+        PaidTicket.from_refund_detail(detail)
+        if train_no is None
+        else PaidTicket.from_refund_detail(detail, train_no=train_no)
+    )
     assert ticket.sale_date == "20991019"
     assert ticket.return_sale_date == "1017"
     assert ticket.companion_name == companion.name
     assert ticket.companion_certificate_no == companion.certificate_no
+    assert ticket.train_no == ("90001" if train_no is None else train_no)
+    assert ticket.pbp_acceptance_target_flag == "SYNTH-PBP"
 
     assert client.refund(ticket, commission=commission).str_result == "SUCC"
     assert len(requests) == 2
     assert wire_form(requests[0])["h_comp_nm"] == [companion.name]
     assert wire_form(requests[0])["h_comp_cert_no"] == [companion.certificate_no]
     assert wire_form(requests[1])["h_orgtk_sale_dt"] == ["20991019"]
+    assert wire_form(requests[1])["trnNo"] == [ticket.train_no]
+    assert wire_form(requests[1])["pbpAcepTgtFlg"] == ["SYNTH-PBP"]
 
 
 def test_new_ticket_identity_fields_are_keyword_only_and_hidden_from_repr(binding_client):
