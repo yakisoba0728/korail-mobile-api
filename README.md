@@ -25,7 +25,8 @@ KORAIL과 관계없는 개인 프로젝트이며 공식 API가 아닙니다. KOR
 - 보고된 실패는 `2!` 기본 헤더 도입 전 `main`(1b89779)에서 기본값과 `app_version="7.0.10"`만 바꾼 설정으로 재현됐습니다.
 - 2026-10-23 08:16 KST에 PyPI의 2.6.2로 로그인 없는 직통 열차 조회(서울→부산)를 실서버에서 확인했습니다. 기본 조합(`2!`·7.0.8·250601003)과 `KorailConfig(app_version="7.0.10", version="250722001")` 모두 `SUCC`/`IRG000000`이었습니다. 기본 요청 버전은 바꾸지 않습니다.
   로그인·예약·결제는 2.6.2로 다시 확인하지 않았습니다.
-- 이 README는 배포 전인 3.0.0(`main`)을 설명합니다. 3.0 코드로는 실서버에 요청하지 않았습니다. PyPI의 최신 배포는 2.6.2이며 사용법은 [2.6.2 README](https://github.com/yakisoba0728/korail-mobile-api/blob/v2.6.2/README.md)에 있습니다.
+- 2026-10-23 23:34:34 KST에는 `3.0.0.dev0` 개발 wheel의 기본 요청 버전으로 익명 서울→부산 직통 첫 페이지 조회 1회가 `SUCC`/`IRG000000`, 열차 10개를 반환했습니다([입력·커밋·관측 한계](https://github.com/yakisoba0728/korail-mobile-api/blob/main/docs/records.md#live-check-300-dev0-20261023)). 한 노선·날짜·시각의 관측이며, 3.0의 로그인·인증 조회·예약·취소·결제·환불은 실서버 미검증입니다.
+- 이 README는 배포 전인 3.0.0(`main`)을 설명합니다. 위 관측은 출시된 3.0.0의 호환 보증이 아닙니다. PyPI의 최신 배포는 2.6.2이며 사용법은 [2.6.2 README](https://github.com/yakisoba0728/korail-mobile-api/blob/v2.6.2/README.md)에 있습니다.
 
 자세한 내용은 [실서버 확인 현황](https://yaki.kr/korail-mobile-api/status/)과 [설정 가이드의 요청 버전](https://yaki.kr/korail-mobile-api/guide/configuration/#request-version)에 있습니다.
 2.x에서 옮겨 오려면 [3.0으로 옮기기](https://yaki.kr/korail-mobile-api/migration-3.0/)를 보세요. 옛 이름의 별칭은 없습니다.
